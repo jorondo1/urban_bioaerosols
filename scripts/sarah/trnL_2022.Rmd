@@ -1,0 +1,2710 @@
+---
+title: "trnL_2022"
+author: "Sarah Poirier"
+date: "2024-01-10"
+output: html_document
+---
+# Installing Packages
+```{r}
+if (!require("BiocManager", quietly = TRUE))
+  install.packages("BiocManager")
+BiocManager::install("dada2")
+BiocManager::install("ShortRead")
+BiocManager::install("BiocGenerics")
+
+to_install<-c("biomformat", "picante","ggplot2","Hmisc", "vegan", "phyloseq","DESeq2","tidyr", "pacman", "devtools", "patchwork", "Biostrings", "patchwork", "kableExtra", "RColorBrewer", "paletteer", "ggthemes", "FSA", "rstatix", "car", "ggsignif", "ggpubr", "magick", "webshot", "MASS", "permute", "lme4", "lmerTest", "lattice", "gridExtra", "gridBase", "ANCOMBC", "ggfortify")
+BiocManager::install(to_install)
+```
+
+## Loading Packages
+```{r}
+library(pacman)
+library(dplyr)
+p_load(dada2, ggplot2, vegan, ANCOMBC, phyloseq, Biostrings, patchwork, kableExtra, RColorBrewer, paletteer, ggthemes, FSA, rstatix, car, ggsignif, ggpubr, magick, webshot, MASS, tidyr, permute, lme4, lmerTest, lattice, gridExtra, gridBase, Ternary, ggtern, ShortRead)
+```
+
+# DADA2
+## Import data
+```{r}
+# Set the path
+setwd("/Users/pois3006/Documents/Universite/M.Sc./Lab_and_field_work/R/sequencing/trnL/trnL_SASS_samples_2022/")
+path_raw <- ("~/Documents/Universite/M.Sc./Lab_and_field_work/R/sequencing/trnL/trnL_SASS_samples_2022/")
+list.files(path_raw)
+
+# Forward and reverse fastq filenames have format: SAMPLENAME_R1_001.fastq and SAMPLENAME_R2_001.fastq
+fnFsTrnL <- sort(list.files(path_raw, pattern="_R1_001.fastq", full.names = TRUE))
+fnRsTrnL <- sort(list.files(path_raw, pattern="_R2_001.fastq", full.names = TRUE))
+
+# Extract sample names, assuming filenames have format: SAMPLENAME_XXX.fastq
+sample.namesTrnL <- sapply(strsplit(basename(fnFsTrnL), "_"), `[`, 1); sample.namesTrnL
+```
+
+### Inspect read quality profiles
+```{r}
+# Forward
+plotQualityProfile(fnFsTrnL[1:2])
+# Reverse
+plotQualityProfile(fnRsTrnL[1:2])
+```
+
+# Remove primers
+https://benjjneb.github.io/dada2/ITS_workflow.html
+https://benjjneb.github.io/dada2/faq.html#how-can-i-remove-primersadaptersetc-from-my-amplicon-reads
+
+### Identify if primers are present
+```{r}
+FWDTrnL <- "CGAAATCGGTAGACGCTACG"
+REVTrnL <- "GGGGATAGAGGGACTTGAAC"
+
+# Verify the presence and orientation of these primers in the data
+allOrientsTrnL <- function(primer) {
+  # Create all orientations of the input sequence
+  require(Biostrings)
+  dnaTrnL <- DNAString(primer)  # The Biostrings works w/ DNAString objects rather than character vectors
+  orientsTrnL <- c(Forward = dnaTrnL, Complement = Biostrings::complement(dnaTrnL), Reverse = Biostrings::reverse(dnaTrnL), 
+               RevComp = Biostrings::reverseComplement(dnaTrnL))
+  return(sapply(orientsTrnL, toString))  # Convert back to character vector
+}
+FWD.orientsTrnL <- allOrientsTrnL(FWDTrnL)
+REV.orientsTrnL <- allOrientsTrnL(REVTrnL)
+FWD.orientsTrnL
+
+# “pre-filter” the sequences just to remove those with Ns, but perform no other filtering
+fnFs.filtNTrnL <- file.path(path_raw, "filtN", basename(fnFsTrnL)) # Put N-filterd files in filtN/ subdirectory
+fnRs.filtNTrnL <- file.path(path_raw, "filtN", basename(fnRsTrnL))
+outTrnL <- filterAndTrim(fnFsTrnL, fnFs.filtNTrnL, fnRsTrnL, fnRs.filtNTrnL, maxN = 0, multithread = TRUE)
+head(outTrnL)
+
+# Count the number of times the primers appear in the forward and reverse read, while considering all possible primer orientations
+primerHitsTrnL <- function(primer, fn) {
+  # Counts number of reads in which the primer is found
+  nhits <- vcountPattern(primer, sread(readFastq(fn)), fixed = FALSE)
+  return(sum(nhits > 0))
+}
+rbind(FWD.ForwardReads = sapply(FWD.orientsTrnL, primerHitsTrnL, fn = fnFs.filtNTrnL[[1]]), 
+      FWD.ReverseReads = sapply(FWD.orientsTrnL, primerHitsTrnL, fn = fnRs.filtNTrnL[[1]]), 
+      REV.ForwardReads = sapply(REV.orientsTrnL, primerHitsTrnL, fn = fnFs.filtNTrnL[[1]]), 
+      REV.ReverseReads = sapply(REV.orientsTrnL, primerHitsTrnL, fn = fnRs.filtNTrnL[[1]])) 
+# Yes primers are present
+```
+
+#### Primers are present so we need to remove them
+```{r}
+FWD.lengthTrnL <- 20 #FWD has 20 nucleotides
+REV.lengthTrnL <- 20 #REV has 20 nucleotides
+
+# We will use the trimLeft = c(FWD_PRIMER_LEN, REV_PRIMER_LEN) argument of the filterAndTrim funtion 
+
+# See Filter and Trim chunk
+```
+
+## Filter and Trim
+```{r}
+# Place filtered files in filtered/ subdirectory
+filtFsTrnL <- file.path(path_raw, "filtered", paste0(sample.namesTrnL, "_F_filt.fastq.gz"))
+filtRsTrnL <- file.path(path_raw, "filtered", paste0(sample.namesTrnL, "_R_filt.fastq.gz"))
+names(filtFsTrnL) <- sample.namesTrnL
+names(filtRsTrnL) <- sample.namesTrnL
+
+# TAKES ~ 2 minutes to run ! ##
+outTrnL <- filterAndTrim(fnFsTrnL, filtFsTrnL, fnRsTrnL, filtRsTrnL,
+                     trimLeft = c(FWD.lengthTrnL, REV.lengthTrnL), #trimLeft to remove primers
+                     truncLen=c(280, 160), # Trim parameter
+                     maxN=0, maxEE=c(2,2), truncQ=2, rm.phix=TRUE,
+                     compress=TRUE, multithread=TRUE) # On Windows set multithread=FALSE
+head(outTrnL)
+```
+
+### Learn the Error Rates
+```{r}
+errFTrnL <- learnErrors(filtFsTrnL, multithread=TRUE)
+errRTrnL <- learnErrors(filtRsTrnL, multithread=TRUE)
+plotErrors(errFTrnL, nominalQ=TRUE)
+plotErrors(errRTrnL, nominalQ=TRUE)
+#Here the estimated error rates (black line) are a good fit to the observed rates
+#(points), and the error rates drop with increased quality as expected.
+```
+
+### Sample Inference
+```{r}
+dadaFsTrnL <- dada(filtFsTrnL, err=errFTrnL, multithread=TRUE)
+dadaRsTrnL <- dada(filtRsTrnL, err=errRTrnL, multithread=TRUE)
+dadaFsTrnL[[1]]
+```
+
+### Merge paired reads
+```{r}
+concatTrnL <- mergePairs(dadaFsTrnL, filtFsTrnL, dadaRsTrnL, filtRsTrnL, 
+                     returnRejects = TRUE, 
+                     justConcatenate = TRUE, 
+                     verbose=TRUE)
+
+# We use JustConcatenate because there is no overlap in some of our forward and reverse sequences
+```
+
+### Construct sequence table
+```{r}
+seqtabTrnL <- makeSequenceTable(concatTrnL)
+dim(seqtabTrnL) # 220 24668
+
+# Inspect distribution of sequence lengths
+table(nchar(getSequences(seqtabTrnL)))
+```
+
+### Remove chimeras
+```{r}
+seqtab.nochimTrnL <- removeBimeraDenovo(seqtabTrnL, method="consensus", multithread=TRUE, verbose=TRUE)
+dim(seqtab.nochimTrnL) # 220 7986
+
+sum(seqtab.nochimTrnL)/sum(seqtabTrnL)
+```
+
+
+## ASSIGN TAXONOMY
+```{r}
+# Custom Pollen (trnL) database - do it on the supercomputer, otherwise it's too long
+taxaTrnL <- assignTaxonomy(colnames(seqtab.nochimTrnL)[1],"~/Documents/Universite/M.Sc./Lab_and_field_work/R/sequencing/trnL/trnL_samples_2022/")
+taxa.printTrnL <- taxaTrnL
+rownames(taxa.printTrnL) <- NULL
+head(taxa.printTrnL)
+```
+
+## Summary statistics create asv
+```{r}
+# See how many sequences are in each sample
+apply(seqtab.nochimTrnL, 1, sum)
+# Look at the row names of the sequence table
+row.names(seqtab.nochimTrnL)
+# Modify the sequence table to remove all unnecessary samples (blank, tests and controls)
+asvTrnL <- seqtab.nochimTrnL[-c(1:3, 43, 81, 154, 164:220),] # Change this if necessary
+dim(asvTrnL) # 157 7986
+
+# Clean up asv: Remove ASVs and samples with less than 100 sequences
+# ASVs
+asvTrnL <- asvTrnL[, colSums(asvTrnL) >= 100]
+dim(asvTrnL) # 157 604
+# Samples
+asvTrnL <- asvTrnL[rowSums(asvTrnL) >= 100,]
+dim(asvTrnL) # 155 604
+
+# Remove the last 5 characters (-trnL) in the row names
+row.names(asvTrnL) <- substring(rownames(asvTrnL), 1, nchar(rownames(asvTrnL)) - 5)
+```
+# Table of Summary statistics for each microbial dataset across the 157 samples
+```{r}
+# Calculate the total number of sequences
+sum(apply(asvTrnL,1,sum)) # 1 827 937
+
+
+# Determine the total number of samples and the total number of asvs
+dim(asvTrnL) # 155 samples and 604 ASVs
+
+
+# Calculate the minimum, maximum, and mean number of ASVs per sample
+summary(apply(asvTrnL,1,sum)) # Min: 477, Max: 29 552, Mean: 11 793
+# Standard Deviation
+sd(apply(asvTrnL,1,sum)) # 6010.121
+
+
+# Calculate the minimum, maximum, and mean number of ASVs per sample
+summary(apply(decostand(asvTrnL,method="pa"),1,sum)) # Min: 4.0, Max: 98.0, Mean: 50.9
+#Standard Deviation
+sd(apply(decostand(asvTrnL,method="pa"),1,sum)) # 17.96453
+
+
+# Calculate the minimum, maximum, and mean number of samples containing each ASVs
+summary(apply(decostand(asvTrnL,method="pa"),2,sum)) # Min: 1.00, Max: 137.0, Mean: 13.06
+# Standard Deviation
+sd(apply(decostand(asvTrnL,method="pa"),2,sum)) # 15.53958
+
+
+# Who is the most ubiquitous ASV?
+# 155 is the number of samples
+taxaTrnL[which(apply(decostand(asvTrnL,method="pa"),2,sum)==155),]
+```
+
+
+# Import metadata 
+## ALL
+```{r}
+# CHANGE THE METADATA
+metaTrnL <- read.csv("~/Documents/Universite/M.Sc./Lab_and_field_work/R/sequencing/16S/sass_samples_2022_16s/metadata_2022_samples_final.csv", sep = ";", row.names = 1)
+metaTrnL$site_id               <- as.factor(metaTrnL$site_id)
+metaTrnL$city                  <- as.factor(metaTrnL$city)
+metaTrnL$time_beginning.       <- as.factor(metaTrnL$time_beginning)
+metaTrnL$time_end              <- as.factor(metaTrnL$time_end)
+metaTrnL$median_income_bracket <- as.factor(metaTrnL$median_income_bracket)
+metaTrnL$veg_index_bracket     <- as.factor(metaTrnL$veg_index_bracket)
+metaTrnL$time                  <- as.factor(metaTrnL$time)
+metaTrnL$date                  <-   as.Date(metaTrnL$date)
+
+# Make sure the only levels for cities are "Montréal", "Québec" and "Sherbrooke".
+unique(metaTrnL$city) # There is another level called "None".
+metaTrnL$city <- droplevels(metaTrnL$city, exclude = "None") # Drop the "none" level
+
+# Make sure the only levels for cities are "Spring", "Summer" and "Fall".
+unique(metaTrnL$time) # There is another level called "None".
+metaTrnL$time <- droplevels(metaTrnL$time, exclude = "None") # Drop the "none" level
+
+# Reorder levels of the 'time' factor
+metaTrnL$time <- factor(metaTrnL$time, levels = levels(metaTrnL$time)[c(2,3,1)])
+
+# Verify dimensions and synchronize row names
+dim(asvTrnL) # 155 604
+dim(metaTrnL) # 172 25
+
+bothTrnL <- intersect(row.names(asvTrnL), row.names(metaTrnL)); bothTrnL
+asvTrnL  <- asvTrnL[bothTrnL,]
+metaTrnL <- metaTrnL[bothTrnL,]
+# Verify if the row names are synchronized
+row.names(metaTrnL) == row.names(asvTrnL)
+
+# Synchronize taxa with the sequence table
+taxaTrnL <- taxaTrnL[colnames(asvTrnL),]
+dim(taxaTrnL) # 2820 7
+```
+# PHYLOSEQ
+## All
+```{r}
+# Create phyloseq object
+phyloTrnL <- phyloseq(otu_table(asvTrnL, taxa_are_rows = FALSE), sample_data(metaTrnL))#, #tax_table(as.matrix(taxaTrnL)))
+
+# DESeq2 transformation
+phyloTrnL.dds <- phyloseq_to_deseq2(phyloTrnL,~time) #variable qui contrôle pour la variance
+
+# Create function for computation (taken from online website of phyloseq)
+gm_mean <- function(x, na.rm=TRUE){exp(sum(log(x[x > 0]), na.rm=na.rm) / length(x))}
+
+# Estimate factor size
+phyloTrnL.dds = estimateSizeFactors(phyloTrnL.dds, geoMeans = apply(counts(phyloTrnL.dds), 1, gm_mean))
+
+# Replace DNA sequences with ASV names
+dnaTrnL <- Biostrings::DNAStringSet(taxa_names(phyloTrnL))
+names(dnaTrnL) <- taxa_names(phyloTrnL)
+phyloTrnL <- merge_phyloseq(phyloTrnL, dnaTrnL)
+taxa_names(phyloTrnL) <- paste0("ASV", seq(ntaxa(phyloTrnL)))
+
+# Variance stabilization
+phyloTrnL.blind <- DESeq2::varianceStabilizingTransformation(phyloTrnL.dds, blind=T)
+phyloTrnL.mat <- SummarizedExperiment::assay(phyloTrnL.blind) # Extract transformed asv table
+phyloTrnL.mat<-t(phyloTrnL.mat)
+phyloTrnL.mat[which(phyloTrnL.mat<0)]<-0
+
+# Prepare for ordination for all treatments
+comm.phyloTrnL.mat <- vegdist(phyloTrnL.mat , "bray")
+PCoA.comm.phyloTrnL.mat<-capscale(phyloTrnL.mat~1,distance="bray")
+PCoA.comm.phyloTrnL.mat$CA$eig[1:3]/sum(PCoA.comm.phyloTrnL.mat$CA$eig)
+eig <- PCoA.comm.phyloTrnL.mat$CA$eig
+eig[1]/sum(abs(eig)) # 22.87 %
+eig[2]/sum(abs(eig)) # 10.42 %
+eig[3]/sum(abs(eig)) # 6.59 %
+PCoA.phyloTrnL <- PCoA.comm.phyloTrnL.mat # New shorter name
+
+# Assign PCoA scores of each samples as column in the meta dataframe
+metaTrnL$MDS1 <- vegan::scores(PCoA.phyloTrnL)$site[,1] # MDS1
+metaTrnL$MDS2 <- scores(PCoA.phyloTrnL)$site[,2] # MDS2
+head(metaTrnL)
+```
+
+## Cities
+### Montréal
+```{r}
+# Making a Montreal phyloseq object
+mtlTrnL <- subset_samples(phyloTrnL, city == "Montreal")
+sample_data(mtlTrnL)
+
+#Metadata for Montréal
+mtlmetaTrnL <- (metaTrnL[metaTrnL$city == "Montreal",])
+
+# Phyloseq MTL
+mtlTrnL.dds <- phyloseq_to_deseq2(mtlTrnL,~time) # variable qui contrôle pour la variance
+
+
+# Estimate factor size
+mtlTrnL.dds = estimateSizeFactors(mtlTrnL.dds,
+                                geoMeans = apply(counts(mtlTrnL.dds), 
+                                                 1, 
+                                                 gm_mean))
+
+# Blind version for all treatments
+mtlTrnL.blind <- DESeq2::varianceStabilizingTransformation(mtlTrnL.dds, blind=T)
+mtlTrnL.mat <- SummarizedExperiment::assay(mtlTrnL.blind) # Extract transformed asv table
+mtlTrnL.mat<-t(mtlTrnL.mat)
+mtlTrnL.mat[which(mtlTrnL.mat<0)]<-0
+
+# Prepare for ordination for all treatments
+comm.mtlTrnL.mat <- vegdist(mtlTrnL.mat , "bray")
+PCoA.comm.mtlTrnL.mat<-capscale(mtlTrnL.mat~1,distance="bray")
+PCoA.comm.mtlTrnL.mat$CA$eig[1:3]/sum(PCoA.comm.mtlTrnL.mat$CA$eig)
+eig <- PCoA.comm.mtlTrnL.mat$CA$eig
+eig[1]/sum(abs(eig)) # 28.01 %
+eig[2]/sum(abs(eig)) # 16.91 %
+eig[3]/sum(abs(eig)) # 6.81 %
+PCoA.mtlTrnL <- PCoA.comm.mtlTrnL.mat # New shorter name
+
+# Assign PCoA scores of each samples as column in the meta dataframe
+mtlmetaTrnL$MDS1 <- scores(PCoA.mtlTrnL)$site[,1] # MDS1
+mtlmetaTrnL$MDS2 <- scores(PCoA.mtlTrnL)$site[,2] # MDS2
+head(mtlmetaTrnL)
+```
+
+### Sherbrooke
+```{r}
+# Making a Sherbrooke phyloseq object
+shbTrnL <- subset_samples(phyloTrnL, city == "Sherbrooke")
+sample_data(shbTrnL)
+
+# Metadata for Sherbooke
+shbmetaTrnL <- (metaTrnL[metaTrnL$city == "Sherbrooke",])
+
+# Phyloseq
+shbTrnL.dds <- phyloseq_to_deseq2(shbTrnL,~time) # variable qui contrôle pour la variance
+
+# Estimate factor size
+shbTrnL.dds = estimateSizeFactors(shbTrnL.dds, geoMeans = apply(counts(shbTrnL.dds), 1, gm_mean))
+
+# Blind version for all treatments
+shbTrnL.blind <- DESeq2::varianceStabilizingTransformation(shbTrnL.dds, blind=T)
+shbTrnL.mat <- SummarizedExperiment::assay(shbTrnL.blind) # Extract transformed asv table
+shbTrnL.mat<-t(shbTrnL.mat)
+shbTrnL.mat[which(shbTrnL.mat<0)]<-0
+
+# Prepare for ordination for all treatments
+comm.shbTrnL.mat <- vegdist(shbTrnL.mat , "bray")
+PCoA.comm.shbTrnL.mat<-capscale(shbTrnL.mat~1,distance="bray")
+PCoA.comm.shbTrnL.mat$CA$eig[1:3]/sum(PCoA.comm.shbTrnL.mat$CA$eig)
+eig <- PCoA.comm.shbTrnL.mat$CA$eig
+eig[1]/sum(abs(eig)) # 29.84 %
+eig[2]/sum(abs(eig)) # 18.32 %
+eig[3]/sum(abs(eig)) # 5.52 %
+PCoA.shbTrnL <- PCoA.comm.shbTrnL.mat # New shorter name
+
+# Assign PCoA scores of each samples as column in the meta dataframe
+shbmetaTrnL$MDS1 <- scores(PCoA.shbTrnL)$site[,1] # MDS1
+shbmetaTrnL$MDS2 <- scores(PCoA.shbTrnL)$site[,2] # MDS2
+head(shbmetaTrnL)
+```
+
+### Québec
+```{r}
+# Making a Quebec phyloseq object
+qcTrnL <- subset_samples(phyloTrnL, city == "Quebec")
+sample_data(qcTrnL)
+
+# Metadata for Quebec
+qcmetaTrnL <- (metaTrnL[metaTrnL$city == "Quebec",])
+
+# Phyloseq
+qcTrnL.dds <- phyloseq_to_deseq2(qcTrnL,~time) # variable qui contrôle pour la variance
+
+# Estimate factor size
+qcTrnL.dds = estimateSizeFactors(qcTrnL.dds, geoMeans = apply(counts(qcTrnL.dds), 1, gm_mean))
+
+# Blind version for all treatments
+qcTrnL.blind <- DESeq2::varianceStabilizingTransformation(qcTrnL.dds, blind=T)
+qcTrnL.mat <- SummarizedExperiment::assay(qcTrnL.blind) # Extract transformed asv table
+qcTrnL.mat<-t(qcTrnL.mat)
+qcTrnL.mat[which(qcTrnL.mat<0)]<-0
+
+# Prepare for ordination for all treatments
+comm.qcTrnL.mat <- vegdist(qcTrnL.mat , "bray")
+PCoA.comm.qcTrnL.mat<-capscale(qcTrnL.mat~1,distance="bray")
+PCoA.comm.qcTrnL.mat$CA$eig[1:3]/sum(PCoA.comm.qcTrnL.mat$CA$eig)
+eig <- PCoA.comm.qcTrnL.mat$CA$eig
+eig[1]/sum(abs(eig)) # 30.51 %
+eig[2]/sum(abs(eig)) # 10.34 %
+eig[3]/sum(abs(eig)) # 6.16 %
+PCoA.qcTrnL <- PCoA.comm.qcTrnL.mat # New shorter name
+
+# Assign PCoA scores of each samples as column in the meta dataframe
+qcmetaTrnL$MDS1 <- scores(PCoA.qcTrnL)$site[,1] # MDS1
+qcmetaTrnL$MDS2 <- scores(PCoA.qcTrnL)$site[,2] # MDS2
+head(qcmetaTrnL)
+```
+
+## Season
+### Spring
+```{r}
+# Making a spring phyloseq object
+springTrnL <- subset_samples(phyloTrnL, time == "Spring")
+sample_data(springTrnL)
+
+# Metadata for Spring
+smetaTrnL <- (metaTrnL[metaTrnL$time == "Spring",])
+
+# Phyloseq
+sTrnL.dds <- phyloseq_to_deseq2(springTrnL,~city) # variable qui contrôle pour la variance
+
+# Estimate factor size
+sTrnL.dds = estimateSizeFactors(sTrnL.dds, geoMeans = apply(counts(sTrnL.dds), 1, gm_mean))
+
+# Blind version for all treatments
+s.blind <- DESeq2::varianceStabilizingTransformation(sTrnL.dds, blind=T)
+s.mat <- SummarizedExperiment::assay(s.blind) # Extract transformed asv table
+s.mat<-t(s.mat)
+s.mat[which(s.mat<0)]<-0
+
+# Prepare for ordination for all treatments
+comm.s.mat <- vegdist(s.mat , "bray")
+PCoA.comm.s.mat<-capscale(s.mat~1,distance="bray")
+PCoA.comm.s.mat$CA$eig[1:3]/sum(PCoA.comm.s.mat$CA$eig)
+eig <- PCoA.comm.s.mat$CA$eig
+eig[1]/sum(abs(eig)) # 18.23 %
+eig[2]/sum(abs(eig)) # 13.55 %
+eig[3]/sum(abs(eig)) # 7.86 %
+PCoA.s <- PCoA.comm.s.mat # New shorter name
+
+# Assign PCoA scores of each samples as column in the meta dataframe
+smetaTrnL$MDS1 <- scores(PCoA.s)$site[,1] # MDS1
+smetaTrnL$MDS2 <- scores(PCoA.s)$site[,2] # MDS2
+head(smetaTrnL)
+```
+
+### Summer
+```{r}
+# Making a summer phyloseq object
+summerTrnL <- subset_samples(phyloTrnL, time == "Summer")
+sample_data(summerTrnL)
+
+# Metadata for summer
+sumetaTrnL <- (metaTrnL[metaTrnL$time == "Summer",])
+
+# Phyloseq
+suTrnL.dds <- phyloseq_to_deseq2(summerTrnL,~city) # variable qui contrôle pour la variance
+
+# Estimate factor size
+suTrnL.dds = estimateSizeFactors(suTrnL.dds, geoMeans = apply(counts(suTrnL.dds),  1, gm_mean))
+
+# Blind version for all treatments
+su.blind <- DESeq2::varianceStabilizingTransformation(suTrnL.dds, blind=T)
+su.mat <- SummarizedExperiment::assay(su.blind) # Extract transformed asv table
+su.mat<-t(su.mat)
+su.mat[which(su.mat<0)]<-0
+
+# Prepare for ordination for all treatments
+comm.su.mat <- vegdist(su.mat , "bray")
+PCoA.comm.su.mat<-capscale(su.mat~1,distance="bray")
+PCoA.comm.su.mat$CA$eig[1:3]/sum(PCoA.comm.su.mat$CA$eig)
+eig <- PCoA.comm.su.mat$CA$eig
+eig[1]/sum(abs(eig)) # 42.99 %
+eig[2]/sum(abs(eig)) # 11.98 %
+eig[3]/sum(abs(eig)) # 8.74 %
+PCoA.su <- PCoA.comm.su.mat # New shorter name
+
+# Assign PCoA scores of each samples as column in the meta dataframe
+sumetaTrnL$MDS1 <- scores(PCoA.su)$site[,1] # MDS1
+sumetaTrnL$MDS2 <- scores(PCoA.su)$site[,2] # MDS2
+head(sumetaTrnL)
+```
+
+### Fall
+```{r}
+# Making a autumn phyloseq object
+fallTrnL <- subset_samples(phyloTrnL, time == "Fall")
+sample_data(fallTrnL)
+
+# Metadata for autumn
+fmetaTrnL <- (metaTrnL[metaTrnL$time == "Fall",])
+
+# Phyloseq
+fallTrnL.dds <- phyloseq_to_deseq2(fallTrnL,~city) # variable qui contrôle pour la variance
+
+# Estimate factor size
+fallTrnL.dds = estimateSizeFactors(fallTrnL.dds, geoMeans = apply(counts(fallTrnL.dds), 1, gm_mean))
+
+# Blind version for all treatments
+fallTrnL.blind <- DESeq2::varianceStabilizingTransformation(fallTrnL.dds, blind=T)
+fallTrnL.mat <- SummarizedExperiment::assay(fallTrnL.blind) # Extract transformed asv table
+fallTrnL.mat<-t(fallTrnL.mat)
+fallTrnL.mat[which(fallTrnL.mat<0)]<-0
+
+# Prepare for ordination for all treatments
+comm.fallTrnL.mat <- vegdist(fallTrnL.mat , "bray")
+PCoA.comm.fallTrnL.mat<-capscale(fallTrnL.mat~1,distance="bray")
+PCoA.comm.fallTrnL.mat$CA$eig[1:3]/sum(PCoA.comm.fallTrnL.mat$CA$eig)
+eig <- PCoA.comm.fallTrnL.mat$CA$eig
+eig[1]/sum(abs(eig)) # 14.84 %
+eig[2]/sum(abs(eig)) # 9.18 %
+eig[3]/sum(abs(eig)) # 6.50 %
+PCoA.fallTrnL<- PCoA.comm.fallTrnL.mat # New shorter name
+
+# Assign PCoA scores of each samples as column in the meta dataframe
+fmetaTrnL$MDS1 <- scores(PCoA.fallTrnL)$site[,1] # MDS1
+fmetaTrnL$MDS2 <- scores(PCoA.fallTrnL)$site[,2] # MDS2
+head(fmetaTrnL)
+```
+
+
+# PERMANOVAS - Test if compositions are different
+## All
+```{r}
+# Permanova
+permanova.test <- adonis2(phyloTrnL.mat ~  time*city + city*date + time*date + mean_temperature + median_income_bracket + longitude*latitude + mean_relative_humidity + mean_wind_speed, by="terms",data=metaTrnL); permanova.test
+
+# Dispersion variance - City
+anova(betadisper(comm.phyloTrnL.mat, metaTrnL$city, type ="centroid")) # NS
+
+# Dispersion variance - Season
+anova(betadisper(comm.phyloTrnL.mat, metaTrnL$time, type ="centroid")) # ***
+
+
+
+# Dispersion variance - Median income
+anova(betadisper(comm.phyloTrnL.mat, metaTrnL$median_income_bracket, type ="centroid")) # **
+
+# Dispersion variance - Temperature
+anova(betadisper(comm.phyloTrnL.mat, metaTrnL$mean_temperature, type ="centroid")) # ***
+
+# Dispersion variance - Relative Humidity
+anova(betadisper(comm.phyloTrnL.mat, metaTrnL$mean_relative_humidity, type ="centroid")) # ***
+
+# Dispersion variance - Wind Speed
+anova(betadisper(comm.phyloTrnL.mat, metaTrnL$mean_wind_speed, type ="centroid")) # ***
+
+# Dispersion variance - Longitude
+anova(betadisper(comm.phyloTrnL.mat, metaTrnL$longitude, type ="centroid")) # ***
+
+# Dispersion variance - date
+anova(betadisper(comm.phyloTrnL.mat, metaTrnL$date, type ="centroid")) # ***
+```
+
+## Cities
+### Montréal
+```{r}
+# Permanova
+mtlpermanova.test <- adonis2(mtlTrnL.mat ~ time*date + mean_temperature + median_income_bracket + longitude*latitude, by="terms",data=mtlmetaTrnL); mtlpermanova.test 
+
+# Dispersion variance - Season
+anova(betadisper(comm.mtlTrnL.mat, mtlmetaTrnL$time, type ="centroid")) # *
+
+# Dispersion variance - Median income
+anova(betadisper(comm.mtlTrnL.mat, mtlmetaTrnL$median_income_bracket, type ="centroid")) # NS
+
+# Dispersion variance - Vegetation
+anova(betadisper(comm.mtlTrnL.mat, mtlmetaTrnL$veg_index_bracket, type ="centroid")) # NS
+
+# Dispersion variance - Temperature
+anova(betadisper(comm.mtlTrnL.mat, mtlmetaTrnL$mean_temperature, type ="centroid")) # *** ANOVA F-tests on an essentially perfect fit are unreliable
+
+# Dispersion variance - Relative humodity
+anova(betadisper(comm.mtlTrnL.mat, mtlmetaTrnL$mean_relative_humidity, type ="centroid")) # *** ANOVA F-tests on an essentially perfect fit are unreliable
+  
+# Dispersion variance - Wind speed
+anova(betadisper(comm.mtlTrnL.mat, mtlmetaTrnL$mean_wind_speed, type ="centroid")) # ***
+```
+
+
+### Sherbrooke
+```{r}
+# Permanova
+shbpermanova.test <- adonis2(shbTrnL.mat ~ time*date + mean_temperature + median_income_bracket + longitude*latitude, by="terms",data=shbmetaTrnL); shbpermanova.test 
+
+
+# Dispersion variance - Season
+anova(betadisper(comm.shbTrnL.mat, shbmetaTrnL$time, type ="centroid")) # *
+
+# Dispersion variance - Median income
+anova(betadisper(comm.shbTrnL.mat, shbmetaTrnL$median_income_bracket, type ="centroid")) # NS
+
+# Dispersion variance - Vegetation
+anova(betadisper(comm.shbTrnL.mat, shbmetaTrnL$veg_index_bracket, type ="centroid")) # NS
+
+# Dispersion variance - Temperature
+anova(betadisper(comm.shbTrnL.mat, shbmetaTrnL$mean_temperature, type ="centroid")) # *** ANOVA F-tests on an essentially perfect fit are unreliable
+
+# Dispersion variance - Relative humidity
+anova(betadisper(comm.shbTrnL.mat, shbmetaTrnL$mean_relative_humidity, type ="centroid")) # *
+
+# Dispersion variance - Wind speed
+anova(betadisper(comm.shbTrnL.mat, shbmetaTrnL$mean_wind_speed, type ="centroid")) # ***
+```
+
+### Québec
+```{r}
+# Permanova
+qcpermanova.test <- adonis2(qcTrnL.mat ~ time*date + mean_temperature + median_income_bracket + longitude*latitude, by="terms",data=qcmetaTrnL); qcpermanova.test 
+
+# Dispersion variance - time
+anova(betadisper(comm.qcTrnL.mat, qcmetaTrnL$time, type ="centroid")) # NS
+
+# Dispersion variance - Median income
+anova(betadisper(comm.qcTrnL.mat, qcmetaTrnL$median_income_bracket, type ="centroid")) # ***
+
+# Dispersion variance - Vegetation
+anova(betadisper(comm.qcTrnL.mat, qcmetaTrnL$veg_index_bracket, type ="centroid")) # NS
+
+# Dispersion variance - Temperature
+anova(betadisper(comm.qcTrnL.mat, qcmetaTrnL$mean_temperature, type ="centroid")) # ***
+
+# Dispersion variance - Relative humidity
+anova(betadisper(comm.qcTrnL.mat, qcmetaTrnL$mean_relative_humidity, type ="centroid")) # *** ANOVA F-tests on an essentially perfect fit are unreliable
+
+# Dispersion variance - Wind speed
+anova(betadisper(comm.qcTrnL.mat, qcmetaTrnL$mean_wind_speed, type ="centroid")) # *** ANOVA F-tests on an essentially perfect fit are unreliable
+```
+
+## Seasons
+### Spring
+```{r}
+# Permanova
+spermanova.test <- adonis2(s.mat ~ city*date + mean_temperature + median_income_bracket + longitude*latitude, by="terms",data=smetaTrnL); spermanova.test
+
+
+# Dispersion variance - City
+anova(betadisper(comm.s.mat, smetaTrnL$city, type ="centroid")) # NS
+
+# Dispersion variance - Median income
+anova(betadisper(comm.s.mat, smetaTrnL$median_income_bracket, type ="centroid")) # NS
+
+# Dispersion variance - Vegetation
+anova(betadisper(comm.s.mat, smetaTrnL$veg_index_bracket, type ="centroid")) # ***
+
+# Dispersion variance - Temperature
+anova(betadisper(comm.s.mat, smetaTrnL$mean_temperature, type ="centroid")) # ***
+
+# Dispersion variance - Relative humidity
+anova(betadisper(comm.s.mat, smetaTrnL$mean_relative_humidity, type ="centroid")) # *** ANOVA F-tests on an essentially perfect fit are unreliable
+
+# Dispersion variance - Wind speed
+anova(betadisper(comm.s.mat, smetaTrnL$mean_wind_speed, type ="centroid")) # *** ANOVA F-tests on an essentially perfect fit are unreliable
+```
+
+### Summer
+```{r}
+# Permanova
+supermanova.test <- adonis2(su.mat ~ city*date + mean_temperature + median_income_bracket + longitude*latitude, by="terms",data=sumetaTrnL); supermanova.test
+
+
+# Dispersion variance
+anova(betadisper(comm.su.mat, sumetaTrnL$city, type ="centroid")) # NS
+
+# Dispersion variance - Median income
+anova(betadisper(comm.su.mat, sumetaTrnL$median_income_bracket, type ="centroid")) # NS
+
+# Dispersion variance - Vegetation
+anova(betadisper(comm.su.mat, sumetaTrnL$veg_index_bracket, type ="centroid")) # *
+
+# Dispersion variance - Temperature
+anova(betadisper(comm.su.mat, sumetaTrnL$mean_temperature, type ="centroid")) # **
+
+# Dispersion variance - Relative humidity
+anova(betadisper(comm.su.mat, sumetaTrnL$mean_relative_humidity, type ="centroid")) # NS
+
+# Dispersion variance - Wind speed
+anova(betadisper(comm.su.mat, sumetaTrnL$mean_wind_speed, type ="centroid")) # *** ANOVA F-tests on an essentially perfect fit are unreliable
+```
+
+### Fall
+```{r}
+# Permanova
+fallpermanova.test <- adonis2(fallTrnL.mat ~ city*date + mean_temperature + median_income_bracket + longitude*latitude, by="terms",data=fmetaTrnL); fallpermanova.test 
+
+
+# Dispersion variance City
+anova(betadisper(comm.fallTrnL.mat, fmetaTrnL$city, type ="centroid")) # NS
+
+# Dispersion variance Median income
+anova(betadisper(comm.fallTrnL.mat, fmetaTrnL$median_income_bracket, type ="centroid")) # NS
+
+# Dispersion variance - Vegetation
+anova(betadisper(comm.fallTrnL.mat, fmetaTrnL$veg_index_bracket, type ="centroid")) # NS
+
+# Dispersion variance - Temperature
+anova(betadisper(comm.fallTrnL.mat, fmetaTrnL$mean_temperature, type ="centroid")) # ***
+
+# Dispersion variance - Relative humidity
+anova(betadisper(comm.fallTrnL.mat, fmetaTrnL$mean_relative_humidity, type ="centroid")) # *** ANOVA F-tests on an essentially perfect fit are unreliable
+
+# Dispersion variance - Wind speed
+anova(betadisper(comm.fallTrnL.mat, fmetaTrnL$mean_wind_speed, type ="centroid")) # ***
+```
+
+
+# Determine the proportion of sequences assigned to species
+```{r}
+# SPECIES
+# Convert the tax_table to a data frame
+df_taxa <- as.data.frame(tax_table(phylo))
+
+# Make a new object with only the "Species" column and the ASVs as rows
+species_column <- df_taxa['Species']
+genus_column <- df_taxa['Genus']
+family_column <- df_taxa['Family']
+class_column <- df_taxa['Class']
+phylum_column <- df_taxa['Phylum']
+kingdom_column <- df_taxa['Kingdom']
+
+
+# How many of the rows in the species column are not NAs / How many rows are there * 100%
+
+sum(!is.na(species_column))/nrow(species_column)*100 # 72.12%
+# genus
+sum(!is.na(genus_column))/nrow(genus_column)*100 # 94.65%
+# family
+sum(!is.na(family_column))/nrow(family_column)*100 # 96.02%
+# class
+sum(!is.na(class_column))/nrow(class_column)*100 # 98.86%
+# phylum
+sum(!is.na(phylum_column))/nrow(phylum_column)*100 # 99.77%
+# kingdom
+sum(!is.na(kingdom_column))/nrow(kingdom_column)*100 # 100%
+```
+
+## PCoAs
+### All
+#### Cities
+```{r}
+pcoa_cities_TrnL <- ggplot(metaTrnL, aes(MDS1, MDS2, shape = city, fill = city, color = city))+# What we want to plot
+  # Add ellipses representing the 95% confidence level for each site
+  stat_ellipse(level=0.95, geom = "polygon",alpha = 1/3, aes(group = city))+
+  geom_point(aes(size=0.1))+ # Add points to the plot, specify point size
+  # Customize the color scale for site labels
+  scale_color_manual(name = "Cities",values= c("black","black","black","black"))+
+  # Customize the shape scale for city labels
+  scale_shape_manual(name = "Cities", values = c(22,21,24))+
+  # Customize the fill color scale for site labels
+ scale_fill_manual(name = "Cities",values = c("indianred3","khaki1","darkolivegreen3"))+
+  theme_bw()+ # Set black and white theme
+  ggtitle("PCoA of pollen along cities") + # Set the plot title
+  theme(plot.title = element_text(hjust = 0.5, face="bold"),
+        axis.title = element_text(size = 16),
+        legend.title = element_text(size=16),
+        legend.text = element_text(size=14))+ # Customize plot and axis titles
+  xlab("PCoA1 (23%)") +  # Set the x-axis label
+ylab("PCoA2 (10%)")+ # y-axis label
+  guides(size = "none")+
+  guides(shape = guide_legend(override.aes = list(size=5)))+
+  guides(fill = guide_legend(override.aes = list(shape = NA))); pcoa_cities_TrnL # Remove the size legend
+```
+
+#### Seasons
+```{r}
+pcoa_time_TrnL <- ggplot(metaTrnL, aes(MDS1, MDS2, shape = city, fill = time, color = time))+# What we want to plot
+  # Add ellipses representing the 95% confidence level for each site
+  stat_ellipse(level=0.95, geom = "polygon",alpha = 1/3, aes(group = time))+
+  geom_point(aes(size=0.1))+ # Add points to the plot, specify point size
+  # Customize the color scale for site labels
+  scale_color_manual(name = "Seasons",values= c("black","black","black","black"))+
+  # Customize the shape scale for cultivar labels
+  scale_shape_manual(name = "Cities", values = c(22,21,24))+
+  # Customize the fill color scale for site labels
+ scale_fill_manual(name = "Seasons",values = c("#ffb3c6","#61a5c2","#F29040"))+
+  theme_bw()+ # Set black and white theme
+  ggtitle("PCoA of pollen along seasons") + # Set the plot title
+  theme(plot.title = element_text(hjust = 0.5, face="bold"),
+        axis.title = element_text(size = 16),
+        legend.title = element_text(size=16),
+        legend.text = element_text(size=14))+ # Customize plot and axis titles
+  xlab("PCoA1 (22%)") +  # Set the x-axis label
+ylab("PCoA2 (10%)")+ # y-axis label
+  guides(size = "none")+
+  guides(shape = guide_legend(override.aes = list(size=5)))+
+  guides(fill = guide_legend(override.aes = list(shape = NA))); pcoa_time_TrnL # Remove the size legend
+```
+
+
+#### Median Income
+```{r}
+pcoa_income_TrnL <- ggplot(metaTrnL, aes(MDS1, MDS2, shape = city, fill = median_income_bracket, color = median_income_bracket))+# What we want to plot
+  # Add ellipses representing the 95% confidence level for each site
+  stat_ellipse(level=0.95, geom = "polygon", alpha = 1/3, aes(group = median_income_bracket))+
+  geom_point(aes(size=0.1))+ # Add points to the plot, specify point size
+  # Customize the color scale for site labels
+  scale_color_manual(name = "Median income index (CA$)",
+                     values= c("black","black","black","black"),
+                     labels = c("1:   0k - 40k", "2: 40k - 70k", "3: 70k - 100k", "4:       > 100k"))+
+  # Customize the shape scale for cultivar labels
+  scale_shape_manual(name = "Cities",
+                     values = c(22,21,24))+
+  # Customize the fill color scale for site labels
+  scale_fill_manual(name = "Median income index (CA$)",
+                    values = c("#b56576", "#a8dadc", "#fec89a","#4a7c59"),
+                    breaks = c("1","2","3","4"),
+                    labels = c("1:   0k - 40k", "2: 40k - 70k", "3: 70k - 100k", "4:       > 100k"))+
+  theme_bw()+ # Set black and white theme
+  ggtitle("PCoA of pollen along median income") + # Set the plot title
+  theme(plot.title = element_text(hjust = 0.5, face="bold"),
+        axis.title = element_text(size = 16),
+        legend.title = element_text(size=16),
+        legend.text = element_text(size=14))+ # Customize plot and axis titles
+  xlab("PCoA1 (22%)") +  # Set the x-axis label
+  ylab("PCoA2 (10%)")+ # y-axis label
+  guides(size = "none")+
+  guides(shape = guide_legend(override.aes = list(size=5)))+
+  guides(fill = guide_legend(override.aes = list(shape = NA))); pcoa_income_TrnL # Remove the size legend
+```
+
+
+#### Vegetation
+```{r}
+pcoa_veg_TrnL <- ggplot(metaTrnL, aes(MDS1, MDS2, shape = city, fill = veg_index_bracket, color = veg_index_bracket))+# What we want to plot
+  # Add ellipses representing the 95% confidence level for each site
+  stat_ellipse(level=0.95, geom = "polygon",alpha = 1/3, aes(group = veg_index_bracket))+
+  geom_point(aes(size=0.1))+ # Add points to the plot, specify point size
+  # Customize the color scale for site labels
+  scale_color_manual(name = "Vegetation index (NDVI)",values= c("black","black","black","black"),
+                    breaks = c("1","2","3","4"),
+                    labels = c("1: 0.2 - 0.3", "2: 0.3 - 0.5", "3: 0.5 - 0.7", "4: 0.7 - 1"))+
+  # Customize the shape scale for cultivar labels
+  scale_shape_manual(name = "Cities", values = c(22,21,24))+
+  # Customize the fill color scale for site labels
+  scale_fill_manual(name = "Vegetation index (NDVI)",values = c("#3C4620", "#adc178", "#f0ead2", "#D17D61"),
+                    breaks = c("1","2","3","4"),
+                    labels = c("1: 0.2 - 0.3", "2: 0.3 - 0.5", "3: 0.5 - 0.7", "4: 0.7 - 1"))+
+  theme_bw()+ # Set black and white theme
+  ggtitle("PCoA of pollen along vegetation") + # Set the plot title
+  theme(plot.title = element_text(hjust = 0.5, face="bold"),
+        axis.title = element_text(size = 16),
+        legend.title = element_text(size=16),
+        legend.text = element_text(size=14))+ # Customize plot and axis titles
+  xlab("PCoA1 (22%)") +  # Set the x-axis label
+  ylab("PCoA2 (10%)")+ # y-axis label
+  guides(size = "none")+
+  guides(shape = guide_legend(override.aes = list(size=5)))+
+  guides(fill = guide_legend(override.aes = list(shape = NA))); pcoa_veg_TrnL # Remove the size legend
+```
+### Cities
+#### Montreal
+##### Seasons
+```{r}
+pcoa_MTLtime_TrnL <- ggplot(mtlmetaTrnL, aes(MDS1, MDS2, shape = city, fill = time, color = time))+# What we want to plot
+  # Add ellipses representing the 95% confidence level for each site
+  stat_ellipse(level=0.95, geom = "polygon",alpha = 1/3, aes(group = time))+
+  geom_point(aes(size=0.1))+ # Add points to the plot, specify point size
+  # Customize the color scale for site labels
+  scale_color_manual(name = "Seasons",values= c("black","black","black","black"))+
+  # Customize the shape scale for cultivar labels
+  scale_shape_manual(name = "Cities", values = 21)+
+  # Customize the fill color scale for site labels
+  scale_fill_manual(name = "Seasons",values = c("#ffb3c6","#61a5c2","#F29040"))+
+  theme_bw()+ # Set black and white theme
+  ggtitle("PCoA of pollen along seasons in Montréal") + # Set the plot title
+  theme(plot.title = element_text(hjust = 0.5, face="bold"),
+        axis.title = element_text(size = 16),
+        legend.title = element_text(size=16),
+        legend.text = element_text(size=14))+ # Customize plot and axis titles
+  xlab("PCoA1 (28%)") +  # Set the x-axis label
+  ylab("PCoA2 (17%)")+ # y-axis label
+  guides(size = "none")+
+  guides(shape = "none")+
+  guides(fill = guide_legend(override.aes = list(shape = NA))); pcoa_MTLtime_TrnL # Remove the size legend
+```
+
+##### Median income
+```{r}
+pcoa_MTLincome_TrnL <- ggplot(mtlmetaTrnL, aes(MDS1, MDS2, shape = city, fill = median_income_bracket, color = median_income_bracket))+# What we want to plot
+  # Add ellipses representing the 95% confidence level for each site
+  stat_ellipse(level=0.95, geom = "polygon",alpha = 1/3, aes(group = median_income_bracket))+
+  geom_point(aes(size=0.1))+ # Add points to the plot, specify point size
+  # Customize the color scale for site labels
+  scale_color_manual(name = "Median income index (CA$)",values= c("black","black","black","black"),
+                    breaks = c("1","2","3","4"),
+                    labels = c("1:   0k - 40k", "2: 40k - 70k", "3: 70k - 100k", "4:       > 100k"))+
+  # Customize the shape scale for cultivar labels
+  scale_shape_manual(name = "Cities", values = 22)+
+  # Customize the fill color scale for site labels
+  scale_fill_manual(name = "Median income index (CA$)",values = c("#b56576", "#a8dadc", "#fec89a","#4a7c59"),
+                    breaks = c("1","2","3","4"),
+                    labels = c("1:   0k - 40k", "2: 40k - 70k", "3: 70k - 100k", "4:       > 100k"))+
+  theme_bw()+ # Set black and white theme
+  ggtitle("PCoA of pollen along median income in Montréal") + # Set the plot title
+  theme(plot.title = element_text(hjust = 0.5, face="bold"),
+        axis.title = element_text(size = 16),
+        legend.title = element_text(size=16),
+        legend.text = element_text(size=14))+ # Customize plot and axis titles
+  xlab("PCoA1 (28%)") +  # Set the x-axis label
+  ylab("PCoA2 (17%)")+ # y-axis label
+  guides(size = "none")+
+  guides(shape = "none")+
+  guides(fill = guide_legend(override.aes = list(shape = NA))); pcoa_MTLincome_TrnL # Remove the size legend
+```
+
+
+##### Vegetation
+```{r}
+pcoa_MTLveg_TrnL <- ggplot(mtlmetaTrnL, aes(MDS1, MDS2, shape = city, fill = veg_index_bracket, color = veg_index_bracket))+# What we want to plot
+  # Add ellipses representing the 95% confidence level for each site
+  stat_ellipse(level=0.95, geom = "polygon",alpha = 1/3, aes(group = veg_index_bracket))+
+  geom_point(aes(size=0.1))+ # Add points to the plot, specify point size
+  # Customize the color scale for site labels
+  scale_color_manual(name = "Vegetation index (NDVI)",values= c("black","black","black","black"),
+                    breaks = c("1","2","3","4"),
+                    labels = c("1: 0.2 - 0.3", "2: 0.3 - 0.5", "3: 0.5 - 0.7", "4: 0.7 - 1"))+
+  # Customize the shape scale for cultivar labels
+  scale_shape_manual(name = "Cities", values = 22)+
+  # Customize the fill color scale for site labels
+  scale_fill_manual(name = "Vegetation index (NDVI)",values = c("#3C4620", "#adc178", "#f0ead2", "#D17D61"),
+                    breaks = c("1","2","3","4"),
+                    labels = c("1: 0.2 - 0.3", "2: 0.3 - 0.5", "3: 0.5 - 0.7", "4: 0.7 - 1"))+
+  theme_bw()+ # Set black and white theme
+  ggtitle("PCoA of pollen along vegetation in Montréal") + # Set the plot title
+  theme(plot.title = element_text(hjust = 0.5, face="bold"),
+        axis.title = element_text(size = 16),
+        legend.title = element_text(size=16),
+        legend.text = element_text(size=14))+ # Customize plot and axis titles
+  xlab("PCoA1 (28%)") +  # Set the x-axis label
+  ylab("PCoA2 (17%)")+ # y-axis label
+  guides(size = "none")+
+  guides(shape = "none")+
+  guides(fill = guide_legend(override.aes = list(shape = NA))); pcoa_MTLveg_TrnL # Remove the size legend
+```
+
+#### Sherbrooke
+##### Seasons
+```{r}
+pcoa_SHBtime_TrnL <- ggplot(shbmetaTrnL, aes(MDS1, MDS2, shape = city, fill = time, color = time))+# What we want to plot
+  # Add ellipses representing the 95% confidence level for each site
+  stat_ellipse(level=0.95, geom = "polygon",alpha = 1/3, aes(group = time))+
+  geom_point(aes(size=0.1))+ # Add points to the plot, specify point size
+  # Customize the color scale for site labels
+  scale_color_manual(name = "Seasons",values= c("black","black","black","black"))+
+  # Customize the shape scale for cultivar labels
+  scale_shape_manual(name = "Cities", values = 24)+
+  # Customize the fill color scale for site labels
+  scale_fill_manual(name = "Seasons",values = c("#ffb3c6","#61a5c2","#F29040"))+
+  theme_bw()+ # Set black and white theme
+  ggtitle("PCoA of pollen along seasons in Sherbrooke") + # Set the plot title
+  theme(plot.title = element_text(hjust = 0.5, face="bold"),
+        axis.title = element_text(size = 16),
+        legend.title = element_text(size=16),
+        legend.text = element_text(size=14))+ # Customize plot and axis titles
+  xlab("PCoA1 (30%)") +  # Set the x-axis label
+  ylab("PCoA2 (18%)")+ # y-axis label
+  guides(size = "none")+
+  guides(shape = "none")+
+  guides(fill = guide_legend(override.aes = list(shape = NA))); pcoa_SHBtime_TrnL # Remove the size legend
+```
+
+##### Median income
+```{r}
+pcoa_SHBincome_TrnL <- ggplot(shbmetaTrnL, aes(MDS1, MDS2, shape = city, fill = median_income_bracket, color = median_income_bracket))+# What we want to plot
+  # Add ellipses representing the 95% confidence level for each site
+  stat_ellipse(level=0.95, geom = "polygon",alpha = 1/3, aes(group = median_income_bracket))+
+  geom_point(aes(size=0.1))+ # Add points to the plot, specify point size
+  # Customize the color scale for site labels
+  scale_color_manual(name = "Median income index (CA$)",values= c("black","black","black","black"),
+                    breaks = c("1","2","3","4"),
+                    labels = c("1:   0k - 40k", "2: 40k - 70k", "3: 70k - 100k", "4:       > 100k"))+
+  # Customize the shape scale for cultivar labels
+  scale_shape_manual(name = "Cities", values = 24)+
+  # Customize the fill color scale for site labels
+  scale_fill_manual(name = "Median income index (CA$)",values = c("#b56576", "#a8dadc", "#fec89a","#4a7c59"),
+                    breaks = c("1","2","3","4"),
+                    labels = c("1:   0k - 40k", "2: 40k - 70k", "3: 70k - 100k", "4:       > 100k"))+
+  theme_bw()+ # Set black and white theme
+  ggtitle("PCoA of pollen along median income in Sherbrooke") + # Set the plot title
+  theme(plot.title = element_text(hjust = 0.5, face="bold"),
+        axis.title = element_text(size = 16),
+        legend.title = element_text(size=16),
+        legend.text = element_text(size=14))+ # Customize plot and axis titles
+  xlab("PCoA1 (30%)") +  # Set the x-axis label
+  ylab("PCoA2 (18%)")+ # y-axis label
+  guides(size = "none")+
+  guides(shape = "none")+
+  guides(fill = guide_legend(override.aes = list(shape = NA))); pcoa_SHBincome_TrnL # Remove the size legend
+```
+
+##### Vegetation
+```{r}
+pcoa_SHBveg_TrnL <- ggplot(shbmetaTrnL, aes(MDS1, MDS2, shape = city, fill = veg_index_bracket, color = veg_index_bracket))+# What we want to plot
+  # Add ellipses representing the 95% confidence level for each site
+  stat_ellipse(level=0.95, geom = "polygon",alpha = 1/3, aes(group = veg_index_bracket))+
+  geom_point(aes(size=0.1))+ # Add points to the plot, specify point size
+  # Customize the color scale for site labels
+  scale_color_manual(name = "Vegetation index (NDVI)",values= c("black","black","black","black"),
+                    breaks = c("1","2","3","4"),
+                    labels = c("1: 0.2 - 0.3", "2: 0.3 - 0.5", "3: 0.5 - 0.7", "4: 0.7 - 1"))+
+  # Customize the shape scale for cultivar labels
+  scale_shape_manual(name = "Cities", values = 24)+
+  # Customize the fill color scale for site labels
+  scale_fill_manual(name = "Vegetation index (NDVI)",values = c("#3C4620", "#adc178", "#f0ead2", "#D17D61"),
+                    breaks = c("1","2","3","4"),
+                    labels = c("1: 0.2 - 0.3", "2: 0.3 - 0.5", "3: 0.5 - 0.7", "4: 0.7 - 1"))+
+  theme_bw()+ # Set black and white theme
+  ggtitle("PCoA of pollen along vegetation in Sherbrooke") + # Set the plot title
+  theme(plot.title = element_text(hjust = 0.5, face="bold"),
+        axis.title = element_text(size = 16),
+        legend.title = element_text(size=16),
+        legend.text = element_text(size=14))+ # Customize plot and axis titles
+  xlab("PCoA1 (30%)") +  # Set the x-axis label
+  ylab("PCoA2 (18%)")+ # y-axis label
+  guides(size = "none")+
+  guides(shape = "none")+
+  guides(fill = guide_legend(override.aes = list(shape = NA))); pcoa_SHBveg_TrnL # Remove the size legend
+```
+
+#### Québec
+##### Seasons
+```{r}
+pcoa_QCtime_TrnL <- ggplot(qcmetaTrnL, aes(MDS1, MDS2, shape = city, fill = time, color = time))+# What we want to plot
+  # Add ellipses representing the 95% confidence level for each site
+  stat_ellipse(level=0.95, geom = "polygon",alpha = 1/3, aes(group = time))+
+  geom_point(aes(size=0.1))+ # Add points to the plot, specify point size
+  # Customize the color scale for site labels
+  scale_color_manual(name = "Seasons",values= c("black","black","black","black"))+
+  # Customize the shape scale for cultivar labels
+  scale_shape_manual(name = "Cities", values = 21)+
+  # Customize the fill color scale for site labels
+  scale_fill_manual(name = "Seasons",values = c("#ffb3c6","#F29040"))+
+  theme_bw()+ # Set black and white theme
+  ggtitle("PCoA of pollen along seasons in Québec") + # Set the plot title
+  theme(plot.title = element_text(hjust = 0.5, face="bold"),
+        axis.title = element_text(size = 16),
+        legend.title = element_text(size=16),
+        legend.text = element_text(size=14))+ # Customize plot and axis titles
+  xlab("PCoA1 (31%)") +  # Set the x-axis label
+  ylab("PCoA2 (10%)")+ # y-axis label
+  guides(size = "none")+
+  guides(shape = "none")+
+  guides(fill = guide_legend(override.aes = list(shape = NA))); pcoa_QCtime_TrnL # Remove the size legend
+```
+
+##### Median income
+```{r}
+pcoa_QCincome_TrnL <- ggplot(qcmetaTrnL, aes(MDS1, MDS2, shape = city, fill = median_income_bracket, color = median_income_bracket))+# What we want to plot
+  # Add ellipses representing the 95% confidence level for each site
+  stat_ellipse(level=0.95, geom = "polygon",alpha = 1/3, aes(group = median_income_bracket))+
+  geom_point(aes(size=0.1))+ # Add points to the plot, specify point size
+  # Customize the color scale for site labels
+  scale_color_manual(name = "Median income index (CA$)",values= c("black","black","black","black"),
+                    breaks = c("1","2","3","4"),
+                    labels = c("1:   0k - 40k", "2: 40k - 70k", "3: 70k - 100k", "4:       > 100k"))+
+  # Customize the shape scale for cultivar labels
+  scale_shape_manual(name = "Cities", values = 21)+
+  # Customize the fill color scale for site labels
+  scale_fill_manual(name = "Median income index (CA$)",values = c("#b56576", "#a8dadc", "#fec89a","#4a7c59"),
+                    breaks = c("1","2","3","4"),
+                    labels = c("1:   0k - 40k", "2: 40k - 70k", "3: 70k - 100k", "4:       > 100k"))+
+  theme_bw()+ # Set black and white theme
+  ggtitle("PCoA of pollen along median income in Québec") + # Set the plot title
+  theme(plot.title = element_text(hjust = 0.5, face="bold"),
+        axis.title = element_text(size = 16),
+        legend.title = element_text(size=16),
+        legend.text = element_text(size=14))+ # Customize plot and axis titles
+  xlab("PCoA1 (31%)") +  # Set the x-axis label
+  ylab("PCoA2 (10%)")+ # y-axis label
+  guides(size = "none")+
+  guides(shape = "none")+
+  guides(fill = guide_legend(override.aes = list(shape = NA))); pcoa_QCincome_TrnL # Remove the size legend
+```
+
+##### Vegetation
+```{r}
+pcoa_QCveg_TrnL <- ggplot(qcmetaTrnL, aes(MDS1, MDS2, shape = city, fill = veg_index_bracket, color = veg_index_bracket))+# What we want to plot
+  # Add ellipses representing the 95% confidence level for each site
+  stat_ellipse(level=0.95, geom = "polygon",alpha = 1/3, aes(group = veg_index_bracket))+
+  geom_point(aes(size=0.1))+ # Add points to the plot, specify point size
+  # Customize the color scale for site labels
+  scale_color_manual(name = "Vegetation index (NDVI)",values= c("black","black","black","black"),
+                    breaks = c("1","2","3","4"),
+                    labels = c("1: 0.2 - 0.3", "2: 0.3 - 0.5", "3: 0.5 - 0.7", "4: 0.7 - 1"))+
+  # Customize the shape scale for cultivar labels
+  scale_shape_manual(name = "Cities", values = 21)+
+  # Customize the fill color scale for site labels
+  scale_fill_manual(name = "Vegetation index (NDVI)",values = c("#3C4620", "#adc178", "#f0ead2", "#D17D61"),
+                    breaks = c("1","2","3","4"),
+                    labels = c("1: 0.2 - 0.3", "2: 0.3 - 0.5", "3: 0.5 - 0.7", "4: 0.7 - 1"))+
+  theme_bw()+ # Set black and white theme
+  ggtitle("PCoA of pollen along vegetation in Québec") + # Set the plot title
+  theme(plot.title = element_text(hjust = 0.5, face="bold"),
+        axis.title = element_text(size = 16),
+        legend.title = element_text(size=16),
+        legend.text = element_text(size=14))+ # Customize plot and axis titles
+  xlab("PCoA1 (31%)") +  # Set the x-axis label
+  ylab("PCoA2 (10%)")+ # y-axis label
+  guides(size = "none")+
+  guides(shape = "none")+
+  guides(fill = guide_legend(override.aes = list(shape = NA))); pcoa_QCveg_TrnL # Remove the size legend
+```
+
+### Spring
+#### Spring along cities
+```{r}
+pcoa_Scities_TrnL <- ggplot(smetaTrnL, aes(MDS1, MDS2, shape = city, fill = city, color = city))+# What we want to plot
+  # Add ellipses representing the 95% confidence level for each site
+  stat_ellipse(level=0.95, geom = "polygon",alpha = 1/3, aes(group = city))+
+  geom_point(aes(size=0.1))+ # Add points to the plot, specify point size
+  # Customize the color scale for site labels
+  scale_color_manual(name = "Cities",values= c("black","black","black","black"))+
+  # Customize the shape scale for cultivar labels
+  scale_shape_manual(name = "Cities", values = c(22,21,24))+
+  # Customize the fill color scale for site labels
+  scale_fill_manual(name = "Cities",values = c("indianred3","khaki1","darkolivegreen3"))+
+  theme_bw()+ # Set black and white theme
+  ggtitle("PCoA of bacteria along cities in the spring") + # Set the plot title
+  theme(plot.title = element_text(hjust = 0.5, face="bold"),
+        axis.title = element_text(size = 16),
+        legend.title = element_text(size=16),
+        legend.text = element_text(size=14))+ # Customize plot and axis titles
+  xlab("PCoA1 (18%)") +  # Set the x-axis label
+  ylab("PCoA2 (14%)")+ # y-axis label
+  guides(size = "none")+
+  guides(shape = guide_legend(override.aes = list(size=5)))+
+  guides(fill = guide_legend(override.aes = list(shape = NA))); pcoa_Scities_TrnL # Remove the size legend
+```
+
+#### Spring along median income
+```{r}
+pcoa_SPincome_TrnL <- ggplot(smetaTrnL, aes(MDS1, MDS2, shape = city, fill = median_income_bracket, color = median_income_bracket))+# What we want to plot
+  # Add ellipses representing the 95% confidence level for each site
+  stat_ellipse(level=0.95, geom = "polygon",alpha = 1/3, aes(group = median_income_bracket))+
+  geom_point(aes(size=0.1))+ # Add points to the plot, specify point size
+  # Customize the color scale for site labels
+  scale_color_manual(name = "Median income index (CA$)",values= c("black","black","black","black"),
+                    breaks = c("1","2","3","4"),
+                    labels = c("1:   0k - 40k", "2: 40k - 70k", "3: 70k - 100k", "4:       > 100k"))+
+  # Customize the shape scale for cultivar labels
+  scale_shape_manual(name = "Cities", values = c(22,21,24))+
+  # Customize the fill color scale for site labels
+  scale_fill_manual(name = "Median income index (CA$)",values = c("#b56576", "#a8dadc", "#fec89a","#4a7c59"),
+                    breaks = c("1","2","3","4"),
+                    labels = c("1:   0k - 40k", "2: 40k - 70k", "3: 70k - 100k", "4:       > 100k"))+
+  theme_bw()+ # Set black and white theme
+  ggtitle("PCoA of pollen along median income in the spring") + # Set the plot title
+  theme(plot.title = element_text(hjust = 0.5, face="bold"),
+        axis.title = element_text(size = 16),
+        legend.title = element_text(size=16),
+        legend.text = element_text(size=14))+ # Customize plot and axis titles
+  xlab("PCoA1 (18%)") +  # Set the x-axis label
+  ylab("PCoA2 (14%)")+ # y-axis label
+  guides(size = "none")+
+  guides(shape = guide_legend(override.aes = list(size=5)))+
+  guides(fill = guide_legend(override.aes = list(shape = NA))); pcoa_SPincome_TrnL # Remove the size legend
+```
+
+#### Spring along vegetation index
+```{r}
+pcoa_SPveg_TrnL <- ggplot(smetaTrnL, aes(MDS1, MDS2, shape = city, fill = veg_index_bracket, color = veg_index_bracket))+# What we want to plot
+  # Add ellipses representing the 95% confidence level for each site
+  stat_ellipse(level=0.95, geom = "polygon",alpha = 1/3, aes(group = veg_index_bracket))+
+  geom_point(aes(size=0.1))+ # Add points to the plot, specify point size
+  # Customize the color scale for site labels
+  scale_color_manual(name = "Vegetation index (NDVI)",values= c("black","black","black","black"),
+                    breaks = c("1","2","3","4"),
+                    labels = c("1: 0.2 - 0.3", "2: 0.3 - 0.5", "3: 0.5 - 0.7", "4: 0.7 - 1"))+
+  # Customize the shape scale for cultivar labels
+  scale_shape_manual(name = "Cities", values = c(22,21,24))+
+  # Customize the fill color scale for site labels
+  scale_fill_manual(name = "Vegetation index (NDVI)",values = c("#3C4620", "#adc178", "#f0ead2", "#D17D61"),
+                    breaks = c("1","2","3","4"),
+                    labels = c("1: 0.2 - 0.3", "2: 0.3 - 0.5", "3: 0.5 - 0.7", "4: 0.7 - 1"))+
+  theme_bw()+ # Set black and white theme
+  ggtitle("PCoA of pollen along vegetation in the spring") + # Set the plot title
+  theme(plot.title = element_text(hjust = 0.5, face="bold"),
+        axis.title = element_text(size = 16),
+        legend.title = element_text(size=16),
+        legend.text = element_text(size=14))+ # Customize plot and axis titles
+  xlab("PCoA1 (18%)") +  # Set the x-axis label
+  ylab("PCoA2 (14%)")+ # y-axis label
+  guides(size = "none")+
+  guides(shape = guide_legend(override.aes = list(size=5)))+
+  guides(fill = guide_legend(override.aes = list(shape = NA))); pcoa_SPveg_TrnL # Remove the size legend
+```
+
+### Summer
+#### Summer along cities
+```{r}
+pcoa_Ecities_TrnL <- ggplot(sumetaTrnL, aes(MDS1, MDS2, shape = city, fill = city, color = city))+# What we want to plot
+  # Add ellipses representing the 95% confidence level for each site
+  stat_ellipse(level=0.95, geom = "polygon",alpha = 1/3, aes(group = city))+
+  geom_point(aes(size=0.1))+ # Add points to the plot, specify point size
+  # Customize the color scale for site labels
+  scale_color_manual(name = "Cities",values= c("black","black","black","black"))+
+  # Customize the shape scale for cultivar labels
+  scale_shape_manual(name = "Cities", values = c(22,24))+
+  # Customize the fill color scale for site labels
+  scale_fill_manual(name = "Cities",values = c("indianred3","darkolivegreen3"))+
+  theme_bw()+ # Set black and white theme
+  ggtitle("PCoA of pollen along cities in the summer") + # Set the plot title
+  theme(plot.title = element_text(hjust = 0.5, face="bold"),
+        axis.title = element_text(size = 16),
+        legend.title = element_text(size=16),
+        legend.text = element_text(size=14))+ # Customize plot and axis titles
+  xlab("PCoA1 (43%)") +  # Set the x-axis label
+  ylab("PCoA2 (12%)")+ # y-axis label
+  guides(size = "none")+
+  guides(shape = guide_legend(override.aes = list(size=5)))+
+  guides(fill = guide_legend(override.aes = list(shape = NA))); pcoa_Ecities_TrnL # Remove the size legend
+```
+
+#### Summer along median income
+```{r}
+pcoa_Eincome_TrnL <- ggplot(sumetaTrnL, aes(MDS1, MDS2, shape = city, fill = median_income_bracket, color = median_income_bracket))+# What we want to plot
+  # Add ellipses representing the 95% confidence level for each site
+  stat_ellipse(level=0.95, geom = "polygon",alpha = 1/3, aes(group = median_income_bracket))+
+  geom_point(aes(size=0.1))+ # Add points to the plot, specify point size
+  # Customize the color scale for site labels
+  scale_color_manual(name = "Median income index (CA$)",values= c("black","black","black","black"),
+                    breaks = c("1","2","3","4"),
+                    labels = c("1:   0k - 40k", "2: 40k - 70k", "3: 70k - 100k", "4:       > 100k"))+
+  # Customize the shape scale for cultivar labels
+  scale_shape_manual(name = "Cities", values = c(22,24))+
+  # Customize the fill color scale for site labels
+  scale_fill_manual(name = "Median income index (CA$)",values = c("#b56576", "#a8dadc", "#fec89a","#4a7c59"),
+                    breaks = c("1","2","3","4"),
+                    labels = c("1:   0k - 40k", "2: 40k - 70k", "3: 70k - 100k", "4:       > 100k"))+
+  theme_bw()+ # Set black and white theme
+  ggtitle("PCoA of pollen along median income in the summer") + # Set the plot title
+  theme(plot.title = element_text(hjust = 0.5, face="bold"),
+        axis.title = element_text(size = 16),
+        legend.title = element_text(size=16),
+        legend.text = element_text(size=14))+ # Customize plot and axis titles
+  xlab("PCoA1 (43%)") +  # Set the x-axis label
+  ylab("PCoA2 (12%)")+ # y-axis label
+  guides(size = "none")+
+  guides(shape = guide_legend(override.aes = list(size=5)))+
+  guides(fill = guide_legend(override.aes = list(shape = NA))); pcoa_Eincome_TrnL # Remove the size legend
+```
+
+#### Summer along vegetation index
+```{r}
+pcoa_Eveg_TrnL <- ggplot(sumetaTrnL, aes(MDS1, MDS2, shape = city, fill = veg_index_bracket, color = veg_index_bracket))+# What we want to plot
+  # Add ellipses representing the 95% confidence level for each site
+  stat_ellipse(level=0.95, geom = "polygon",alpha = 1/3, aes(group = veg_index_bracket))+
+  geom_point(aes(size=0.1))+ # Add points to the plot, specify point size
+  # Customize the color scale for site labels
+  scale_color_manual(name = "Vegetation index (NDVI)",values= c("black","black","black","black"),
+                    breaks = c("1","2","3","4"),
+                    labels = c("1: 0.2 - 0.3", "2: 0.3 - 0.5", "3: 0.5 - 0.7", "4: 0.7 - 1"))+
+  # Customize the shape scale for cultivar labels
+  scale_shape_manual(name = "Cities", values = c(22,24))+
+  # Customize the fill color scale for site labels
+  scale_fill_manual(name = "Vegetation index (NDVI)",values = c("#3C4620", "#adc178", "#f0ead2", "#D17D61"),
+                    breaks = c("1","2","3","4"),
+                    labels = c("1: 0.2 - 0.3", "2: 0.3 - 0.5", "3: 0.5 - 0.7", "4: 0.7 - 1"))+
+  theme_bw()+ # Set black and white theme
+  ggtitle("PCoA of pollen along vegetation in the summer") + # Set the plot title
+  theme(plot.title = element_text(hjust = 0.5, face="bold"),
+        axis.title = element_text(size = 16),
+        legend.title = element_text(size=16),
+        legend.text = element_text(size=14))+ # Customize plot and axis titles
+  xlab("PCoA1 (43%)") +  # Set the x-axis label
+  ylab("PCoA2 (12%)")+ # y-axis label
+  guides(size = "none")+
+  guides(shape = guide_legend(override.aes = list(size=5)))+
+  guides(fill = guide_legend(override.aes = list(shape = NA))); pcoa_Eveg_TrnL # Remove the size legend
+```
+
+### Fall
+#### Fall along cities
+```{r}
+pcoa_Fcities_TrnL <- ggplot(fmetaTrnL, aes(MDS1, MDS2, shape = city, fill = city, color = city))+# What we want to plot
+  # Add ellipses representing the 95% confidence level for each site
+  stat_ellipse(level=0.95, geom = "polygon",alpha = 1/3, aes(group = city))+
+  geom_point(aes(size=0.1))+ # Add points to the plot, specify point size
+  # Customize the color scale for site labels
+  scale_color_manual(name = "Cities",values= c("black","black","black","black"))+
+  # Customize the shape scale for cultivar labels
+  scale_shape_manual(name = "Cities", values = c(22,21,24))+
+  # Customize the fill color scale for site labels
+  scale_fill_manual(name = "Cities",values = c("indianred3","khaki1","darkolivegreen3"))+
+  theme_bw()+ # Set black and white theme
+  ggtitle("PCoA of pollen along cities in the fall") + # Set the plot title
+  theme(plot.title = element_text(hjust = 0.5, face="bold"),
+        axis.title = element_text(size = 16),
+        legend.title = element_text(size=16),
+        legend.text = element_text(size=14))+ # Customize plot and axis titles
+  xlab("PCoA1 (15%)") +  # Set the x-axis label
+  ylab("PCoA2 (9%)")+ # y-axis label
+  guides(size = "none")+
+  guides(shape = guide_legend(override.aes = list(size=5)))+
+  guides(fill = guide_legend(override.aes = list(shape = NA))); pcoa_Fcities_TrnL # Remove the size legend
+```
+
+#### Fall along median income
+```{r}
+pcoa_Fincome_TrnL <- ggplot(fmetaTrnL, aes(MDS1, MDS2, shape = city, fill = median_income_bracket, color = median_income_bracket))+# What we want to plot
+  # Add ellipses representing the 95% confidence level for each site
+  stat_ellipse(level=0.95, geom = "polygon",alpha = 1/3, aes(group = median_income_bracket))+
+  geom_point(aes(size=0.1))+ # Add points to the plot, specify point size
+  # Customize the color scale for site labels
+  scale_color_manual(name = "Median income index (CA$)",values= c("black","black","black","black"),
+                    breaks = c("1","2","3","4"),
+                    labels = c("1:   0k - 40k", "2: 40k - 70k", "3: 70k - 100k", "4:       > 100k"))+
+  # Customize the shape scale for cultivar labels
+  scale_shape_manual(name = "Cities", values = c(22,21,24))+
+  # Customize the fill color scale for site labels
+  scale_fill_manual(name = "Median income index (CA$)",values = c("#b56576", "#a8dadc", "#fec89a","#4a7c59"),
+                    breaks = c("1","2","3","4"),
+                    labels = c("1:   0k - 40k", "2: 40k - 70k", "3: 70k - 100k", "4:       > 100k"))+
+  theme_bw()+ # Set black and white theme
+  ggtitle("PCoA of pollen along median income in the fall") + # Set the plot title
+  theme(plot.title = element_text(hjust = 0.5, face="bold"),
+        axis.title = element_text(size = 16),
+        legend.title = element_text(size=16),
+        legend.text = element_text(size=14))+ # Customize plot and axis titles
+  xlab("PCoA1 (15%)") +  # Set the x-axis label
+  ylab("PCoA2 (9%)")+ # y-axis label
+  guides(size = "none")+
+  guides(shape = guide_legend(override.aes = list(size=5)))+
+  guides(fill = guide_legend(override.aes = list(shape = NA))); pcoa_Fincome_TrnL # Remove the size legend
+```
+
+#### Fall along vegetation index
+```{r}
+pcoa_Fveg_TrnL <- ggplot(fmetaTrnL, aes(MDS1, MDS2, shape = city, fill = veg_index_bracket, color = veg_index_bracket))+# What we want to plot
+  # Add ellipses representing the 95% confidence level for each site
+  stat_ellipse(level=0.95, geom = "polygon",alpha = 1/3, aes(group = veg_index_bracket))+
+  geom_point(aes(size=0.1))+ # Add points to the plot, specify point size
+  # Customize the color scale for site labels
+  scale_color_manual(name = "Vegetation index (NDVI)",values= c("black","black","black","black"),
+                    breaks = c("1","2","3","4"),
+                    labels = c("1: 0.2 - 0.3", "2: 0.3 - 0.5", "3: 0.5 - 0.7", "4: 0.7 - 1"))+
+  # Customize the shape scale for cultivar labels
+  scale_shape_manual(name = "Cities", values = c(22,21,24))+
+  # Customize the fill color scale for site labels
+  scale_fill_manual(name = "Vegetation index (NDVI)",values = c("#3C4620", "#adc178", "#f0ead2", "#D17D61"),
+                    breaks = c("1","2","3","4"),
+                    labels = c("1: 0.2 - 0.3", "2: 0.3 - 0.5", "3: 0.5 - 0.7", "4: 0.7 - 1"))+
+  theme_bw()+ # Set black and white theme
+  ggtitle("PCoA of pollen along vegetation in the summer") + # Set the plot title
+  theme(plot.title = element_text(hjust = 0.5, face="bold"),
+        axis.title = element_text(size = 16),
+        legend.title = element_text(size=16),
+        legend.text = element_text(size=14))+ # Customize plot and axis titles
+  xlab("PCoA1 (15%)") +  # Set the x-axis label
+  ylab("PCoA2 (9%)")+ # y-axis label
+  guides(size = "none")+
+  guides(shape = guide_legend(override.aes = list(size=5)))+
+  guides(fill = guide_legend(override.aes = list(shape = NA))); pcoa_Fveg_TrnL # Remove the size legend
+```
+
+## Barcharts
+### All samples
+```{r}
+phylomeltTrnL <- phyloTrnL %>% psmelt
+taxLev="Family"
+topN=15  
+topTaxaTrnL <- phylomeltTrnL %>%  group_by(!!sym(taxLev)) %>% # melt the table and group by tax level
+    summarise(Abundance = sum(Abundance)) %>% # find most overall abundant taxa
+    arrange(desc(Abundance)) %>% # Species them
+    mutate(aggTaxo = as.factor(case_when( # aggTaxo will become the plot legend
+      row_number()<=topN ~ !!sym(taxLev), #+++ We'll need to manually order the species!
+      row_number()>topN~'Others'))) %>% 
+    mutate(aggTaxo = case_when(
+      is.na(!!sym(taxLev)) ~ 'Others',
+      TRUE ~ aggTaxo)) %>%
+    dplyr::select(-Abundance) 
+
+taxOrderTrnL <- topTaxaTrnL$aggTaxo %>% 
+  .[. != "Others"] %>% 
+  c("Others")
+my_colors <- c("#ADB7FF","#a8dadc","#61a5c2","#81b29a","#adc178","darkolivegreen3","khaki1","#f2cc8f","#f6bd60","#F29040","#BE5937","#E28065","indianred3","#A55062","#CA919D")
+
+
+phylomeltTrnL %>%
+  left_join(.,topTaxaTrnL, by=taxLev) %>% 
+  aggregate(Abundance~time+aggTaxo+city, # Abundance is aggregated...
+              data=., FUN = sum) %>% 
+  mutate(time = factor(time, levels = c("Spring", "Summer", "Fall")),
+         aggTaxo = factor(aggTaxo, levels=taxOrderTrnL)) %>% 
+  
+  ggplot(aes(x = time, y = Abundance, fill = aggTaxo))+
+  geom_bar(stat="identity", position = "fill")+
+  labs(title = "Relative abundance of airborne pollen", fill=taxLev, x = "Season", y= "Relative abundance")+
+  facet_grid(~city,
+             scale = "free",
+             space = "free_x")+
+scale_fill_manual(values = my_colors)+
+  theme_light(base_size = 20) -> plot.barcharts.TrnL; plot.barcharts.TrnL
+```
+
+### Montréal
+```{r}
+MTLphylomeltTrnL <- mtlTrnL %>% psmelt
+taxLev="Family"
+topN=15  
+MTLtopTaxaTrnL <- MTLphylomeltTrnL %>%  group_by(!!sym(taxLev)) %>% # melt the table and group by tax level
+    summarise(Abundance = sum(Abundance)) %>% # find most overall abundant taxa
+    arrange(desc(Abundance)) %>% # Species them
+    mutate(aggTaxo = as.factor(case_when( # aggTaxo will become the plot legend
+      row_number()<=topN ~ !!sym(taxLev), #+++ We'll need to manually order the species!
+      row_number()>topN~'Others'))) %>% 
+    mutate(aggTaxo = case_when(
+      is.na(!!sym(taxLev)) ~ 'Others',
+      TRUE ~ aggTaxo)) %>%
+    dplyr::select(-Abundance) 
+
+MTLtaxOrderTrnL <- MTLtopTaxaTrnL$aggTaxo %>% 
+  .[. != "Others"] %>% 
+  c("Others")
+
+
+MTLphylomeltTrnL %>%
+  left_join(.,MTLtopTaxaTrnL, by=taxLev) %>% 
+  aggregate(Abundance~time+aggTaxo+city, # Abundance is aggregated...
+              data=., FUN = sum) %>% 
+  mutate(time = factor(time, levels = c("Spring", "Summer", "Fall")),
+         aggTaxo = factor(aggTaxo, levels=MTLtaxOrderTrnL)) %>% 
+  
+  ggplot(aes(x = time, y = Abundance, fill = aggTaxo))+
+  geom_bar(stat="identity", position = "fill")+
+  labs(title = "Relative abundance of airborne pollen in Montréal", fill=taxLev, x = "Season", y= "Relative abundance")+
+  facet_grid(~city,
+             scale = "free",
+             space = "free_x")+
+scale_fill_manual(values = my_colors)+
+  theme_light(base_size = 20) -> plot.barcharts.MTL.TrnL; plot.barcharts.MTL.TrnL
+```
+
+### Sherbrooke
+```{r}
+SHBphylomeltTrnL <- shbTrnL%>% psmelt
+taxLev="Family"
+topN=15  
+SHBtopTaxaTrnL <- SHBphylomeltTrnL %>%  group_by(!!sym(taxLev)) %>% # melt the table and group by tax level
+    summarise(Abundance = sum(Abundance)) %>% # find most overall abundant taxa
+    arrange(desc(Abundance)) %>% # Species them
+    mutate(aggTaxo = as.factor(case_when( # aggTaxo will become the plot legend
+      row_number()<=topN ~ !!sym(taxLev), #+++ We'll need to manually order the species!
+      row_number()>topN~'Others'))) %>% 
+    mutate(aggTaxo = case_when(
+      is.na(!!sym(taxLev)) ~ 'Others',
+      TRUE ~ aggTaxo)) %>%
+    dplyr::select(-Abundance) 
+
+SHBtaxOrderTrnL <- SHBtopTaxaTrnL$aggTaxo %>% 
+  .[. != "Others"] %>% 
+  c("Others")
+
+
+SHBphylomeltTrnL %>%
+  left_join(.,SHBtopTaxaTrnL, by=taxLev) %>% 
+  aggregate(Abundance~time+aggTaxo+city, # Abundance is aggregated...
+              data=., FUN = sum) %>% 
+  mutate(time = factor(time, levels = c("Spring", "Summer", "Fall")),
+         aggTaxo = factor(aggTaxo, levels=SHBtaxOrderTrnL)) %>% 
+  
+  ggplot(aes(x = time, y = Abundance, fill = aggTaxo))+
+  geom_bar(stat="identity", position = "fill")+
+  labs(title = "Relative abundance of airborne pollen in Shebrooke", fill=taxLev, x = "Season", y= "Relative abundance")+
+  facet_grid(~city,
+             scale = "free",
+             space = "free_x")+
+scale_fill_manual(values = my_colors)+
+  theme_light(base_size = 20) -> plot.barcharts.SHB.TrnL; plot.barcharts.SHB.TrnL
+```
+
+### Québec
+```{r}
+QCphylomeltTrnL <- qcTrnL %>% psmelt
+taxLev="Family"
+topN=15  
+QCtopTaxaTrnL <- QCphylomeltTrnL %>%  group_by(!!sym(taxLev)) %>% # melt the table and group by tax level
+    summarise(Abundance = sum(Abundance)) %>% # find most overall abundant taxa
+    arrange(desc(Abundance)) %>% # Species them
+    mutate(aggTaxo = as.factor(case_when( # aggTaxo will become the plot legend
+      row_number()<=topN ~ !!sym(taxLev), #+++ We'll need to manually order the species!
+      row_number()>topN~'Others'))) %>% 
+    mutate(aggTaxo = case_when(
+      is.na(!!sym(taxLev)) ~ 'Others',
+      TRUE ~ aggTaxo)) %>%
+    dplyr::select(-Abundance) 
+
+QCtaxOrderTrnL <- QCtopTaxaTrnL$aggTaxo %>% 
+  .[. != "Others"] %>% 
+  c("Others")
+
+
+QCphylomeltTrnL %>%
+  left_join(.,QCtopTaxaTrnL, by=taxLev) %>% 
+  aggregate(Abundance~time+aggTaxo+city, # Abundance is aggregated...
+              data=., FUN = sum) %>% 
+  mutate(time = factor(time, levels = c("Spring", " ", "Fall")),
+         aggTaxo = factor(aggTaxo, levels=QCtaxOrderTrnL)) %>% 
+  
+  ggplot(aes(x = time, y = Abundance, fill = aggTaxo))+
+  geom_bar(stat="identity", position = "fill")+
+  labs(title = "Relative abundance of airborne pollen in Québec", fill=taxLev, x = "Season", y= "Relative abundance")+
+  facet_grid(~city,
+             scale = "free",
+             space = "free_x")+
+scale_fill_manual(values = my_colors)+
+  theme_light(base_size = 20) -> plot.barcharts.QC.TrnL; plot.barcharts.QC.TrnL
+```
+
+# Diversity
+**Rarefaction**
+We rarefy so that every sample have the same number of sequence. We will rarefy to the sample having the smallest number of sequence.  
+"Rarefaction is a method that adjusts for differences in library sizes across samples to aid comparisons of alpha diversity."  
+https://www.frontiersin.org/articles/10.3389/fmicb.2019.02407/full 
+
+## Richness
+### Rarefy
+```{r}
+min(sample_sums(phyloTrnL))# Minimum number of sequence/sample is 1558
+phyloTrnL1 <- prune_samples(sample_sums(phyloTrnL) >= 1557, phyloTrnL);phyloTrnL1
+#samples_to_exclude <- c("22-A-SHER-SH07", "22-E-SHER-SH09", "22-S-SHER-SH11")
+#meta1 <- meta[!(rownames(meta) %in% samples_to_exclude),];meta1
+
+# This is a code that repeats 100 times rarefaction of our datasets
+# So we can then compute alpha-div and species richness and take an average
+many_rare <- function(ASV_OBJ,rare_level) {
+  statslist <- NULL
+  for (i in 1:100) {
+    rarefied_data <- rarefy_even_depth(otu_table(ASV_OBJ, taxa_are_rows=FALSE), sample.size=rare_level)
+    alphadiversity <- estimate_richness(rarefied_data, measures=c("Shannon", "Observed","Chao1"))
+    statslist[[i]] <- alphadiversity
+  }
+  rar_100<-matrix(NA, nrow=dim(otu_table(ASV_OBJ, taxa_are_rows=FALSE))[1],ncol=6)
+  row.names(rar_100)<-row.names(otu_table(ASV_OBJ, taxa_are_rows=FALSE))
+  colnames(rar_100)<-c("Observed","Observed.sd","Chao1","Chao1.sd","Shannon","Shannon.sd")
+  t=1
+  for (j in c(1,2,4)){
+    # Step 1: Extract the column from each matrix
+    fc <- lapply(statslist, function(matrix) matrix[, j])
+    # Step 2: Combine the first columns into a single data frame
+    merged_data <- do.call(cbind, fc)
+    # Print the resulting merged data frame
+    rar_100[,t] <- rowMeans(merged_data)
+    rar_100[,t+1] <- apply(merged_data,1,sd)
+    t<-t+2
+  }
+  return(as.data.frame(rar_100))
+}
+
+min(sample_sums(phyloTrnL1))# Minimum number of sequence/sample is 1558
+phylo.rareTrnL <- many_rare(phyloTrnL1, 1458)
+```
+
+### Calculate Alpha Diversity
+```{r}
+
+metaTrnL$Shannon <- phylo.rareTrnL$Shannon
+metaTrnL$Shannon.sd <- phylo.rareTrnL$Shannon.sd
+metaTrnL$Observed <- phylo.rareTrnL$Observed
+metaTrnL$Observed.sd <- phylo.rareTrnL$Observed.sd
+metaTrnL$Chao1 <- phylo.rareTrnL$Chao1
+metaTrnL$Chao1.sd <- phylo.rareTrnL$Chao1.sd
+
+
+# Shannon
+# Bind the Shannon index into the metadata
+# Check the length of phylo.rare$Shannon
+length_alpha_divTrnL <- length(phylo.rareTrnL$Shannon)
+
+# Check the number of rows in the meta data frame
+num_rows_metaTrnL <- nrow(metaTrnL)
+
+# Compare the lengths
+if (length_alpha_divTrnL == num_rows_metaTrnL) {
+  # Assign the values to meta$alphadiv
+  metaTrnL$Shannon <- phylo.rareTrnL$Shannon
+} else {
+  # Handle the data mismatch or discrepancy
+  # You may need to subset or manipulate your data to match the lengths
+  # or investigate why there is a mismatch
+}
+
+
+
+# Chao1
+# Bind the Chao1 index into the metadata
+# Check the length of phylo.rare$Shannon
+length_alpha_div_chao1_TrnL <- length(phylo.rareTrnL$Chao1)
+
+# Check the number of rows in the meta data frame
+num_rows_metaTrnL <- nrow(metaTrnL)
+
+# Compare the lengths
+if (length_alpha_div_chao1_TrnL == num_rows_metaTrnL) {
+  # Assign the values to meta$alphadiv
+  metaTrnL$Chao1 <- phylo.rareTrnL$Chao1
+} else {
+  # Handle the data mismatch or discrepancy
+  # You may need to subset or manipulate your data to match the lengths
+  # or investigate why there is a mismatch
+}
+```
+
+### Test if groups have different diversity
+```{r}
+# Shannon
+shapiro_test(metaTrnL$Shannon)
+hist(log(metaTrnL$Shannon))
+
+metaTrnL %>%
+  group_by(city) %>%
+  shapiro_test (Shannon) # NOT NORMAL
+
+metaTrnL %>%
+  group_by(city) %>%
+  kruskal_test (Shannon ~ time) # They are all DIFFERENT
+
+# Differences between seasons in a city
+stat.diversity.shannon.TrnL <- metaTrnL %>%
+  group_by(city) %>%
+  dunn_test (Shannon ~ time, p.adjust.method = "bonferroni");stat.diversity.shannon.TrnL # HERE WE SHOW WHICH GROUPS ARE DIFFERENT
+
+# Differences between cities in a season
+stat.diversity.shannon.TrnL1 <- metaTrnL %>%
+  group_by(time) %>%
+  dunn_test (Shannon ~ city, p.adjust.method = "bonferroni");stat.diversity.shannon.TrnL1 # HERE WE SHOW WHICH GROUPS ARE DIFFERENT
+
+
+# Chao1
+shapiro_test(metaTrnL$Chao1)
+hist(log(metaTrnL$Chao1))
+
+metaTrnL %>%
+  group_by(city) %>%
+  shapiro_test (Chao1) # NOT NORMAL
+
+metaTrnL %>%
+  group_by(city) %>%
+  kruskal_test (Chao1 ~ time) # They are all DIFFERENT
+
+# Differences between seasons in a city
+stat.diversity.chao1.TrnL <- metaTrnL %>%
+  group_by(city) %>%
+  dunn_test (Chao1 ~ time, p.adjust.method = "bonferroni");stat.diversity.chao1.TrnL # HERE WE SHOW WHICH GROUPS ARE DIFFERENT
+
+# Differences between cities in a season
+stat.diversity.chao1.TrnL1 <- metaTrnL %>%
+  group_by(time) %>%
+  dunn_test (Chao1 ~ city, p.adjust.method = "bonferroni");stat.diversity.chao1.TrnL1 # HERE WE SHOW WHICH GROUPS ARE DIFFERENT
+```
+
+#### Plot Shannon alphadiversity of differences between seasons in a city
+```{r}
+stat.test.shannon.TrnL <- stat.diversity.shannon.TrnL %>% add_xy_position(x = "time") # Where we will plot the statistic results
+
+shannon.alphadiversity.TrnL <- ggplot(metaTrnL, aes(time, Shannon, fill = city))+
+  theme_bw()+ # General style of the plot (black & white)
+  geom_boxplot(aes(time, Shannon, fill = time, alpha = 1/3))+ # Boxplot
+  facet_wrap(~city)+
+  scale_fill_manual(name = "Seasons", values = c("#ffb3c6","#61a5c2","#F29040","#ffb3c6","#61a5c2"))+ # Colors according to the season
+  scale_x_discrete(labels=c("Spring","Summer","Fall"))+ # a-xis labels 
+  guides(alpha = "none")+ # Remove size legend
+  theme(legend.position="none")+ # Remove legend
+  labs(title = "Alpha Diversity of Airborne Pollen Communities Across Seasons")+
+  theme(plot.title = element_text(size =16, face = "bold", hjust = 0.5))+# Plot title
+  ylab("Shannon Index")+ # Y axis labels
+  theme(axis.title.x = element_blank())+ # Hide axis title
+  ylab("Shannon Index")+ # Y axis labels
+  #ylim()+ # y axis scale
+  theme(axis.title.y = element_text(size =16))+ # Axis text
+  theme(axis.text = element_text(size = 14))+ # Axis text
+  theme(strip.text.x = element_text(size = 14))+ #Axis text
+  theme(strip.text.y = element_text(size = 14))+
+  theme(strip.text.y = element_blank())+ #Axis text
+  # Add stat test
+  stat_pvalue_manual(stat.test.shannon.TrnL, y.position = 6.0, step.increase = 0.1, hide.ns = TRUE);shannon.alphadiversity.TrnL
+```
+
+#### Plot Chao1 alphadiversity of differences between seasons in a city
+```{r}
+stat.test.chao1.TrnL <- stat.diversity.chao1.TrnL %>% add_xy_position(x = "time") # Where we will plot the statistic results
+
+chao1.alphadiversity.TrnL <- ggplot(metaTrnL, aes(time, Chao1, fill = city))+
+  theme_bw()+ # General style of the plot (black & white)
+  geom_boxplot(aes(time, Chao1, fill = time, alpha = 1/3))+ # Boxplot
+  facet_wrap(~city)+
+  scale_fill_manual(name = "Seasons", values = c("#ffb3c6","#61a5c2","#F29040","#ffb3c6","#61a5c2"))+ # Colors according to the season
+  scale_x_discrete(labels=c("Spring","Summer","Fall"))+ # a-xis labels 
+  guides(alpha = "none")+ # Remove size legend
+  theme(legend.position="none")+ # Remove legend
+  labs(title = "Alpha Diversity of Airborne Pollen Communities Across Seasons")+
+  theme(plot.title = element_text(size =16, face = "bold", hjust = 0.5))+# Plot title
+  ylab("Chao1 Index")+ # Y axis labels
+  theme(axis.title.x = element_blank())+ # Hide axis title
+  ylab("Chao1 Index")+ # Y axis labels
+  #ylim()+ # y axis scale
+  theme(axis.title.y = element_text(size =16))+ # Axis text
+  theme(axis.text = element_text(size = 14))+ # Axis text
+  theme(strip.text.x = element_text(size = 14))+ #Axis text
+  theme(strip.text.y = element_text(size = 14))+
+  theme(strip.text.y = element_blank())+ #Axis text
+  # Add stat test
+  stat_pvalue_manual(stat.test.chao1.TrnL, y.position = 600, step.increase = 0.1, hide.ns = TRUE);chao1.alphadiversity.TrnL
+```
+
+#### Plot Shannon alphadiversity of differences between seasons in a city
+```{r}
+stat.test.shannon.TrnL1 <- stat.diversity.shannon.TrnL1 %>% add_xy_position(x = "city") # Where we will plot the statistic results
+
+shannon.alphadiversity.TrnL1 <- ggplot(metaTrnL, aes(time, Shannon, fill = time))+
+  theme_bw()+ # General style of the plot (black & white)
+  geom_boxplot(aes(city, Shannon, fill = city, alpha = 1/3))+ # Boxplot
+  facet_wrap(~time)+
+  scale_fill_manual(name = "Cities", values = c("indianred3","khaki1","darkolivegreen3","indianred3"))+ # Colors according to the city
+  scale_x_discrete(labels=c("Montréal","Québec","Sherbrooke"))+ # a-xis labels 
+  guides(alpha = "none")+ # Remove size legend
+  theme(legend.position="none")+ # Remove legend
+  labs(title = "Alpha Diversity of Airborne Pollen Communities Across Cities")+
+  theme(plot.title = element_text(size =15, face = "bold", hjust = 0.5))+# Plot title
+  ylab("Shannon Index")+ # Y axis labels
+  theme(axis.title.x = element_blank())+ # Hide axis title
+  ylab("Shannon Index")+ # Y axis labels
+  #ylim()+ # y axis scale
+  theme(axis.title.y = element_text(size =16))+ # Axis text
+  theme(axis.text = element_text(size = 14))+ # Axis text
+  theme(strip.text.x = element_text(size = 14))+ #Axis text
+  theme(strip.text.y = element_text(size = 14))+
+  theme(strip.text.y = element_blank())+ #Axis text
+  # Add stat test
+  stat_pvalue_manual(stat.test.shannon.TrnL1, y.position = 5.7, step.group.by = "time", step.increase = 0.1, hide.ns = TRUE);shannon.alphadiversity.TrnL1
+```
+
+#### Plot Chao1 alphadiversity of differences between seasons in a city
+```{r}
+stat.test.chao1.TrnL1 <- stat.diversity.chao1.TrnL1 %>% add_xy_position(x = "city") # Where we will plot the statistic results
+
+chao1.alphadiversity.TrnL1 <- ggplot(metaTrnL, aes(time, Chao1, fill = time))+
+  theme_bw()+ # General style of the plot (black & white)
+  geom_boxplot(aes(city, Chao1, fill = city, alpha = 1/3))+ # Boxplot
+  facet_wrap(~time)+
+  scale_fill_manual(name = "Cities", values = c("indianred3","khaki1","darkolivegreen3","indianred3"))+ # Colors according to the city
+  scale_x_discrete(labels=c("Montréal","Québec","Sherbrooke"))+ # a-xis labels 
+  guides(alpha = "none")+ # Remove size legend
+  theme(legend.position="none")+ # Remove legend
+  labs(title = "Alpha Diversity of Airborne Bacterial Communities Across Cities")+
+  theme(plot.title = element_text(size =15, face = "bold", hjust = 0.5))+# Plot title
+  ylab("Chao1 Index")+ # Y axis labels
+  theme(axis.title.x = element_blank())+ # Hide axis title
+  ylab("Chao1 Index")+ # Y axis labels
+  #ylim()+ # y axis scale
+  theme(axis.title.y = element_text(size =16))+ # Axis text
+  theme(axis.text = element_text(size = 14))+ # Axis text
+  theme(strip.text.x = element_text(size = 14))+ #Axis text
+  theme(strip.text.y = element_text(size = 14))+
+  theme(strip.text.y = element_blank())+ #Axis text
+  # Add stat test
+  stat_pvalue_manual(stat.test.chao1.TrnL1, y.position = 600, step.group.by = "time", step.increase = 0.1, hide.ns = TRUE);chao1.alphadiversity.TrnL1
+```
+
+# Ancombc (analyse d'abondance différentielle) - savoir si des taxons sont plus différentiellement abondants dans certaines villes ou pas de temps
+## Ancombc Cities
+```{r}
+df.ancombc_cities.TrnL <- ancombc2(
+  data = phyloTrnL,
+  tax_level = "Genus",
+  fix_formula = "city",
+  alpha = 0.05,
+  group ="city",
+  struc_zero = TRUE,
+  pairwise = TRUE,
+  n_cl = 7
+); df.ancombc_cities.TrnL
+```
+
+## Ancombc Seasons
+```{r}
+df.ancombc_time.TrnL <- ancombc2(
+  data = phyloTrnL,
+  tax_level = "Genus",
+  fix_formula = "time",
+  alpha = 0.05,
+  group = "time",
+  struc_zero = TRUE,
+  pairwise = TRUE,
+  n_cl = 7
+); df.ancombc_time.TrnL
+```
+# Plots Ancombc
+## City
+```{r}
+res_pair_cityTrnL = df.ancombc_cities.TrnL$res_pair
+df.ancombc_cities.TrnL
+
+res_pair_cityTrnL <- res_pair_cityTrnL %>%
+  separate(taxon, c("tax", "taxa.name"), ":")
+
+res_pair_cityTrnL <- filter(res_pair_cityTrnL, tax == "Family")
+
+
+df_fig_pair_cityTrnL = res_pair_cityTrnL %>%
+    dplyr::filter((diff_cityQuebec == 1 & passed_ss_cityQuebec == 1 & q_cityQuebec <= 0.05) | 
+                    (diff_citySherbrooke == 1 & passed_ss_citySherbrooke == 1 & q_citySherbrooke <= 0.05) |
+                    (diff_citySherbrooke_cityQuebec == 1 & passed_ss_citySherbrooke_cityQuebec == 1 & q_citySherbrooke_cityQuebec<= 0.05)) %>%
+    dplyr::mutate(lfc_cityQuebec = ifelse(diff_cityQuebec == 1, 
+                                    lfc_cityQuebec, 0),
+                  lfc_citySherbrooke = ifelse(diff_citySherbrooke == 1, 
+                                          lfc_citySherbrooke, 0),
+                  lfc_citySherbrooke_cityQuebec = ifelse(diff_citySherbrooke_cityQuebec == 1, 
+                                               lfc_citySherbrooke_cityQuebec, 0)) %>%
+    dplyr::transmute(taxa.name, 
+                     `Québec vs. Montréal` = round(lfc_cityQuebec, 2),
+                     `Sherbrooke vs. Montréal` = round(lfc_citySherbrooke, 2),
+                     `Québec vs. Sherbrooke` = round(lfc_citySherbrooke_cityQuebec, 2)
+                     ) %>%
+    tidyr::pivot_longer(cols = `Québec vs. Montréal`:`Québec vs. Sherbrooke`, 
+                        names_to = "group", values_to = "value") %>%
+    dplyr::arrange(taxa.name)
+df_fig_pair_cityTrnL$group = factor(df_fig_pair_cityTrnL$group, 
+                           levels = c("Québec vs. Montréal",
+                                      "Sherbrooke vs. Montréal",
+                                      "Québec vs. Sherbrooke"))
+
+
+# Filter the dataset so that it only keeps the absolute log fold change values greater than 0.5
+df_fig_pair_cityTrnL1 <- df_fig_pair_cityTrnL %>%
+  semi_join(df_fig_pair_cityTrnL[abs(df_fig_pair_cityTrnL$value) > 0.5, ], by = "taxa.name")
+
+
+# This code is to determine the scale of the figure, here it is -3 to 2
+#lo = floor(min(df_fig_pair_cityTrnL$value))
+#up = ceiling(max(df_fig_pair_cityTrnL$value))
+#mid = (lo + up)/2
+
+# Here we choose values for the scale of the figure that fit with the "cities" figure in order to be able to compare them
+lo = -2
+up = 2
+mid = 0
+
+# Figure
+fig_pair_cityTrnL = df_fig_pair_cityTrnL1 %>%
+  ggplot(aes(x = group, y = taxa.name, fill = value)) + 
+  geom_tile(aes(width=1, height=1),color = "black") +
+  scale_fill_gradient2(low = "#004b23", high = "#91171f", mid = "white", 
+                       na.value = "white", midpoint = mid, limit = c(lo, up),
+                       name = NULL) +
+  geom_text(aes(group, taxa.name, label = value), color = "black", size = 6) +
+  labs(x = NULL, y = NULL, title = "Log fold change") +
+  theme_bw() +
+  theme(plot.title = element_text(hjust = 0.5, size = 18))+
+  theme(axis.text = element_text(size=15))+
+  theme(axis.text.x = element_text(vjust = 1, hjust=0.5));fig_pair_cityTrnL
+```
+
+## Season
+```{r}
+res_pair_timeTrnL = df.ancombc_time.TrnL$res_pair
+df.ancombc_time.TrnL
+
+res_pair_timeTrnL <- res_pair_timeTrnL %>%
+  separate(taxon, c("tax", "taxa.name"), ":")
+
+res_pair_timeTrnL <- filter(res_pair_timeTrnL, tax == "Family")
+
+
+df_fig_pair_timeTrnL = res_pair_timeTrnL %>%
+    dplyr::filter((diff_timeSummer == 1 & passed_ss_timeSummer == 1 & q_timeSummer <= 0.05) | 
+                    (diff_timeFall == 1 & passed_ss_timeFall == 1 & q_timeFall <= 0.05) |
+                    (diff_timeFall_timeSummer == 1 & passed_ss_timeFall_timeSummer == 1 & q_timeFall_timeSummer<= 0.05)) %>%
+    dplyr::mutate(lfc_timeSummer = ifelse(diff_timeSummer == 1, 
+                                    lfc_timeSummer, 0),
+                  lfc_timeFall = ifelse(diff_timeFall == 1, 
+                                          lfc_timeFall, 0),
+                  lfc_timeFall_timeSummer = ifelse(diff_timeFall_timeSummer == 1, 
+                                               lfc_timeFall_timeSummer, 0)) %>%
+    dplyr::transmute(taxa.name, 
+                     `Summer vs. Spring` = round(lfc_timeSummer, 2),
+                     `Fall vs. Spring` = round(lfc_timeFall, 2),
+                     `Fall vs. Summer` = round(lfc_timeFall_timeSummer, 2)
+                     ) %>%
+    tidyr::pivot_longer(cols = `Summer vs. Spring`:`Fall vs. Summer`, 
+                        names_to = "group", values_to = "value") %>%
+    dplyr::arrange(taxa.name)
+df_fig_pair_timeTrnL$group = factor(df_fig_pair_timeTrnL$group, 
+                           levels = c("Summer vs. Spring",
+                                      "Fall vs. Spring",
+                                      "Fall vs. Summer"))
+
+# Filter the dataset so that it only keeps the absolute log fold change values greater than 0.5
+df_fig_pair_timeTrnL1 <- df_fig_pair_timeTrnL %>%
+  semi_join(df_fig_pair_timeTrnL[abs(df_fig_pair_timeTrnL$value) > 0.5, ], by = "taxa.name")
+
+
+# This code is to determine the scale of the figure, here it is -3 to 2
+#lo = floor(min(df_fig_pair_timeTrnL$value))
+#up = ceiling(max(df_fig_pair_timeTrnL$value))
+#mid = (lo + up)/2
+
+# Here we choose values for the scale of the figure that fit with the "cities" figure in order to be able to compare them
+lo = -2
+up = 2
+mid = 0
+
+# Figure
+fig_pair_timeTrnL = df_fig_pair_timeTrnL %>%
+  ggplot(aes(x = group, y = taxa.name, fill = value)) + 
+  geom_tile(aes(width=1, height=1),color = "black") +
+  scale_fill_gradient2(low = "#004b23", high = "#91171f", mid = "white", 
+                       na.value = "white", midpoint = mid, limit = c(lo, up),
+                       name = NULL) +
+  geom_text(aes(group, taxa.name, label = value), color = "black", size = 5) +
+  labs(x = NULL, y = NULL, title = "Log fold change") +
+  theme_bw() +
+  theme(plot.title = element_text(hjust = 0.5, size = 18))+
+  theme(axis.text = element_text(size=14))+
+  theme(axis.text.x = element_text(vjust = 1, hjust=0.5));fig_pair_timeTrnL
+```
+
+# Ternary plots
+## Dataframe
+```{r}
+# Create a dataframe with only the Family and the Abundance of the phylomeltTrnL dataframe
+relabTrnL <- data.frame(phylomeltTrnL$OTU, phylomeltTrnL$Kingdom, phylomeltTrnL$Phylum, phylomeltTrnL$Class, phylomeltTrnL$Order, phylomeltTrnL$Family, phylomeltTrnL$Genus, phylomeltTrnL$Species, phylomeltTrnL$Abundance, phylomeltTrnL$city, phylomeltTrnL$time)
+
+# change column names
+colnames(relabTrnL)[1] <- "OTU"
+colnames(relabTrnL)[2] <- "Kingdom"
+colnames(relabTrnL)[3] <- "Phylum"
+colnames(relabTrnL)[4] <- "Class"
+colnames(relabTrnL)[5] <- "Order"
+colnames(relabTrnL)[6] <- "Family"
+colnames(relabTrnL)[7] <- "Genus"
+colnames(relabTrnL)[8] <- "Species"
+colnames(relabTrnL)[9] <- "Abundance"
+colnames(relabTrnL)[10] <- "City"
+colnames(relabTrnL)[11] <- "Time"
+
+# Make a new column of relative abundances in the relabTrnL dataframe
+relabTrnL <- mutate(relabTrnL, Relative_Abundance = (Abundance / (sum(Abundance)) * 100))
+colnames(relabTrnL)[12] <- "Relative_Abundance" # change column name
+
+# Combine relative abundances of duplicate families
+relabTrnL_combined <- relabTrnL %>%
+  group_by(Phylum) %>%
+  summarise(Relative_Abundance = sum(`Relative_Abundance`))
+
+# Get the most abundant phyla
+top_phylaTrnL <- relabTrnL_combined %>%
+  arrange(desc(Relative_Abundance)); top_phylaTrnL 
+
+# Top 9
+# Actinobacteriota, Proteobacteria, Bacteroidota, Firmicutes, Deinococcota, Patescibacteria, Chloroflexi, Myxococcota, Gemmatimonadota
+```
+
+### Dataframe for Ternary plots - Cities
+```{r}
+# Create three columns for the abundances in Montreal, Quebec and Sherbrooke
+relabTrnL_C <- relabTrnL %>%
+  group_by(OTU, Phylum, City) %>%
+  summarize(Relative_Abundance = sum(Relative_Abundance)) %>%
+  pivot_wider(names_from = City, values_from = Relative_Abundance, names_prefix = "")
+```
+
+### Dataframe for Ternary plots - Time
+```{r}
+# Create three columns for the abundances in Spring, Summer, Fall
+relabTrnL_T <- relabTrnL %>%
+  group_by(OTU, Phylum, Time) %>%
+  summarize(Relative_Abundance = sum(Relative_Abundance)) %>%
+  pivot_wider(names_from = Time, values_from = Relative_Abundance, names_prefix = "")
+```
+
+### Dataframe for Ternary plots - Time ~ City
+```{r}
+# Create three columns for the abundances in Montreal+Spring, Montreal+Summer, Montreal+Fall, Quebec+Spring, Quebec+Fall, Sherbrooke+Spring, Sherbrooke+Summer, Sherbrooke+Fall
+relabTrnL_TC <- relabTrnL %>%
+  group_by(OTU, Phylum, Time, City) %>%
+  summarize(Relative_Abundance = sum(Relative_Abundance)) %>%
+  pivot_wider(names_from = c(Time,City), values_from = Relative_Abundance, names_prefix = "")
+```
+
+## Cities - ternary plots
+```{r}
+# For Top 9 phyla
+# 1
+# Actinobacteriota
+dfC1_TrnL<-relabTrnL_C[which(relabTrnL_C$Phylum=="Actinobacteriota"),]
+  # Make the plot  
+Act_terC <- ggtern(dfC1_TrnL,aes(Montreal, Quebec, Sherbrooke, color = Phylum))+ 
+  geom_point(aes(size=(Montreal + Quebec + Sherbrooke)))+
+  theme_bw()+
+  theme_legend_position('topleft')+
+  scale_size(name="Mean Relative Abundance")+
+  scale_color_manual(name="Phylum",values=my_colors[1])+
+  guides(color = FALSE); Act_terC # Remove the legend for 'Phylum'
+
+# 2
+# Proteobacteria
+dfC2_TrnL<-relabTrnL_C[which(relabTrnL_C$Phylum=="Proteobacteria"),]
+  # Make the plot  
+  Pro_terC <- ggtern(dfC2_TrnL,aes(Montreal, Quebec, Sherbrooke, color = Phylum))+ 
+    geom_point(aes(size=(Montreal + Quebec + Sherbrooke)))+
+    theme_bw()+
+    theme_legend_position('topleft')+
+    scale_size(name="Mean Relative Abundance")+
+    scale_color_manual(name="Phylum",values=my_colors[2])+
+    guides(color = FALSE); Pro_terC # Remove the legend for 'Phylum'
+
+# 3
+# Bacteroidota
+dfC3_TrnL<-relabTrnL_C[which(relabTrnL_C$Phylum=="Bacteroidota"),]
+# Make the plot  
+Bac_terC <- ggtern(dfC3_TrnL,aes(Montreal, Quebec, Sherbrooke, color = Phylum))+ 
+  geom_point(aes(size=(Montreal + Quebec + Sherbrooke)))+
+  theme_bw()+
+  theme_legend_position('topleft')+
+  scale_size(name="Mean Relative Abundance")+
+  scale_color_manual(name="Phylum",values=my_colors[3])+
+  guides(color = FALSE); Bac_terC # Remove the legend for 'Phylum'
+
+# 4
+# Firmicutes
+dfC4_TrnL<-relabTrnL_C[which(relabTrnL_C$Phylum=="Firmicutes"),]
+# Make the plot  
+Fir_terC <- ggtern(dfC4_TrnL,aes(Montreal, Quebec, Sherbrooke, color = Phylum))+ 
+  geom_point(aes(size=(Montreal + Quebec + Sherbrooke)))+
+  theme_bw()+
+  theme_legend_position('topleft')+
+  scale_size(name="Mean Relative Abundance")+
+  scale_color_manual(name="Phylum",values=my_colors[4])+
+  guides(color = FALSE); Fir_terC # Remove the legend for 'Phylum'
+
+# 5
+# Deinococcota
+dfC5_TrnL<-relabTrnL_C[which(relabTrnL_C$Phylum=="Deinococcota"),]
+# Make the plot  
+Dei_terC <- ggtern(dfC5_TrnL,aes(Montreal, Quebec, Sherbrooke, color = Phylum))+ 
+  geom_point(aes(size=(Montreal + Quebec + Sherbrooke)))+
+  theme_bw()+
+  theme_legend_position('topleft')+
+  scale_size(name="Mean Relative Abundance")+
+  scale_color_manual(name="Phylum",values=my_colors[5])+
+  guides(color = FALSE); Dei_terC # Remove the legend for 'Phylum'
+
+# 6
+# Patescibacteria
+dfC6_TrnL<-relabTrnL_C[which(relabTrnL_C$Phylum=="Patescibacteria"),]
+# Make the plot  
+Pas_terC <- ggtern(dfC6_TrnL,aes(Montreal, Quebec, Sherbrooke, color = Phylum))+ 
+  geom_point(aes(size=(Montreal + Quebec + Sherbrooke)))+
+  theme_bw()+
+  theme_legend_position('topleft')+
+  scale_size(name="Mean Relative Abundance")+
+  scale_color_manual(name="Phylum",values=my_colors[6])+
+  guides(color = FALSE); Pas_terC # Remove the legend for 'Phylum'
+
+# 7
+# Chloroflexi
+dfC7_TrnL<-relabTrnL_C[which(relabTrnL_C$Phylum=="Chloroflexi"),]
+# Make the plot  
+Chlo_terC <- ggtern(dfC7_TrnL,aes(Montreal, Quebec, Sherbrooke, color = Phylum))+ 
+  geom_point(aes(size=(Montreal + Quebec + Sherbrooke)))+
+  theme_bw()+
+  theme_legend_position('topleft')+
+  scale_size(name="Mean Relative Abundance")+
+  scale_color_manual(name="Phylum",values=my_colors[9])+
+  guides(color = FALSE); Chlo_terC # Remove the legend for 'Phylum'
+
+# 8
+# Myxococcota
+dfC8_TrnL<-relabTrnL_C[which(relabTrnL_C$Phylum=="Myxococcota"),]
+# Make the plot  
+Myxo_terC <- ggtern(dfC8_TrnL,aes(Montreal, Quebec, Sherbrooke, color = Phylum))+ 
+  geom_point(aes(size=(Montreal + Quebec + Sherbrooke)))+
+  theme_bw()+
+  theme_legend_position('topleft')+
+  scale_size(name="Mean Relative Abundance")+
+  scale_color_manual(name="Phylum",values=my_colors[10])+
+  guides(color = FALSE); Myxo_terC # Remove the legend for 'Phylum'
+
+# 9
+# Gemmatimonadota
+dfC9_TrnL<-relabTrnL_C[which(relabTrnL_C$Phylum=="Gemmatimonadota"),]
+# Make the plot  
+Gem_terC <- ggtern(dfC9_TrnL,aes(Montreal, Quebec, Sherbrooke, color = Phylum))+ 
+  geom_point(aes(size=(Montreal + Quebec + Sherbrooke)))+
+  theme_bw()+
+  theme_legend_position('topleft')+
+  scale_size(name="Mean Relative Abundance")+
+  scale_color_manual(name="Phylum",values=my_colors[11])+
+  guides(color = FALSE); Gem_terC  # Remove the legend for 'Phylum'
+```
+
+## Time - ternary plots
+```{r}
+# For all phyla
+# 1
+# Actinobacteriota
+dfT1_TrnL<-relabTrnL_T[which(relabTrnL_T$Phylum=="Actinobacteriota"),]
+  # Make the plot  
+Act_terT <- ggtern(dfT1_TrnL,aes(Spring, Summer, Fall, color = Phylum))+ 
+  geom_point(aes(size=(Spring + Summer + Fall)))+
+  theme_bw()+
+  theme_legend_position('topleft')+
+  scale_size(name="Mean Relative Abundance")+
+  scale_color_manual(name="Phylum",values=my_colors[1])+
+  guides(color = FALSE); Act_terT # Remove the legend for 'Phylum'
+
+# 2
+# Proteobacteria
+dfT2_TrnL<-relabTrnL_T[which(relabTrnL_T$Phylum=="Proteobacteria"),]
+  # Make the plot  
+  Pro_terT <- ggtern(dfT2_TrnL,aes(Spring, Summer, Fall, color = Phylum))+ 
+    geom_point(aes(size=(Spring + Summer + Fall)))+
+    theme_bw()+
+    theme_legend_position('topleft')+
+    scale_size(name="Mean Relative Abundance")+
+    scale_color_manual(name="Phylum",values=my_colors[2])+
+    guides(color = FALSE); Pro_terT # Remove the legend for 'Phylum'
+
+# 3
+# Bacteroidota
+dfT3_TrnL<-relabTrnL_T[which(relabTrnL_T$Phylum=="Bacteroidota"),]
+# Make the plot  
+Bac_terT <- ggtern(dfT3_TrnL,aes(Spring, Summer, Fall, color = Phylum))+ 
+  geom_point(aes(size=(Spring + Summer + Fall)))+
+  theme_bw()+
+  theme_legend_position('topleft')+
+  scale_size(name="Mean Relative Abundance")+
+  scale_color_manual(name="Phylum",values=my_colors[3])+
+  guides(color = FALSE); Bac_terT # Remove the legend for 'Phylum'
+
+# 4
+# Firmicutes
+dfT4_TrnL<-relabTrnL_T[which(relabTrnL_T$Phylum=="Firmicutes"),]
+# Make the plot  
+Fir_terT <- ggtern(dfT4_TrnL,aes(Spring, Summer, Fall, color = Phylum))+ 
+  geom_point(aes(size=(Spring + Summer + Fall)))+
+  theme_bw()+
+  theme_legend_position('topleft')+
+  scale_size(name="Mean Relative Abundance")+
+  scale_color_manual(name="Phylum",values=my_colors[4])+
+  guides(color = FALSE); Fir_terT # Remove the legend for 'Phylum'
+
+# 5
+# Deinococcota
+dfT5_TrnL<-relabTrnL_T[which(relabTrnL_T$Phylum=="Deinococcota"),]
+# Make the plot  
+Dei_terT <- ggtern(dfT5_TrnL,aes(Spring, Summer, Fall, color = Phylum))+ 
+  geom_point(aes(size=(Spring + Summer + Fall)))+
+  theme_bw()+
+  theme_legend_position('topleft')+
+  scale_size(name="Mean Relative Abundance")+
+  scale_color_manual(name="Phylum",values=my_colors[5])+
+  guides(color = FALSE); Dei_terT # Remove the legend for 'Phylum'
+
+# 6
+# Patescibacteria
+dfT6_TrnL<-relabTrnL_T[which(relabTrnL_T$Phylum=="Patescibacteria"),]
+# Make the plot  
+Pas_terT <- ggtern(dfT6_TrnL,aes(Spring, Summer, Fall, color = Phylum))+ 
+  geom_point(aes(size=(Spring + Summer + Fall)))+
+  theme_bw()+
+  theme_legend_position('topleft')+
+  scale_size(name="Mean Relative Abundance")+
+  scale_color_manual(name="Phylum",values=my_colors[6])+
+  guides(color = FALSE); Pas_terT # Remove the legend for 'Phylum'
+
+# 7
+# Chloroflexi
+dfT7_TrnL<-relabTrnL_T[which(relabTrnL_T$Phylum=="Chloroflexi"),]
+# Make the plot  
+Chlo_terT <- ggtern(dfT7_TrnL,aes(Spring, Summer, Fall, color = Phylum))+ 
+  geom_point(aes(size=(Spring + Summer + Fall)))+
+  theme_bw()+
+  theme_legend_position('topleft')+
+  scale_size(name="Mean Relative Abundance")+
+  scale_color_manual(name="Phylum",values=my_colors[9])+
+  guides(color = FALSE); Chlo_terT # Remove the legend for 'Phylum'
+
+# 8
+# Myxococcota
+dfT8_TrnL<-relabTrnL_T[which(relabTrnL_T$Phylum=="Myxococcota"),]
+# Make the plot  
+Myxo_terT <- ggtern(dfT8_TrnL,aes(Spring, Summer, Fall, color = Phylum))+ 
+  geom_point(aes(size=(Spring + Summer + Fall)))+
+  theme_bw()+
+  theme_legend_position('topleft')+
+  scale_size(name="Mean Relative Abundance")+
+  scale_color_manual(name="Phylum",values=my_colors[10])+
+  guides(color = FALSE); Myxo_terT # Remove the legend for 'Phylum'
+
+# 9
+# Gemmatimonadota
+dfT9_TrnL<-relabTrnL_T[which(relabTrnL_T$Phylum=="Gemmatimonadota"),]
+# Make the plot  
+Gem_terT <- ggtern(dfT9_TrnL,aes(Spring, Summer, Fall, color = Phylum))+ 
+  geom_point(aes(size=(Spring + Summer + Fall)))+
+  theme_bw()+
+  theme_legend_position('topleft')+
+  scale_size(name="Mean Relative Abundance")+
+  scale_color_manual(name="Phylum",values=my_colors[11])+
+  guides(color = FALSE); Gem_terT  # Remove the legend for 'Phylum'
+```
+
+## Time ~ Cities - ternary plots
+### Time ~ Montreal
+```{r}
+# For all phyla
+# 1
+# Actinobacteriota
+dfTM1_TrnL<-relabTrnL_TC[which(relabTrnL_TC$Phylum=="Actinobacteriota"),]
+  # Make the plot  
+Act_terTM <- ggtern(dfTM1_TrnL,aes(Spring_Montreal, Summer_Montreal, Fall_Montreal, color = Phylum))+ 
+  geom_point(aes(size=(Spring_Montreal + Summer_Montreal + Fall_Montreal)))+
+  theme_bw()+
+  theme_legend_position('topleft')+
+  scale_size(name="Mean Relative Abundance")+
+  scale_color_manual(name="Phylum",values=my_colors[1])+
+  guides(color = FALSE) # Remove the legend for 'Phylum'
+
+# 2
+# Proteobacteria
+dfTM2_TrnL<-relabTrnL_TC[which(relabTrnL_TC$Phylum=="Proteobacteria"),]
+  # Make the plot  
+  Pro_terTM <- ggtern(dfTM2_TrnL,aes(Spring_Montreal, Summer_Montreal, Fall_Montreal, color = Phylum))+ 
+    geom_point(aes(size=(Spring_Montreal + Summer_Montreal + Fall_Montreal)))+
+    theme_bw()+
+    theme_legend_position('topleft')+
+    scale_size(name="Mean Relative Abundance")+
+    scale_color_manual(name="Phylum",values=my_colors[2])+
+    guides(color = FALSE) # Remove the legend for 'Phylum'
+
+# 3
+# Bacteroidota
+dfTM3_TrnL<-relabTrnL_TC[which(relabTrnL_TC$Phylum=="Bacteroidota"),]
+# Make the plot  
+Bac_terTM <- ggtern(dfTM3_TrnL,aes(Spring_Montreal, Summer_Montreal, Fall_Montreal, color = Phylum))+ 
+  geom_point(aes(size=(Spring_Montreal + Summer_Montreal + Fall_Montreal)))+
+  theme_bw()+
+  theme_legend_position('topleft')+
+  scale_size(name="Mean Relative Abundance")+
+  scale_color_manual(name="Phylum",values=my_colors[3])+
+  guides(color = FALSE); Bac_terTM # Remove the legend for 'Phylum'
+
+# 4
+# Firmicutes
+dfTM4_TrnL<-relabTrnL_TC[which(relabTrnL_TC$Phylum=="Firmicutes"),]
+# Make the plot  
+Fir_terTM <- ggtern(dfTM4_TrnL,aes(Spring_Montreal, Summer_Montreal, Fall_Montreal, color = Phylum))+ 
+  geom_point(aes(size=(Spring_Montreal + Summer_Montreal + Fall_Montreal)))+
+  theme_bw()+
+  theme_legend_position('topleft')+
+  scale_size(name="Mean Relative Abundance")+
+  scale_color_manual(name="Phylum",values=my_colors[4])+
+  guides(color = FALSE); Fir_terTM # Remove the legend for 'Phylum'
+
+# 5
+# Deinococcota
+dfTM5_TrnL<-relabTrnL_TC[which(relabTrnL_TC$Phylum=="Deinococcota"),]
+# Make the plot  
+Dei_terTM <- ggtern(dfTM5_TrnL,aes(Spring_Montreal, Summer_Montreal, Fall_Montreal, color = Phylum))+ 
+  geom_point(aes(size=(Spring_Montreal + Summer_Montreal + Fall_Montreal)))+
+  theme_bw()+
+  theme_legend_position('topleft')+
+  scale_size(name="Mean Relative Abundance")+
+  scale_color_manual(name="Phylum",values=my_colors[5])+
+  guides(color = FALSE); Dei_terTM # Remove the legend for 'Phylum'
+
+# 6
+# Patescibacteria
+dfTM6_TrnL<-relabTrnL_TC[which(relabTrnL_TC$Phylum=="Patescibacteria"),]
+# Make the plot  
+Pas_terTM <- ggtern(dfTM6_TrnL,aes(Spring_Montreal, Summer_Montreal, Fall_Montreal, color = Phylum))+ 
+  geom_point(aes(size=(Spring_Montreal + Summer_Montreal + Fall_Montreal)))+
+  theme_bw()+
+  theme_legend_position('topleft')+
+  scale_size(name="Mean Relative Abundance")+
+  scale_color_manual(name="Phylum",values=my_colors[6])+
+  guides(color = FALSE); Pas_terTM # Remove the legend for 'Phylum'
+
+# 7
+# Chloroflexi
+dfTM7_TrnL<-relabTrnL_TC[which(relabTrnL_TC$Phylum=="Chloroflexi"),]
+# Make the plot  
+Chlo_terTM <- ggtern(dfTM7_TrnL,aes(Spring_Montreal, Summer_Montreal, Fall_Montreal, color = Phylum))+ 
+  geom_point(aes(size=(Spring_Montreal + Summer_Montreal + Fall_Montreal)))+
+  theme_bw()+
+  theme_legend_position('topleft')+
+  scale_size(name="Mean Relative Abundance")+
+  scale_color_manual(name="Phylum",values=my_colors[9])+
+  guides(color = FALSE); Chlo_terTM # Remove the legend for 'Phylum'
+
+# 8
+# Myxococcota
+dfTM8_TrnL<-relabTrnL_TC[which(relabTrnL_TC$Phylum=="Myxococcota"),]
+# Make the plot  
+Myxo_terTM <- ggtern(dfTM8_TrnL,aes(Spring_Montreal, Summer_Montreal, Fall_Montreal, color = Phylum))+ 
+  geom_point(aes(size=(Spring_Montreal + Summer_Montreal + Fall_Montreal)))+
+  theme_bw()+
+  theme_legend_position('topleft')+
+  scale_size(name="Mean Relative Abundance")+
+  scale_color_manual(name="Phylum",values=my_colors[10])+
+  guides(color = FALSE); Myxo_terTM # Remove the legend for 'Phylum'
+
+# 9
+# Gemmatimonadota
+dfTM9_TrnL<-relabTrnL_TC[which(relabTrnL_TC$Phylum=="Gemmatimonadota"),]
+# Make the plot  
+Gem_terTM <- ggtern(dfTM9_TrnL,aes(Spring_Montreal, Summer_Montreal, Fall_Montreal, color = Phylum))+ 
+  geom_point(aes(size=(Spring_Montreal + Summer_Montreal + Fall_Montreal)))+
+  labs(x = "Spring", y = "Summer", z = "Fall", title = " Gemmatimonadota in Montreal across the seasons")+
+  #theme_legend_position('topleft')+
+  scale_size(name="Mean Relative Abundance")+
+  scale_color_manual(name="Phylum",values=my_colors[11])+
+  guides(color = FALSE)+
+  theme_bw(); Gem_terTM  # Remove the legend for 'Phylum'
+```
+
+### Time ~ Sherbrooke
+```{r}
+# For all phyla
+# 1
+# Actinobacteriota
+dfTS1_TrnL<-relabTrnL_TC[which(relabTrnL_TC$Phylum=="Actinobacteriota"),]
+  # Make the plot  
+Act_terTS <- ggtern(dfTS1_TrnL,aes(Spring_Sherbrooke, Summer_Sherbrooke, Fall_Sherbrooke, color = Phylum))+ 
+  geom_point(aes(size=(Spring_Sherbrooke + Summer_Sherbrooke + Fall_Sherbrooke)))+
+  theme_bw()+
+  theme_legend_position('topleft')+
+  scale_size(name="Mean Relative Abundance")+
+  scale_color_manual(name="Phylum",values=my_colors[1])+
+  guides(color = FALSE); Act_terTS # Remove the legend for 'Phylum'
+
+# 2
+# Proteobacteria
+dfTS2_TrnL<-relabTrnL_TC[which(relabTrnL_TC$Phylum=="Proteobacteria"),]
+  # Make the plot  
+  Pro_terTS <- ggtern(dfTS2_TrnL,aes(Spring_Sherbrooke, Summer_Sherbrooke, Fall_Sherbrooke, color = Phylum))+ 
+    geom_point(aes(size=(Spring_Sherbrooke + Summer_Sherbrooke + Fall_Sherbrooke)))+
+    theme_bw()+
+    theme_legend_position('topleft')+
+    scale_size(name="Mean Relative Abundance")+
+    scale_color_manual(name="Phylum",values=my_colors[2])+
+    guides(color = FALSE); Pro_terTS # Remove the legend for 'Phylum'
+
+# 3
+# Bacteroidota
+dfTS3_TrnL<-relabTrnL_TC[which(relabTrnL_TC$Phylum=="Bacteroidota"),]
+# Make the plot  
+Bac_terTS <- ggtern(dfTS3_TrnL,aes(Spring_Sherbrooke, Summer_Sherbrooke, Fall_Sherbrooke, color = Phylum))+ 
+  geom_point(aes(size=(Spring_Sherbrooke + Summer_Sherbrooke + Fall_Sherbrooke)))+
+  theme_bw()+
+  theme_legend_position('topleft')+
+  scale_size(name="Mean Relative Abundance")+
+  scale_color_manual(name="Phylum",values=my_colors[3])+
+  guides(color = FALSE); Bac_terTS # Remove the legend for 'Phylum'
+
+# 4
+# Firmicutes
+dfTS4_TrnL<-relabTrnL_TC[which(relabTrnL_TC$Phylum=="Firmicutes"),]
+# Make the plot  
+Fir_terTS <- ggtern(dfTS4_TrnL,aes(Spring_Sherbrooke, Summer_Sherbrooke, Fall_Sherbrooke, color = Phylum))+ 
+  geom_point(aes(size=(Spring_Sherbrooke + Summer_Sherbrooke + Fall_Sherbrooke)))+
+  theme_bw()+
+  theme_legend_position('topleft')+
+  scale_size(name="Mean Relative Abundance")+
+  scale_color_manual(name="Phylum",values=my_colors[4])+
+  guides(color = FALSE); Fir_terTS # Remove the legend for 'Phylum'
+
+# 5
+# Deinococcota
+dfTS5_TrnL<-relabTrnL_TC[which(relabTrnL_TC$Phylum=="Deinococcota"),]
+# Make the plot  
+Dei_terTS <- ggtern(dfTS5_TrnL,aes(Spring_Sherbrooke, Summer_Sherbrooke, Fall_Sherbrooke, color = Phylum))+ 
+  geom_point(aes(size=(Spring_Sherbrooke + Summer_Sherbrooke + Fall_Sherbrooke)))+
+  theme_bw()+
+  theme_legend_position('topleft')+
+  scale_size(name="Mean Relative Abundance")+
+  scale_color_manual(name="Phylum",values=my_colors[5])+
+  guides(color = FALSE); Dei_terTS # Remove the legend for 'Phylum'
+
+# 6
+# Patescibacteria
+dfTS6_TrnL<-relabTrnL_TC[which(relabTrnL_TC$Phylum=="Patescibacteria"),]
+# Make the plot  
+Pas_terTS <- ggtern(dfTS6_TrnL,aes(Spring_Sherbrooke, Summer_Sherbrooke, Fall_Sherbrooke, color = Phylum))+ 
+  geom_point(aes(size=(Spring_Sherbrooke + Summer_Sherbrooke + Fall_Sherbrooke)))+
+  theme_bw()+
+  theme_legend_position('topleft')+
+  scale_size(name="Mean Relative Abundance")+
+  scale_color_manual(name="Phylum",values=my_colors[6])+
+  guides(color = FALSE); Pas_terTS # Remove the legend for 'Phylum'
+
+# 7
+# Chloroflexi
+dfTS7_TrnL<-relabTrnL_TC[which(relabTrnL_TC$Phylum=="Chloroflexi"),]
+# Make the plot  
+Chlo_terTS <- ggtern(dfTS7_TrnL,aes(Spring_Sherbrooke, Summer_Sherbrooke, Fall_Sherbrooke, color = Phylum))+ 
+  geom_point(aes(size=(Spring_Sherbrooke + Summer_Sherbrooke + Fall_Sherbrooke)))+
+  theme_bw()+
+  theme_legend_position('topleft')+
+  scale_size(name="Mean Relative Abundance")+
+  scale_color_manual(name="Phylum",values=my_colors[9])+
+  guides(color = FALSE); Chlo_terTS # Remove the legend for 'Phylum'
+
+# 8
+# Myxococcota
+dfTS8_TrnL<-relabTrnL_TC[which(relabTrnL_TC$Phylum=="Myxococcota"),]
+# Make the plot  
+Myxo_terTS <- ggtern(dfTS8_TrnL,aes(Spring_Sherbrooke, Summer_Sherbrooke, Fall_Sherbrooke, color = Phylum))+ 
+  geom_point(aes(size=(Spring_Sherbrooke + Summer_Sherbrooke + Fall_Sherbrooke)))+
+  theme_bw()+
+  theme_legend_position('topleft')+
+  scale_size(name="Mean Relative Abundance")+
+  scale_color_manual(name="Phylum",values=my_colors[10])+
+  guides(color = FALSE); Myxo_terTS # Remove the legend for 'Phylum'
+
+# 9
+# Gemmatimonadota
+dfTS9_TrnL<-relabTrnL_TC[which(relabTrnL_TC$Phylum=="Gemmatimonadota"),]
+# Make the plot  
+Gem_terTS <- ggtern(dfTS9_TrnL,aes(Spring_Sherbrooke, Summer_Sherbrooke, Fall_Sherbrooke, color = Phylum))+ 
+  geom_point(aes(size=(Spring_Sherbrooke + Summer_Sherbrooke + Fall_Sherbrooke)))+
+  theme_nomask()+
+  theme_legend_position('topleft')+
+  scale_size(name="Mean Relative Abundance")+
+  scale_color_manual(name="Phylum",values=my_colors[11])+
+  guides(color = FALSE); Gem_terTS  # Remove the legend for 'Phylum'
+```
+
+### Spring ~ City
+```{r}
+# For all phyla
+# 1
+# Actinobacteriota
+dfSC1_TrnL<-relabTrnL_TC[which(relabTrnL_TC$Phylum=="Actinobacteriota"),]
+  # Make the plot  
+Act_terSC <- ggtern(dfSC1_TrnL,aes(Spring_Montreal, Spring_Quebec, Spring_Sherbrooke, color = Phylum))+ 
+  geom_point(aes(size=(Spring_Montreal + Spring_Quebec + Spring_Sherbrooke)))+
+  theme_bw()+
+  theme_legend_position('topleft')+
+  scale_size(name="Mean Relative Abundance")+
+  scale_color_manual(name="Phylum",values=my_colors[1])+
+  guides(color = FALSE); Act_terSC # Remove the legend for 'Phylum'
+
+# 2
+# Proteobacteria
+dfSC2_TrnL<-relabTrnL_TC[which(relabTrnL_TC$Phylum=="Proteobacteria"),]
+  # Make the plot  
+  Pro_terSC <- ggtern(dfSC2_TrnL,aes(Spring_Montreal, Spring_Quebec, Spring_Sherbrooke, color = Phylum))+ 
+    geom_point(aes(size=(Spring_Montreal + Spring_Quebec + Spring_Sherbrooke)))+
+    theme_bw()+
+    theme_legend_position('topleft')+
+    scale_size(name="Mean Relative Abundance")+
+    scale_color_manual(name="Phylum",values=my_colors[2])+
+    guides(color = FALSE); Pro_terSC # Remove the legend for 'Phylum'
+
+# 3
+# Bacteroidota
+dfSC3_TrnL<-relabTrnL_TC[which(relabTrnL_TC$Phylum=="Bacteroidota"),]
+# Make the plot  
+Bac_terSC <- ggtern(dfSC3_TrnL,aes(Spring_Montreal, Spring_Quebec, Spring_Sherbrooke, color = Phylum))+ 
+  geom_point(aes(size=(Spring_Montreal + Spring_Quebec + Spring_Sherbrooke)))+
+  theme_bw()+
+  theme_legend_position('topleft')+
+  scale_size(name="Mean Relative Abundance")+
+  scale_color_manual(name="Phylum",values=my_colors[3])+
+  guides(color = FALSE); Bac_terSC # Remove the legend for 'Phylum'
+
+# 4
+# Firmicutes
+dfSC4_TrnL<-relabTrnL_TC[which(relabTrnL_TC$Phylum=="Firmicutes"),]
+# Make the plot  
+Fir_terSC <- ggtern(dfSC4_TrnL,aes(Spring_Montreal, Spring_Quebec, Spring_Sherbrooke, color = Phylum))+ 
+  geom_point(aes(size=(Spring_Montreal + Spring_Quebec + Spring_Sherbrooke)))+
+  theme_bw()+
+  theme_legend_position('topleft')+
+  scale_size(name="Mean Relative Abundance")+
+  scale_color_manual(name="Phylum",values=my_colors[4])+
+  guides(color = FALSE); Fir_terSC # Remove the legend for 'Phylum'
+
+# 5
+# Deinococcota
+dfSC5_TrnL<-relabTrnL_TC[which(relabTrnL_TC$Phylum=="Deinococcota"),]
+# Make the plot  
+Dei_terSC <- ggtern(dfSC5_TrnL,aes(Spring_Montreal, Spring_Quebec, Spring_Sherbrooke, color = Phylum))+ 
+  geom_point(aes(size=(Spring_Montreal + Spring_Quebec + Spring_Sherbrooke)))+
+  theme_bw()+
+  theme_legend_position('topleft')+
+  scale_size(name="Mean Relative Abundance")+
+  scale_color_manual(name="Phylum",values=my_colors[5])+
+  guides(color = FALSE); Dei_terSC # Remove the legend for 'Phylum'
+
+# 6
+# Patescibacteria
+dfSC6_TrnL<-relabTrnL_TC[which(relabTrnL_TC$Phylum=="Patescibacteria"),]
+# Make the plot  
+Pas_terSC <- ggtern(dfSC6_TrnL,aes(Spring_Montreal, Spring_Quebec, Spring_Sherbrooke, color = Phylum))+ 
+  geom_point(aes(size=(Spring_Montreal + Spring_Quebec + Spring_Sherbrooke)))+
+  theme_bw()+
+  theme_legend_position('topleft')+
+  scale_size(name="Mean Relative Abundance")+
+  scale_color_manual(name="Phylum",values=my_colors[6])+
+  guides(color = FALSE); Pas_terSC # Remove the legend for 'Phylum'
+
+# 7
+# Chloroflexi
+dfSC7_TrnL<-relabTrnL_TC[which(relabTrnL_TC$Phylum=="Chloroflexi"),]
+# Make the plot  
+Chlo_terSC <- ggtern(dfSC7_TrnL,aes(Spring_Montreal, Spring_Quebec, Spring_Sherbrooke, color = Phylum))+ 
+  geom_point(aes(size=(Spring_Montreal + Spring_Quebec + Spring_Sherbrooke)))+
+  theme_bw()+
+  theme_legend_position('topleft')+
+  scale_size(name="Mean Relative Abundance")+
+  scale_color_manual(name="Phylum",values=my_colors[9])+
+  guides(color = FALSE); Chlo_terSC # Remove the legend for 'Phylum'
+
+# 8
+# Myxococcota
+dfSC8_TrnL<-relabTrnL_TC[which(relabTrnL_TC$Phylum=="Myxococcota"),]
+# Make the plot  
+Myxo_terSC <- ggtern(dfSC8_TrnL,aes(Spring_Montreal, Spring_Quebec, Spring_Sherbrooke, color = Phylum))+ 
+  geom_point(aes(size=(Spring_Montreal + Spring_Quebec + Spring_Sherbrooke)))+
+  theme_bw()+
+  theme_legend_position('topleft')+
+  scale_size(name="Mean Relative Abundance")+
+  scale_color_manual(name="Phylum",values=my_colors[10])+
+  guides(color = FALSE); Myxo_terSC # Remove the legend for 'Phylum'
+
+# 9
+# Gemmatimonadota
+dfSC9_TrnL<-relabTrnL_TC[which(relabTrnL_TC$Phylum=="Gemmatimonadota"),]
+# Make the plot  
+Gem_terSC <- ggtern(dfSC9_TrnL,aes(Spring_Montreal, Spring_Quebec, Spring_Sherbrooke, color = Phylum))+ 
+  geom_point(aes(size=(Spring_Montreal + Spring_Quebec + Spring_Sherbrooke)))+
+  theme_bw()+
+  theme_legend_position('topleft')+
+  scale_size(name="Mean Relative Abundance")+
+  scale_color_manual(name="Phylum",values=my_colors[11])+
+  guides(color = FALSE); Gem_terSC  # Remove the legend for 'Phylum'
+```
+
+### Fall ~ City
+```{r}
+# For all phyla
+# 1
+# Actinobacteriota
+dfFC1_TrnL<-relabTrnL_TC[which(relabTrnL_TC$Phylum=="Actinobacteriota"),]
+  # Make the plot  
+Act_terFC <- ggtern(dfFC1_TrnL,aes(Fall_Montreal, Fall_Quebec, Fall_Sherbrooke, color = Phylum))+ 
+  geom_point(aes(size=(Fall_Montreal + Fall_Quebec + Fall_Sherbrooke)))+
+  theme_bw()+
+  theme_legend_position('topleft')+
+  scale_size(name="Mean Relative Abundance")+
+  scale_color_manual(name="Phylum",values=my_colors[1])+
+  guides(color = FALSE); Act_terFC # Remove the legend for 'Phylum'
+
+# 2
+# Proteobacteria
+dfFC2_TrnL<-relabTrnL_TC[which(relabTrnL_TC$Phylum=="Proteobacteria"),]
+  # Make the plot  
+  Pro_terFC <- ggtern(dfFC2_TrnL,aes(Fall_Montreal, Fall_Quebec, Fall_Sherbrooke, color = Phylum))+ 
+    geom_point(aes(size=(Fall_Montreal + Fall_Quebec + Fall_Sherbrooke)))+
+    theme_bw()+
+    theme_legend_position('topleft')+
+    scale_size(name="Mean Relative Abundance")+
+    scale_color_manual(name="Phylum",values=my_colors[2])+
+    guides(color = FALSE); Pro_terFC # Remove the legend for 'Phylum'
+
+# 3
+# Bacteroidota
+dfFC3_TrnL<-relabTrnL_TC[which(relabTrnL_TC$Phylum=="Bacteroidota"),]
+# Make the plot  
+Bac_terFC <- ggtern(dfFC3_TrnL,aes(Fall_Montreal, Fall_Quebec, Fall_Sherbrooke, color = Phylum))+ 
+  geom_point(aes(size=(Fall_Montreal + Fall_Quebec + Fall_Sherbrooke)))+
+  theme_bw()+
+  theme_legend_position('topleft')+
+  scale_size(name="Mean Relative Abundance")+
+  scale_color_manual(name="Phylum",values=my_colors[3])+
+  guides(color = FALSE); Bac_terFC # Remove the legend for 'Phylum'
+
+# 4
+# Firmicutes
+dfFC4_TrnL<-relabTrnL_TC[which(relabTrnL_TC$Phylum=="Firmicutes"),]
+# Make the plot  
+Fir_terFC <- ggtern(dfFC4_TrnL,aes(Fall_Montreal, Fall_Quebec, Fall_Sherbrooke, color = Phylum))+ 
+  geom_point(aes(size=(Fall_Montreal + Fall_Quebec + Fall_Sherbrooke)))+
+  theme_bw()+
+  theme_legend_position('topleft')+
+  scale_size(name="Mean Relative Abundance")+
+  scale_color_manual(name="Phylum",values=my_colors[4])+
+  guides(color = FALSE); Fir_terFC # Remove the legend for 'Phylum'
+
+# 5
+# Deinococcota
+dfFC5_TrnL<-relabTrnL_TC[which(relabTrnL_TC$Phylum=="Deinococcota"),]
+# Make the plot  
+Dei_terFC <- ggtern(dfFC5_TrnL,aes(Fall_Montreal, Fall_Quebec, Fall_Sherbrooke, color = Phylum))+ 
+  geom_point(aes(size=(Fall_Montreal + Fall_Quebec + Fall_Sherbrooke)))+
+  theme_bw()+
+  theme_legend_position('topleft')+
+  scale_size(name="Mean Relative Abundance")+
+  scale_color_manual(name="Phylum",values=my_colors[5])+
+  guides(color = FALSE); Dei_terFC # Remove the legend for 'Phylum'
+
+# 6
+# Patescibacteria
+dfFC6_TrnL<-relabTrnL_TC[which(relabTrnL_TC$Phylum=="Patescibacteria"),]
+# Make the plot  
+Pas_terFC <- ggtern(dfFC6_TrnL,aes(Fall_Montreal, Fall_Quebec, Fall_Sherbrooke, color = Phylum))+ 
+  geom_point(aes(size=(Fall_Montreal + Fall_Quebec + Fall_Sherbrooke)))+
+  theme_bw()+
+  theme_legend_position('topleft')+
+  scale_size(name="Mean Relative Abundance")+
+  scale_color_manual(name="Phylum",values=my_colors[6])+
+  guides(color = FALSE); Pas_terFC # Remove the legend for 'Phylum'
+
+# 7
+# Chloroflexi
+dfFC7_TrnL<-relabTrnL_TC[which(relabTrnL_TC$Phylum=="Chloroflexi"),]
+# Make the plot  
+Chlo_terFC <- ggtern(dfFC7_TrnL,aes(Fall_Montreal, Fall_Quebec, Fall_Sherbrooke, color = Phylum))+ 
+  geom_point(aes(size=(Fall_Montreal + Fall_Quebec + Fall_Sherbrooke)))+
+  theme_bw()+
+  theme_legend_position('topleft')+
+  scale_size(name="Mean Relative Abundance")+
+  scale_color_manual(name="Phylum",values=my_colors[9])+
+  guides(color = FALSE); Chlo_terFC # Remove the legend for 'Phylum'
+
+# 8
+# Myxococcota
+dfFC8_TrnL<-relabTrnL_TC[which(relabTrnL_TC$Phylum=="Myxococcota"),]
+# Make the plot  
+Myxo_terFC <- ggtern(dfFC8_TrnL,aes(Fall_Montreal, Fall_Quebec, Fall_Sherbrooke, color = Phylum))+ 
+  geom_point(aes(size=(Fall_Montreal + Fall_Quebec + Fall_Sherbrooke)))+
+  theme_bw()+
+  theme_legend_position('topleft')+
+  scale_size(name="Mean Relative Abundance")+
+  scale_color_manual(name="Phylum",values=my_colors[10])+
+  guides(color = FALSE); Myxo_terFC # Remove the legend for 'Phylum'
+
+# 9
+# Gemmatimonadota
+dfFC9_TrnL<-relabTrnL_TC[which(relabTrnL_TC$Phylum=="Gemmatimonadota"),]
+# Make the plot  
+Gem_terFC <- ggtern(dfFC9_TrnL,aes(Fall_Montreal, Fall_Quebec, Fall_Sherbrooke, color = Phylum))+ 
+  geom_point(aes(size=(Fall_Montreal + Fall_Quebec + Fall_Sherbrooke)))+
+  theme_bw()+
+  theme_legend_position('topleft')+
+  scale_size(name="Mean Relative Abundance")+
+  scale_color_manual(name="Phylum",values=my_colors[11])+
+  guides(color = FALSE); Gem_terFC  # Remove the legend for 'Phylum'
+```
+
+# Save and import objects to start back where we left
+## Save
+```{r}
+saveRDS(asvTrnL,"asvTrnL.rds")
+saveRDS(metaTrnL,"metaTrnL.rds")
+saveRDS(phyloTrnL,"phyloTrnL.rds")
+saveRDS(seqtab.nochimTrnL, "seqtab.nochimTrnL.rds")
+saveRDS(taxaTrnL, "taxaTrnL.rds")
+saveRDS(mtlTrnL, "mtlTrnL.rds")
+saveRDS(shbTrnL, "shbTrnL.rds")
+saveRDS(qcTrnL, "qcTrnL.rds")
+saveRDS(springTrnL, "springTrnL.rds")
+saveRDS(summerTrnL, "summerTrnL.rds")
+saveRDS(fallTrnL, "fallTrnL.rds")
+saveRDS(dnaTrnL, "dnaTrnL.rds")
+saveRDS(fmetaTrnL, "fmetaTrnL.rds")
+saveRDS(qcmetaTrnL, "qcmetaTrnL.rds")
+saveRDS(shbmetaTrnL, "shbmetaTrnL.rds")
+saveRDS(smetaTrnL, "smetaTrnL.rds")
+saveRDS(sumetaTrnL, "sumetaTrnL.rds")
+saveRDS(phylo.rareTrnL, "phylo.rareTrnL.rds")
+saveRDS(df.ancombc_cities.TrnL, "df.ancombc_cities.TrnL.rds")
+saveRDS(df.ancombc_time.TrnL, "df.ancombc_time.TrnL.rds")
+saveRDS(phylomeltTrnL, "phylomeltTrnL.rds")
+```
+
+## Import
+```{r}
+#objectsToImport <- c("asvTrnL", "metaTrnL", "phyloTrnL", "seqtab.nochimTrnL", "taxaTrnL", "mtlTrnL", "shbTrnL", "qcTrnL", "springTrnL", "summerTrnL", "fallTrnL", "dnaTrnL", "mtlmetaTrnL", "qcmetaTrnL", "shbmetaTrnL","smetaTrnL", "sumetaTrnL", "phylo.rareTrnL", "df.ancombc_cities.TrnL", "df.ancombc_time.TrnL", "phylomeltTrnL")
+
+
+
+objectsToImport <- c("asvTrnL", "metaTrnL", "phyloTrnL", "seqtab.nochimTrnL")
+
+for(i in objectsToImport) {
+assign(i, readRDS(paste0("~/Documents/Universite/M.Sc./Lab_and_field_work/R/sequencing/trnL/trnL_SASS_samples_2022/", i,".rds")))
+}
+```
+
+
