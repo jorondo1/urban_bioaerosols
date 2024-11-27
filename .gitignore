@@ -1,13 +1,10 @@
-*.rds
-*.RDS
+archive/
 tmp/
 bak/
 *.bak
-.throttle/
 doc/
 logs/
 *.log
-archive/
 *.fa
 *.fastq
 *.fastq.gz
