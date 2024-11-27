@@ -41,14 +41,9 @@ head(out.N)
 # Identify primers
 FWD <- "CGAAATCGGTAGACGCTACG"
 REV <- "GGGGATAGAGGGACTTGAAC"
-FWD.orientsTrnL <- allOrients(FWD)
-REV.orientsTrnL <- allOrients(REV)
 
 # Analyse primer occurence
-rbind(FWD.ForwardReads = sapply(FWD.orientsTrnL, primerHits, fn = fnFs.filtN[[1]]), 
-      FWD.ReverseReads = sapply(FWD.orientsTrnL, primerHits, fn = fnRs.filtN[[1]]), 
-      REV.ForwardReads = sapply(REV.orientsTrnL, primerHits, fn = fnFs.filtN[[1]]), 
-      REV.ReverseReads = sapply(REV.orientsTrnL, primerHits, fn = fnRs.filtN[[1]])) 
+primer_occurence(fnFs.filtN, fnRs.filtN, FWD, REV)
 
 ### CUTADAPT
 cutadapt <- "/Users/jorondo/miniconda3/envs/cutadapt/bin/cutadapt" # CHANGE ME to the cutadapt path on your machine
@@ -75,10 +70,7 @@ run_cutadapt_wrapper(
 )
 
 # Check if it worked?
-rbind(FWD.ForwardReads = sapply(FWD.orientsTrnL, primerHits, fn = fnFs.cut[[1]]), 
-      FWD.ReverseReads = sapply(FWD.orientsTrnL, primerHits, fn = fnRs.cut[[1]]), 
-      REV.ForwardReads = sapply(REV.orientsTrnL, primerHits,fn = fnFs.cut[[1]]), 
-      REV.ReverseReads = sapply(REV.orientsTrnL, primerHits, fn = fnRs.cut[[1]]))
+primer_occurence(fnFs.cut, fnRs.cut, FWD, REV)
 
 ##############################
 # 3. QUALITY FILTERING ########
@@ -153,31 +145,13 @@ seqtab.nochim <- removeBimeraDenovo(
   )
 
 # WRITE OUT
-write_rds(seqtab.nochim, 'data/seqtab_rescued50_pooled_EE42.rds')
+write_rds(seqtab.nochim, paste0('data/seqtab_', barcode,'.rds'))
 
 ### TRACK PIPELINE READS
-getN <- function(x) sum(getUniques(x))
-track <- cbind(out.N, out[,2], 
-               sapply(dadaFs, getN), 
-               sapply(dadaRs, getN), 
-               sapply(mergers_pooled, getN),
-               rowSums(seqtab.nochim))
-
-colnames(track) <- c("input", "removeNs", "filtered", "denoisedF", "denoisedR", "merged", "nonchim")
-rownames(track) <- sample.names
-
-track_change <- track %>% data.frame %>% 
-  rownames_to_column('Sample') %>% 
-  tibble %>% 
-  filter(filtered>10) %>% 
-  mutate(lost_Ns = (input-removeNs)/input,
-         lost_filt = (removeNs-filtered)/removeNs,
-         lost_noise = (filtered-denoisedR)/filtered,
-         lost_merged = (denoisedR-merged)/denoisedR, # Proportion of reads lost to merging
-         prop_chimera = (merged-nonchim)/merged) # proportion of chimeras
+track_change <- track_dada(mergers = mergers_pooled)
 
 # Number of samples lost at merge stage
-track_change %>%  filter(lost_merged>0.1) %>% dim 
+track_change %>% filter(lost_merged>0.1) %>% dim 
 
 # Check chimera proportion
 track_change %>% 

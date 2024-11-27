@@ -1,13 +1,12 @@
-# Reproducing Sarah's script
+### 16S STANDARD DADA2 PIPELINE
 
 library(pacman)
 p_load(dada2, tidyverse, Biostrings, ShortRead, parallel)
 source('scripts/myFunctions.R')
-source('scripts/mergePairsRescue.R')
 
 # List raw files 
-barcode <- 'ITS'
-path_dbio <- paste0('/Volumes/DBio_Rech_Data/LaforestLapointeI/PROJECTS/SARAH_POIRIER/DATA/',barcode)
+barcode <- '16S'
+path_dbio <- paste0('/Volumes/DBio_Rech_Data/LaforestLapointeI/PROJECTS/SARAH_POIRIER/DATA/', barcode)
 path_dbio_jo <- paste0(path_dbio,'/',barcode,'_JRL')
 path_raw <- paste0(path_dbio,'/sass_samples_2022_',barcode,'/raw')
 
@@ -34,14 +33,13 @@ out.N <- filterAndTrim(fnFs, fnFs.filtN,
                          rm.lowcomplex = TRUE, # added because of https://github.com/benjjneb/dada2/issues/2045#issuecomment-2452299127
                          maxN = 0, 
                          multithread = TRUE)
-head(out.N)
 
 ###########################
 # 2. PRIMER REMOVAL ########
 #############################
 # Identify primers
-FWD <- "CTTGGTCATTTAGAGGAAGTAA"
-REV <- "GCTGCGTTCTTCATCGATGC"
+FWD <- "AACMGGATTAGATACCCKG"
+REV <- "AGGGTTGCGCTCGTTG"
 
 # Analyse primer occurence
 primer_occurence(fnFs.filtN, fnRs.filtN, FWD, REV)
@@ -64,7 +62,7 @@ R1.flags <- paste("-g", FWD, "-a", REV.RC)
 # Trim REV and the reverse-complement of FWD off of R2 (reverse reads)
 R2.flags <- paste("-G", REV, "-A", FWD.RC) 
 
-# Run Cutadapt multicore (each sample is run single-core)
+# Run Cutadapt (custom function defined in myFunctions.R)
 mclapply(seq_along(fnFs), run_cutadapt, mc.cores = 8)
 
 # Check if it worked?
@@ -147,20 +145,25 @@ table(nchar(getSequences(seqtab.nochim))) %>% sort %>% plot # distrib of seq len
 write_rds(seqtab.nochim, paste0('data/seqtab_', barcode,'.rds'))
 
 ### TRACK PIPELINE READS
-track_change <- track_dada(out.N = out.N, out = out,
-                           dadaFs = dadaFs, dadaRs = dadaRs,
-                           mergers = mergers_pooled,
-                           seqtab.nochim = seqtab.nochim)
+track_change <- track_dada(mergers = mergers_pooled)
 
-plot_track_change(track_change)
+# samples lost at merge stage
+track_change %>%  filter(lost_merged>0.1) %>% dim 
+
+# Check chimera proportion
+track_change %>% 
+  pivot_longer(names_to = 'variable', values_to = 'values') %>% 
+  ggplot(aes(x = variable, y = values)) +
+  geom_boxplot() + theme_minimal() # overall very low chimeric rate
 
 ### ASSIGN TAXONOMY
 taxaITS <- assignTaxonomy(seqtab.nochim, 
                           paste0(path_dbio, '/sass_samples_2022_ITS/sh_general_release_dynamic_04.04.2024.fasta'), 
                           multithread=TRUE, tryRC = TRUE, verbose = TRUE)
 
-taxaITS %<>% as.data.frame() %>%
-  mutate(across(Kingdom:Species, ~ gsub("^[a-z]__", "", .))) 
+taxaITS %>% as.data.frame() %>%
+  mutate(across(Kingdom:Species, ~ gsub("^[a-z]__", "", gsub("_", " ", .))))
+
 
 
 

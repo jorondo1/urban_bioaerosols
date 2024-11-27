@@ -20,6 +20,16 @@ primerHits <- function(primer, fn) {
   return(sum(nhits > 0))
 }
 
+### PRIMER OCCURENCE
+primer_occurence <- function(fnFs, fnRs, FWD, REV){
+  FWD.orients <- allOrients(FWD)
+  REV.orients <- allOrients(REV)
+  rbind(FWD.ForwardReads = sapply(FWD.orients, primerHits, fn = fnFs[[1]]), 
+        FWD.ReverseReads = sapply(FWD.orients, primerHits, fn = fnRs[[1]]), 
+        REV.ForwardReads = sapply(REV.orients, primerHits, fn = fnFs[[1]]), 
+        REV.ReverseReads = sapply(REV.orients, primerHits, fn = fnRs[[1]])) 
+}
+
 ### CUTADAPT
 run_cutadapt <- function(i) {
   system2(
@@ -33,7 +43,49 @@ run_cutadapt <- function(i) {
   )
 }
 
-### PLOTS 
+### READS TRACKING
+
+getN <- function(x) sum(getUniques(x))
+
+track_dada <- function(out.N, out,
+                       dadaFs, dadaRs,
+                       mergers,
+                       seqtab.nochim) {
+  
+  track <- cbind(out.N, out[,2], 
+                 sapply(dadaFs, getN), 
+                 sapply(dadaRs, getN), 
+                 sapply(mergers, getN),
+                 rowSums(seqtab.nochim))
+  
+  colnames(track) <- c("input", "removeNs", "filtered", "denoisedF", "denoisedR", "merged", "nonchim")
+  rownames(track) <- sample.names
+  
+  track %>% data.frame %>% 
+    rownames_to_column('Sample') %>% 
+    tibble %>% 
+    filter(filtered>10) %>% 
+    mutate(lost_Ns = (input-removeNs)/input,
+           lost_filt = (removeNs-filtered)/removeNs,
+           lost_noise = (filtered-denoisedR)/filtered,
+           lost_merged = (denoisedR-merged)/denoisedR, # Proportion of reads lost to merging
+           prop_chimera = (merged-nonchim)/merged) %>% 
+    pivot_longer(where(is.numeric), names_to = 'variable', values_to = 'values')
+}
+
+
+###############
+### PLOTS ######
+#################
+
+plot_track_change <- function(track_change) {
+  change_vars <- c('prop_chimera', 'lost_merged', 'lost_noise', 'lost_filt', 'lost_Ns')
+  track_change %>% 
+    filter(variable %in% change_vars) %>% 
+    mutate(variable = factor(variable, level = change_vars)) %>% 
+    ggplot(aes(y = variable, x = values)) +
+    geom_jitter() + theme_minimal() # overall very low chimeric rate
+}
 
 topTaxa <- function(psmelt, taxLvl, topN) {
   psmelt %>% 
