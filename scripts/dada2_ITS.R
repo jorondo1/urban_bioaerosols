@@ -2,6 +2,8 @@
 
 library(pacman)
 p_load(dada2, tidyverse, Biostrings, ShortRead, parallel)
+source('scripts/myFunctions.R')
+source('scripts/mergePairsRescue.R')
 
 # List raw files 
 barcode <- 'ITS'
@@ -19,19 +21,10 @@ write_delim(data.frame(sample.names), 'data/sample_names_',barcode,'.tsv')
 ########################
 # 1. N-FILTERING ########
 ##########################
-# Inspect qc
-plotQualityProfile(fnFs[1:2])
-plotQualityProfile(fnRs[1:2])
 
-# Verify the presence and orientation of these primers in the data
-allOrientsTrnL <- function(primer) {
-  # Create all orientations of the input sequence
-  require(Biostrings)
-  dnaTrnL <- DNAString(primer)  # The Biostrings works w/ DNAString objects rather than character vectors
-  orientsTrnL <- c(Forward = dnaTrnL, Complement = Biostrings::complement(dnaTrnL), Reverse = Biostrings::reverse(dnaTrnL), 
-                   RevComp = Biostrings::reverseComplement(dnaTrnL))
-  return(sapply(orientsTrnL, toString))  # Convert back to character vector
-}
+# Inspect qc
+plotQualityProfile(fnFs[5:10])
+plotQualityProfile(fnRs[5:10])
 
 ### PRE-FILTER (no qc, just remove Ns)
 fnFs.filtN <- file.path(path_dbio_jo, "1_filtN", basename(fnFs)) # Put N-filterd files in filtN/ subdirectory
@@ -47,22 +40,16 @@ head(out.N)
 # 2. PRIMER REMOVAL ########
 #############################
 # Identify primers
-FWD <- "CGAAATCGGTAGACGCTACG"
-REV <- "GGGGATAGAGGGACTTGAAC"
-FWD.orientsTrnL <- allOrientsTrnL(FWD)
-REV.orientsTrnL <- allOrientsTrnL(REV)
+FWD <- "CTTGGTCATTTAGAGGAAGTAA"
+REV <- "GCTGCGTTCTTCATCGATGC"
+FWD.orients <- allOrients(FWD)
+REV.orients <- allOrients(REV)
 
-# Count the number of times the primers appear in the forward and reverse read, 
-# while considering all possible primer orientations
-primerHits <- function(primer, fn) {
-  # Counts number of reads in which the primer is found
-  nhits <- vcountPattern(primer, sread(readFastq(fn)), fixed = FALSE)
-  return(sum(nhits > 0))
-}
-rbind(FWD.ForwardReads = sapply(FWD.orientsTrnL, primerHits, fn = fnFs.filtN[[1]]), 
-      FWD.ReverseReads = sapply(FWD.orientsTrnL, primerHits, fn = fnRs.filtN[[1]]), 
-      REV.ForwardReads = sapply(REV.orientsTrnL, primerHits, fn = fnFs.filtN[[1]]), 
-      REV.ReverseReads = sapply(REV.orientsTrnL, primerHits, fn = fnRs.filtN[[1]])) 
+# Analyse primer occurence
+rbind(FWD.ForwardReads = sapply(FWD.orients, primerHits, fn = fnFs.filtN[[1]]), 
+      FWD.ReverseReads = sapply(FWD.orients, primerHits, fn = fnRs.filtN[[1]]), 
+      REV.ForwardReads = sapply(REV.orients, primerHits, fn = fnFs.filtN[[1]]), 
+      REV.ReverseReads = sapply(REV.orients, primerHits, fn = fnRs.filtN[[1]])) 
 
 ### CUTADAPT
 cutadapt <- "/Users/jorondo/miniconda3/envs/cutadapt/bin/cutadapt" # CHANGE ME to the cutadapt path on your machine
@@ -83,25 +70,14 @@ R1.flags <- paste("-g", FWD, "-a", REV.RC)
 R2.flags <- paste("-G", REV, "-A", FWD.RC) 
 
 # Run Cutadapt multicore (each sample is run single-core)
-run_cutadapt <- function(i) {
-  system2(
-    cutadapt, args = c(
-      R1.flags, R2.flags, 
-      "-n", 2, 
-      "-m", 21, '-M', 300, # see https://github.com/benjjneb/dada2/issues/2045#issuecomment-2449416862
-      "-o", fnFs.cut[i], 
-      "-p", fnRs.cut[i],
-      fnFs.filtN[i], fnRs.filtN[i])
-    )
-}
 
 mclapply(seq_along(fnFs), run_cutadapt, mc.cores = 8)
 
 # Check if it worked?
-rbind(FWD.ForwardReads = sapply(FWD.orientsTrnL, primerHits, fn = fnFs.cut[[1]]), 
-      FWD.ReverseReads = sapply(FWD.orientsTrnL, primerHits, fn = fnRs.cut[[1]]), 
-      REV.ForwardReads = sapply(REV.orientsTrnL, primerHits,fn = fnFs.cut[[1]]), 
-      REV.ReverseReads = sapply(REV.orientsTrnL, primerHits, fn = fnRs.cut[[1]]))
+rbind(FWD.ForwardReads = sapply(FWD.orients, primerHits, fn = fnFs.cut[[1]]), 
+      FWD.ReverseReads = sapply(FWD.orients, primerHits, fn = fnRs.cut[[1]]), 
+      REV.ForwardReads = sapply(REV.orients, primerHits, fn = fnFs.cut[[1]]), 
+      REV.ReverseReads = sapply(REV.orients, primerHits, fn = fnRs.cut[[1]]))
 
 ##############################
 # 3. QUALITY FILTERING ########
@@ -118,18 +94,18 @@ sample.names <- unname(sapply(cutFs, get.sample.name))
 head(sample.names)
 
 # Check quality
-plotQualityProfile(cutFs[1:2])
-plotQualityProfile(cutRs[10:20])
+plotQualityProfile(cutFs[10:21])
+plotQualityProfile(cutRs[10:21])
 
 # Filter samples; define out files
 filtFs <- file.path(path_dbio_jo, "3_filtered_EE42", basename(cutFs))
 filtRs <- file.path(path_dbio_jo, "3_filtered_EE42", basename(cutRs))
 
 out <- filterAndTrim(cutFs, filtFs, cutRs, filtRs, 
-                     maxN = 0, maxEE = c(4, 2), truncQ = 2,
+                     maxN = 0, maxEE = c(4, 4), truncQ = 2,
                      minLen = 100, #RERUN AT 100 
                      rm.phix = TRUE, 
-                     compress = TRUE, multithread = TRUE)  # on windows, set multithread = FALSE
+                     compress = TRUE, multithread = TRUE) 
 plotQualityProfile(filtFs[10:21])
 plotQualityProfile(filtRs[10:21])
 
@@ -174,9 +150,10 @@ table(nchar(getSequences(seqtab))) %>% sort %>% plot # distrib of seq len
 seqtab.nochim <- removeBimeraDenovo(
   seqtab, method="consensus", multithread=TRUE, verbose=TRUE
   )
+table(nchar(getSequences(seqtab.nochim))) %>% sort %>% plot # distrib of seq len
 
 # WRITE OUT
-write_rds(seqtab.nochim, 'data/seqtab_rescued50_pooled_EE42.rds')
+write_rds(seqtab.nochim, paste0('data/seqtab_', barcode,'.rds'))
 
 ### TRACK PIPELINE READS
 getN <- function(x) sum(getUniques(x))
@@ -198,14 +175,14 @@ track_change <- track %>% data.frame %>%
          lost_noise = (filtered-denoisedR)/filtered,
          lost_merged = (denoisedR-merged)/denoisedR, # Proportion of reads lost to merging
          prop_chimera = (merged-nonchim)/merged) # proportion of chimeras
-
+track_change
 # Number of samples lost at merge stage
 track_change %>%  filter(lost_merged>0.1) %>% dim 
 
 # Check chimera proportion
 track_change %>% 
   #filter(prop_chimera>=0) %>% 
-  ggplot(aes(x = NA, y = lost_filt))+
+  ggplot(aes(x = NA, y = prop_chimera))+
   geom_boxplot() + theme_minimal() # overall very low chimeric rate
 
 

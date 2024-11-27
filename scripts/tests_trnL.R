@@ -3,7 +3,7 @@ p_load(dada2, tidyverse, magrittr, RColorBrewer, phyloseq, ggh4x, Biostrings, gg
 
 source('https://raw.githubusercontent.com/jorondo1/misc_scripts/refs/heads/main/tax_glom2.R')
 source('https://raw.githubusercontent.com/jorondo1/misc_scripts/refs/heads/main/rarefy_even_depth2.R')
-source('scripts/myFunctions_trnL.R')
+source('scripts/myFunctions.R')
 
 ##############################
 # FILTER REFERENCE DATABASE ###

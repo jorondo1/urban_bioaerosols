@@ -2,18 +2,21 @@
 
 library(pacman)
 p_load(dada2, tidyverse, Biostrings, ShortRead, parallel)
+source('scripts/myFunctions.R')
+source('scripts/mergePairsRescue.R')
 
 # List raw files 
-path_dbio <- '/Volumes/DBio_Rech_Data/LaforestLapointeI/PROJECTS/SARAH_POIRIER/DATA/trnL'
-path_dbio_jo <- paste0(path_dbio,'/trnL_SASS_JRL')
-path_raw <- paste0(path_dbio,'/trnL_SASS_samples_2022/raw')
+barcode <- 'trnL'
+path_dbio <- paste0('/Volumes/DBio_Rech_Data/LaforestLapointeI/PROJECTS/SARAH_POIRIER/DATA/',barcode)
+path_dbio_jo <- paste0(path_dbio,'/',barcode,'_JRL')
+path_raw <- paste0(path_dbio,'/SASS_samples_2022_',barcode,'/raw')
 
 fnFs <- sort(list.files(path_raw, pattern="_R1_001.fastq", full.names = TRUE))
 fnRs <- sort(list.files(path_raw, pattern="_R2_001.fastq", full.names = TRUE))
 
 # List and write out sample names
-(sample.namesTrnL <- sapply(strsplit(basename(fnFs), "_"), `[`, 1))
-write_delim(data.frame(sample.namesTrnL), 'data/sample_names.tsv')
+(sample.names <- sapply(strsplit(basename(fnFs), "_"), `[`, 1))
+write_delim(data.frame(sample.names), 'data/sample_names_',barcode,'.tsv')
 
 ########################
 # 1. N-FILTERING ########
@@ -21,16 +24,6 @@ write_delim(data.frame(sample.namesTrnL), 'data/sample_names.tsv')
 # Inspect qc
 plotQualityProfile(fnFs[1:2])
 plotQualityProfile(fnRs[1:2])
-
-# Verify the presence and orientation of these primers in the data
-allOrientsTrnL <- function(primer) {
-  # Create all orientations of the input sequence
-  require(Biostrings)
-  dnaTrnL <- DNAString(primer)  # The Biostrings works w/ DNAString objects rather than character vectors
-  orientsTrnL <- c(Forward = dnaTrnL, Complement = Biostrings::complement(dnaTrnL), Reverse = Biostrings::reverse(dnaTrnL), 
-                   RevComp = Biostrings::reverseComplement(dnaTrnL))
-  return(sapply(orientsTrnL, toString))  # Convert back to character vector
-}
 
 ### PRE-FILTER (no qc, just remove Ns)
 fnFs.filtN <- file.path(path_dbio_jo, "1_filtN", basename(fnFs)) # Put N-filterd files in filtN/ subdirectory
@@ -48,16 +41,10 @@ head(out.N)
 # Identify primers
 FWD <- "CGAAATCGGTAGACGCTACG"
 REV <- "GGGGATAGAGGGACTTGAAC"
-FWD.orientsTrnL <- allOrientsTrnL(FWD)
-REV.orientsTrnL <- allOrientsTrnL(REV)
+FWD.orientsTrnL <- allOrients(FWD)
+REV.orientsTrnL <- allOrients(REV)
 
-# Count the number of times the primers appear in the forward and reverse read, 
-# while considering all possible primer orientations
-primerHits <- function(primer, fn) {
-  # Counts number of reads in which the primer is found
-  nhits <- vcountPattern(primer, sread(readFastq(fn)), fixed = FALSE)
-  return(sum(nhits > 0))
-}
+# Analyse primer occurence
 rbind(FWD.ForwardReads = sapply(FWD.orientsTrnL, primerHits, fn = fnFs.filtN[[1]]), 
       FWD.ReverseReads = sapply(FWD.orientsTrnL, primerHits, fn = fnRs.filtN[[1]]), 
       REV.ForwardReads = sapply(REV.orientsTrnL, primerHits, fn = fnFs.filtN[[1]]), 
@@ -65,7 +52,8 @@ rbind(FWD.ForwardReads = sapply(FWD.orientsTrnL, primerHits, fn = fnFs.filtN[[1]
 
 ### CUTADAPT
 cutadapt <- "/Users/jorondo/miniconda3/envs/cutadapt/bin/cutadapt" # CHANGE ME to the cutadapt path on your machine
-system2(cutadapt, args = "--version") # Run shell commands from R
+cutadapt_path <- "/Users/jorondo/miniconda3/envs/cutadapt/bin/cutadapt" # CHANGE ME to the cutadapt path on your machine
+system2(cutadapt_path, args = "--version") # Run shell commands from R
 
 path.cut <- file.path(path_dbio_jo, "2_cutadapt")
 
@@ -73,28 +61,18 @@ if(!dir.exists(path.cut)) dir.create(path.cut)
 fnFs.cut <- file.path(path.cut, basename(fnFs))
 fnRs.cut <- file.path(path.cut, basename(fnRs))
 
-FWD.RC <- dada2:::rc(FWD)
-REV.RC <- dada2:::rc(REV)
-
-# Trim FWD and the reverse-complement of REV off of R1 (forward reads)
-R1.flags <- paste("-g", FWD, "-a", REV.RC) 
-# Trim REV and the reverse-complement of FWD off of R2 (reverse reads)
-R2.flags <- paste("-G", REV, "-A", FWD.RC) 
-
-# Run Cutadapt multicore (each sample is run single-core)
-run_cutadapt <- function(i) {
-  system2(
-    cutadapt, args = c(
-      R1.flags, R2.flags, 
-      "-n", 2, 
-      "-m", 21, '-M', 300, # see https://github.com/benjjneb/dada2/issues/2045#issuecomment-2449416862
-      "-o", fnFs.cut[i], 
-      "-p", fnRs.cut[i],
-      fnFs.filtN[i], fnRs.filtN[i])
-    )
-}
-
-mclapply(seq_along(fnFs), run_cutadapt, mc.cores = 8)
+run_cutadapt_wrapper(
+  fnFs = fnFs, 
+  fnRs = fnRs, 
+  fnFs.cut = fnFs.cut, 
+  fnRs.cut = fnRs.cut, 
+  FWD = FWD, 
+  REV = REV, 
+  cutadapt = cutadapt_path, 
+  fnFs.filtN = fnFs.filtN, 
+  fnRs.filtN = fnRs.filtN, 
+  cores = 8
+)
 
 # Check if it worked?
 rbind(FWD.ForwardReads = sapply(FWD.orientsTrnL, primerHits, fn = fnFs.cut[[1]]), 
@@ -126,7 +104,7 @@ filtRs <- file.path(path_dbio_jo, "3_filtered_EE42", basename(cutRs))
 
 out <- filterAndTrim(cutFs, filtFs, cutRs, filtRs, 
                      maxN = 0, maxEE = c(4, 2), truncQ = 2,
-                     minLen = 100, #RERUN AT 100 
+                     minLen = 100, 
                      rm.phix = TRUE, 
                      compress = TRUE, multithread = TRUE)  # on windows, set multithread = FALSE
 plotQualityProfile(filtFs[10:21])
