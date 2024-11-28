@@ -5,45 +5,8 @@ source('https://raw.githubusercontent.com/jorondo1/misc_scripts/refs/heads/main/
 source('https://raw.githubusercontent.com/jorondo1/misc_scripts/refs/heads/main/rarefy_even_depth2.R')
 source('scripts/myFunctions.R')
 
-##############################
-# FILTER REFERENCE DATABASE ###
-################################
-trnl.ref <- 'data/trnL_hits.lineage.filtered.Genus.fa'
 
-# check sequence length distribution
-trnl.seq <- readDNAStringSet(trnl.ref, format = 'fasta')
-seqlen <- width(trnl.seq)
-ggplot(data.frame(length = seqlen), aes(x = length)) +
-  geom_histogram(binwidth = 10, fill = "blue", color = "black") +
-  labs(title = "Distribution of Sequence Lengths", x = "Sequence Length", y = "Frequency") +
-  theme_minimal()
-
-# filter within expected limits for trnL (???)
-filtered_sequences <- trnl.seq[seqlen >= 300 & 
-                                 width(trnl.seq) <= 800]
-
-filtered_sequences %>% width %>% sort %>% hist
-writeXStringSet(filtered_sequences, "/filtered_trnl_ref.fa")
-
-######################
-### ASSIGN TAXONOMY ###
-########################
-dirpath <- 'data'
-suffix <- 'rescued50_pooled_EE42'
-raw_sequences <- read_rds(paste0(dirpath,'/seqtab_',suffix,'.rds'))
-
-# Filter out sequences smaller than 200bp
-keep <- nchar(colnames(raw_sequences)) >= 200
-raw_sequences200 <- raw_sequences[, keep, drop = FALSE]
-
-# Assign taxonomy
-taxa <- assignTaxonomy(raw_sequences200, 'data/filtered_trnl_ref.fa', multithread = TRUE, tryRC = TRUE)
-taxa[taxa == ""] <- NA # some are NA, others ""
-taxa[is.na(taxa)] <- 'Unclassified' # otherwise Tax_glom flushes out the NAs .
-write_rds(taxa, paste0(dirpath,'/taxonomy_',suffix,'.rds'))
-taxa <- read_rds(paste0(dirpath,'/taxonomy_',suffix,'.rds'))
-
-#meta <- read_rds('data/metaTrnL.rds') #not usable yet
+#meta <- read_rds('data/meta_TrnL.rds') #not usable yet
 
 ### TEMPORARY METADATA
   # Some samples are nearly empty, choose a rowsums cutoff:
@@ -77,7 +40,8 @@ ps.list[['ITS']] <- read_rds('data/sarah/phyloITS.rds') %>%
 ps.list[['16S']] <- read_rds('data/sarah/phylo16S.rds') %>% 
   rarefy_even_depth2()
 
-
+ps.list <- read_rds('data/merge_parameters_tests.ps.rds')
+ps_sarah <- read_rds('data/metaITS.rds')
 
 # Community composition overview
 which_taxrank <- 'Family'

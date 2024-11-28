@@ -10,6 +10,7 @@ logs/
 *.fastq.gz
 .RData
 .Rhistory
+.RDataTmp
 *.Rproj
 .Rproj.user
 .DS_Store

@@ -145,6 +145,7 @@ table(nchar(getSequences(seqtab.nochim))) %>% sort %>% plot # distrib of seq len
 
 # Writeout
 write_rds(seqtab.nochim, paste0('data/seqtab_', barcode,'.rds'))
+seqtab.nochim <- read_rds(paste0('data/seqtab_', barcode,'.rds'))
 
 ### TRACK PIPELINE READS
 track_change <- track_dada(out.N = out.N, out = out,
@@ -156,7 +157,7 @@ plot_track_change(track_change)
 
 ### ASSIGN TAXONOMY
 taxaITS <- assignTaxonomy(seqtab.nochim, 
-                          paste0(path_dbio, '/sass_samples_2022_ITS/sh_general_release_dynamic_04.04.2024.fasta'), 
+                          paste0(path_dbio, '/sh_general_release_dynamic_04.04.2024.fasta'), 
                           multithread=TRUE, tryRC = TRUE, verbose = TRUE)
 
 taxaITS %<>% as.data.frame() %>%

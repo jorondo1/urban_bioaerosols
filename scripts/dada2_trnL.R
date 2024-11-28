@@ -46,7 +46,6 @@ REV <- "GGGGATAGAGGGACTTGAAC"
 primer_occurence(fnFs.filtN, fnRs.filtN, FWD, REV)
 
 ### CUTADAPT
-cutadapt <- "/Users/jorondo/miniconda3/envs/cutadapt/bin/cutadapt" # CHANGE ME to the cutadapt path on your machine
 cutadapt_path <- "/Users/jorondo/miniconda3/envs/cutadapt/bin/cutadapt" # CHANGE ME to the cutadapt path on your machine
 system2(cutadapt_path, args = "--version") # Run shell commands from R
 
@@ -84,7 +83,6 @@ cutRs <- sort(list.files(path.cut, pattern = "_R2_001.fastq.gz", full.names = TR
 # Extract sample names, assuming filenames have format:
 get.sample.name <- function(fname) strsplit(basename(fname), "_")[[1]][1]
 sample.names <- unname(sapply(cutFs, get.sample.name))
-head(sample.names)
 
 # Check quality
 plotQualityProfile(cutFs[1:2])
@@ -93,6 +91,8 @@ plotQualityProfile(cutRs[10:20])
 # Filter samples; define out files
 filtFs <- file.path(path_dbio_jo, "3_filtered_EE42", basename(cutFs))
 filtRs <- file.path(path_dbio_jo, "3_filtered_EE42", basename(cutRs))
+names(filtFs) <- sample.names
+names(filtRs) <- sample.names
 
 out <- filterAndTrim(cutFs, filtFs, cutRs, filtRs, 
                      maxN = 0, maxEE = c(4, 2), truncQ = 2,
@@ -122,6 +122,9 @@ plotErrors(errR, nominalQ = TRUE)
 dadaFs <- dada(filtFs_survived, err = errF, pool = TRUE, multithread = TRUE)
 dadaRs <- dada(filtRs_survived, err = errR, pool = TRUE, multithread = TRUE)
 
+#####################
+### SEQUENCE TABLE ###
+#######################
 # Modified version of mergePairs that rescues non-merged reads by concatenation
 # source('scripts/mergePairsRescue.R')
 mergers_pooled <- mergePairsRescue(dadaFs, filtFs_survived, dadaRs, filtRs_survived,
@@ -136,7 +139,7 @@ mergers_pooled <- mergePairsRescue(dadaFs, filtFs_survived, dadaRs, filtRs_survi
 # Motivated by https://github.com/benjjneb/dada2/issues/537#issuecomment-412530338
 
 seqtab <- makeSequenceTable(mergers_pooled)
-dim(seqtab) # 220 25606
+dim(seqtab) # 218 18579
 table(nchar(getSequences(seqtab))) %>% sort %>% plot # distrib of seq len
 
 # Clean chimeras
@@ -148,17 +151,55 @@ seqtab.nochim <- removeBimeraDenovo(
 write_rds(seqtab.nochim, paste0('data/seqtab_', barcode,'.rds'))
 
 ### TRACK PIPELINE READS
-track_change <- track_dada(mergers = mergers_pooled)
+track_change <- track_dada(out.N = out.N, out = out,
+                           dadaFs = dadaFs, dadaRs = dadaRs,
+                           mergers = mergers_pooled,
+                           seqtab.nochim = seqtab.nochim)
 
-# Number of samples lost at merge stage
-track_change %>% filter(lost_merged>0.1) %>% dim 
-
-# Check chimera proportion
 track_change %>% 
-  #filter(prop_chimera>=0) %>% 
-  ggplot(aes(x = NA, y = lost_filt))+
-  geom_boxplot() + theme_minimal() # overall very low chimeric rate
+  filter(values>=0) %>% 
+  plot_track_change()
 
+###################################
+# TRNL: CUSTOM TAXONOMY DATABASE ###
+#####################################
+trnl.ref <- 'data/trnL_hits.lineage.filtered.Genus.fa'
 
+# check sequence length distribution
+trnl.seq <- readDNAStringSet(trnl.ref, format = 'fasta')
+seqlen <- width(trnl.seq)
+ggplot(data.frame(length = seqlen), aes(x = length)) +
+  geom_histogram(binwidth = 10, fill = "blue", color = "black") +
+  labs(title = "Distribution of Sequence Lengths", x = "Sequence Length", y = "Frequency") +
+  theme_minimal()
 
+# filter within expected limits for trnL (???)
+filtered_sequences <- trnl.seq[seqlen >= 300 & 
+                                 width(trnl.seq) <= 800]
+
+filtered_sequences %>% width %>% sort %>% hist
+writeXStringSet(filtered_sequences, "data/filtered_trnl_ref.fa")
+
+######################
+### ASSIGN TAXONOMY ###
+########################
+seqtab_trnL <- read_rds(paste0('data/seqtab_',suffix,'.rds'))
+
+# Filter out sequences smaller than 200bp
+keep <- nchar(colnames(seqtab_trnL)) >= 200
+seqtab200 <- seqtab_trnL[, keep, drop = FALSE]
+
+# Assign taxonomy
+taxa <- assignTaxonomy(seqtab200, 'data/filtered_trnl_ref.fa', multithread = TRUE, tryRC = TRUE)
+taxa[taxa == ""] <- NA # some are NA, others ""
+taxa[is.na(taxa)] <- 'Unclassified' # otherwise Tax_glom flushes out the NAs .
+write_rds(taxa, paste0(dirpath,'/taxonomy_',suffix,'.rds'))
+taxa <- read_rds(paste0(dirpath,'/taxonomy_',suffix,'.rds'))
+taxa %>% View
+
+# Phyloseq Object
+meta_trnL <- read_rds('data/meta_trnL.rds')
+phyloseq(tax_table(taxa),
+         otu_table(seqtab200, taxa_are_rows = FALSE),
+         sample_data(meta_trnL))
 
