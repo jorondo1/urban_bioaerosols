@@ -8,11 +8,11 @@ logs/
 *.fa
 *.fastq
 *.fastq.gz
-.RData
-.Rhistory
-.RDataTmp
+*.RData
+*.Rhistory
+*.RDataTmp
 *.Rproj
-.Rproj.user
+*.Rproj.user
 .DS_Store
 ILL_pipelines/
 *fastqc*html
