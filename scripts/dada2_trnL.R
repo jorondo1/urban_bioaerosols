@@ -1,22 +1,20 @@
-# Reproducing Sarah's script
-
+# trnL
 library(pacman)
 p_load(dada2, tidyverse, Biostrings, ShortRead, parallel)
 source('scripts/myFunctions.R')
 source('scripts/mergePairsRescue.R')
 
-# List raw files 
+# CONFIG
 barcode <- 'trnL'
-path_dbio <- paste0('/Volumes/DBio_Rech_Data/LaforestLapointeI/PROJECTS/SARAH_POIRIER/DATA/',barcode)
-path_dbio_jo <- paste0(path_dbio,'/',barcode,'_JRL')
-path_raw <- paste0(path_dbio,'/SASS_samples_2022_',barcode,'/raw')
+FWD <- "CGAAATCGGTAGACGCTACG"
+REV <- "GGGGATAGAGGGACTTGAAC"
+
+ncores <- 72
+path_data <- paste0('data/',barcode)
+path_raw <- paste0(path_data, '/0_raw')
 
 fnFs <- sort(list.files(path_raw, pattern="_R1_001.fastq", full.names = TRUE))
 fnRs <- sort(list.files(path_raw, pattern="_R2_001.fastq", full.names = TRUE))
-
-# List and write out sample names
-(sample.names <- sapply(strsplit(basename(fnFs), "_"), `[`, 1))
-write_delim(data.frame(sample.names), 'data/sample_names_',barcode,'.tsv')
 
 ########################
 # 1. N-FILTERING ########
@@ -26,21 +24,18 @@ plotQualityProfile(fnFs[1:2])
 plotQualityProfile(fnRs[1:2])
 
 ### PRE-FILTER (no qc, just remove Ns)
-fnFs.filtN <- file.path(path_dbio_jo, "1_filtN", basename(fnFs)) # Put N-filterd files in filtN/ subdirectory
-fnRs.filtN <- file.path(path_dbio_jo, "1_filtN", basename(fnRs))
+fnFs.filtN <- file.path(path_data, "1_filtN", basename(fnFs)) # Put N-filterd files in filtN/ subdirectory
+fnRs.filtN <- file.path(path_data, "1_filtN", basename(fnRs))
 out.N <- filterAndTrim(fnFs, fnFs.filtN,
                          fnRs, fnRs.filtN, 
                          rm.lowcomplex = TRUE, # added because of https://github.com/benjjneb/dada2/issues/2045#issuecomment-2452299127
                          maxN = 0, 
-                         multithread = TRUE)
+                         multithread = ncores)
 head(out.N)
 
 ###########################
 # 2. PRIMER REMOVAL ########
 #############################
-# Identify primers
-FWD <- "CGAAATCGGTAGACGCTACG"
-REV <- "GGGGATAGAGGGACTTGAAC"
 
 # Analyse primer occurence
 primer_occurence(fnFs.filtN, fnRs.filtN, FWD, REV)
@@ -49,24 +44,22 @@ primer_occurence(fnFs.filtN, fnRs.filtN, FWD, REV)
 cutadapt_path <- "/Users/jorondo/miniconda3/envs/cutadapt/bin/cutadapt" # CHANGE ME to the cutadapt path on your machine
 system2(cutadapt_path, args = "--version") # Run shell commands from R
 
-path.cut <- file.path(path_dbio_jo, "2_cutadapt")
+path.cut <- file.path(path_data, "2_cutadapt")
 
 if(!dir.exists(path.cut)) dir.create(path.cut)
 fnFs.cut <- file.path(path.cut, basename(fnFs))
 fnRs.cut <- file.path(path.cut, basename(fnRs))
 
-run_cutadapt_wrapper(
-  fnFs = fnFs, 
-  fnRs = fnRs, 
-  fnFs.cut = fnFs.cut, 
-  fnRs.cut = fnRs.cut, 
-  FWD = FWD, 
-  REV = REV, 
-  cutadapt = cutadapt_path, 
-  fnFs.filtN = fnFs.filtN, 
-  fnRs.filtN = fnRs.filtN, 
-  cores = 8
-)
+FWD.RC <- dada2:::rc(FWD)
+REV.RC <- dada2:::rc(REV)
+
+# Trim FWD and the reverse-complement of REV off of R1 (forward reads)
+R1.flags <- paste("-g", FWD, "-a", REV.RC) 
+# Trim REV and the reverse-complement of FWD off of R2 (reverse reads)
+R2.flags <- paste("-G", REV, "-A", FWD.RC) 
+
+# Run Cutadapt multicore (each sample is run single-core)
+mclapply(seq_along(fnFs), run_cutadapt, mc.cores = 8)
 
 # Check if it worked?
 primer_occurence(fnFs.cut, fnRs.cut, FWD, REV)
@@ -89,16 +82,17 @@ plotQualityProfile(cutFs[1:2])
 plotQualityProfile(cutRs[10:20])
 
 # Filter samples; define out files
-filtFs <- file.path(path_dbio_jo, "3_filtered_EE42", basename(cutFs))
-filtRs <- file.path(path_dbio_jo, "3_filtered_EE42", basename(cutRs))
+filtFs <- file.path(path_data, "3_filtered", basename(cutFs))
+filtRs <- file.path(path_data, "3_filtered", basename(cutRs))
 names(filtFs) <- sample.names
 names(filtRs) <- sample.names
 
 out <- filterAndTrim(cutFs, filtFs, cutRs, filtRs, 
-                     maxN = 0, maxEE = c(4, 2), truncQ = 2,
+                     maxN = 0, maxEE = c(2, 4), truncQ = 2,
                      minLen = 100, 
                      rm.phix = TRUE, 
-                     compress = TRUE, multithread = TRUE)  # on windows, set multithread = FALSE
+                     compress = TRUE, multithread = ncores)  # on windows, set multithread = FALSE
+
 plotQualityProfile(filtFs[10:21])
 plotQualityProfile(filtRs[10:21])
 
@@ -112,26 +106,28 @@ filtFs_survived <- filtFs[file.exists(filtFs)]
 filtRs_survived <- filtRs[file.exists(filtRs)]
 
 # Learn errors from the data
-errF <- learnErrors(filtFs_survived, multithread = TRUE)
-errR <- learnErrors(filtRs_survived, multithread = TRUE)
+errF <- learnErrors(filtFs_survived, multithread = ncores)
+errR <- learnErrors(filtRs_survived, multithread = ncores)
 
 plotErrors(errF, nominalQ = TRUE)
 plotErrors(errR, nominalQ = TRUE)
 
 # Infer sample composition
-dadaFs <- dada(filtFs_survived, err = errF, pool = TRUE, multithread = TRUE)
-dadaRs <- dada(filtRs_survived, err = errR, pool = TRUE, multithread = TRUE)
+dadaFs <- dada(filtFs_survived, err = errF, pool = TRUE, multithread = TRUE, verbose = TRUE)
+dadaRs <- dada(filtRs_survived, err = errR, pool = TRUE, multithread = TRUE, verbose = TRUE)
 
 #####################
 ### SEQUENCE TABLE ###
 #######################
 # Modified version of mergePairs that rescues non-merged reads by concatenation
 # source('scripts/mergePairsRescue.R')
-mergers_pooled <- mergePairsRescue(dadaFs, filtFs_survived, dadaRs, filtRs_survived,
-                 returnRejects = TRUE,
-                 minOverlap = 12,
-                 maxMismatch = 0,
-                 rescueUnmerged = TRUE
+mergers_pooled <- mergePairsRescue(
+  dadaFs, filtFs_survived, 
+  dadaRs, filtRs_survived,
+  returnRejects = TRUE,
+  minOverlap = 12,
+  maxMismatch = 0,
+  rescueUnmerged = TRUE
 )
 
 # Intersect the merge and concat; allows merge to fail when overlap is mismatched,
@@ -190,7 +186,7 @@ keep <- nchar(colnames(seqtab_trnL)) >= 200
 seqtab200 <- seqtab_trnL[, keep, drop = FALSE]
 
 # Assign taxonomy
-taxa <- assignTaxonomy(seqtab200, 'data/filtered_trnl_ref.fa', multithread = TRUE, tryRC = TRUE)
+taxa <- assignTaxonomy(seqtab200, 'data/filtered_trnl_ref.fa', multithread = ncores, tryRC = TRUE)
 taxa[taxa == ""] <- NA # some are NA, others ""
 taxa[is.na(taxa)] <- 'Unclassified' # otherwise Tax_glom flushes out the NAs .
 write_rds(taxa, paste0(dirpath,'/taxonomy_',suffix,'.rds'))
