@@ -7,7 +7,10 @@ logs/
 *.RDS
 *.log
 *.fa
+<<<<<<< HEAD
 *.fa.gz
+=======
+>>>>>>> dc237bc3c5115199b89feae0c1c1bde6c34b6b1e
 *.fasta
 *.fastq
 *.fastq.gz
