@@ -1,7 +1,13 @@
 ##########################
 ### PROCESSING DADA2 ####
 ########################
-#
+
+# List and write out sample names
+get.sample.name <- function(fname) {
+  base <- tools::file_path_sans_ext(basename(fname))
+  sub("(_.*)?(-[^-]+)$", "", base)
+}
+
 ### Verify the presence and orientation of these primers in the data
 allOrients <- function(primer) {
   # Create all orientations of the input sequence

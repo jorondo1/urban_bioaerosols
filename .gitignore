@@ -4,8 +4,10 @@ bak/
 *.bak
 doc/
 logs/
+*.RDS
 *.log
 *.fa
+*.fasta
 *.fastq
 *.fastq.gz
 *.RData
@@ -23,3 +25,4 @@ ILL_pipelines/
 radEmu_scores*
 Maaslin2/
 
+.Rproj.user
