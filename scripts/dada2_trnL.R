@@ -16,12 +16,6 @@ path_raw <- paste0(path_data, '/0_raw')
 fnFs <- sort(list.files(path_raw, pattern="_R1_001.fastq", full.names = TRUE))
 fnRs <- sort(list.files(path_raw, pattern="_R2_001.fastq", full.names = TRUE))
 
-<<<<<<< HEAD
-=======
-(sample.names <- sapply(fnFs, get.sample.name, USE.NAMES = FALSE))
-write_delim(data.frame(sample.names), paste0('data/sample_names_',barcode,'.tsv'))
-
->>>>>>> dc237bc3c5115199b89feae0c1c1bde6c34b6b1e
 ########################
 # 1. N-FILTERING ########
 ##########################
@@ -119,13 +113,8 @@ plotErrors(errF, nominalQ = TRUE)
 plotErrors(errR, nominalQ = TRUE)
 
 # Infer sample composition
-<<<<<<< HEAD
-dadaFs <- dada(filtFs_survived, err = errF, pool = TRUE, multithread = TRUE, verbose = TRUE)
-dadaRs <- dada(filtRs_survived, err = errR, pool = TRUE, multithread = TRUE, verbose = TRUE)
-=======
 dadaFs <- dada(filtFs_survived, err = errF, pool = TRUE, multithread = ncores)
 dadaRs <- dada(filtRs_survived, err = errR, pool = TRUE, multithread = ncores)
->>>>>>> dc237bc3c5115199b89feae0c1c1bde6c34b6b1e
 
 #####################
 ### SEQUENCE TABLE ###

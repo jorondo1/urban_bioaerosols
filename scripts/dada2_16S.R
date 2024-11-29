@@ -121,10 +121,7 @@ write_rds(mergers, paste0('data/mergers_',barcode,'.RDS'))
 
 # Sequence table
 seqtab <- makeSequenceTable(mergers)
-<<<<<<< HEAD
 rownames(seqtab) <- sample.names
-=======
->>>>>>> dc237bc3c5115199b89feae0c1c1bde6c34b6b1e
 dim(seqtab) # 174 27683
 table(nchar(getSequences(seqtab))) %>% sort %>% plot # distrib of seq len
 
@@ -135,7 +132,6 @@ seqtab.nochim <- removeBimeraDenovo(
 table(nchar(getSequences(seqtab.nochim))) %>% sort %>% plot # distrib of seq len
 
 # Writeout
-<<<<<<< HEAD
 write_rds(seqtab.nochim, paste0('data/',barcode,'/seqtab_', barcode,'.RDS'))
 
 ### TRACK PIPELINE READS
@@ -143,13 +139,6 @@ track_change <- track_dada(out.N = out.N, out = out,
                            dadaFs = dadaFs, dadaRs = dadaRs,
                            mergers = mergers_pooled,
                            seqtab.nochim = seqtab.nochim)
-=======
-write_rds(seqtab.nochim, paste0('data/seqtab_', barcode,'.RDS'))
-
-### TRACK PIPELINE READS
-track_change <- track_dada(mergers = mergers)
->>>>>>> dc237bc3c5115199b89feae0c1c1bde6c34b6b1e
-
 # samples lost at merge stage
 track_change %>%  filter(lost_merged>0.1) %>% dim 
 
