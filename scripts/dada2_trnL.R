@@ -135,7 +135,7 @@ mergers_pooled <- mergePairsRescue(
 # Motivated by https://github.com/benjjneb/dada2/issues/537#issuecomment-412530338
 
 seqtab <- makeSequenceTable(mergers_pooled)
-dim(seqtab) # 218 18579
+dim(seqtab) # 218 30226
 table(nchar(getSequences(seqtab))) %>% sort %>% plot # distrib of seq len
 
 # Clean chimeras
@@ -155,7 +155,7 @@ track_change <- track_dada(out.N = out.N, out = out,
 track_change %>% 
   filter(values>=0) %>% 
   plot_track_change()
-
+  
 ###################################
 # TRNL: CUSTOM TAXONOMY DATABASE ###
 #####################################
