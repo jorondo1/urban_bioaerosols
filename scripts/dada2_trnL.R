@@ -88,7 +88,7 @@ names(filtFs) <- sample.names
 names(filtRs) <- sample.names
 
 out <- filterAndTrim(cutFs, filtFs, cutRs, filtRs, 
-                     maxN = 0, maxEE = c(2, 4), truncQ = 2,
+                     maxN = 0, maxEE = c(4, 4), truncQ = 2,
                      minLen = 100, 
                      rm.phix = TRUE, 
                      compress = TRUE, multithread = ncores)  # on windows, set multithread = FALSE
@@ -106,15 +106,15 @@ filtFs_survived <- filtFs[file.exists(filtFs)]
 filtRs_survived <- filtRs[file.exists(filtRs)]
 
 # Learn errors from the data
-errF <- learnErrors(filtFs_survived, multithread = ncores)
-errR <- learnErrors(filtRs_survived, multithread = ncores)
+errF <- learnErrors(filtFs_survived, multithread = 24)
+errR <- learnErrors(filtRs_survived, multithread = 24)
 
 plotErrors(errF, nominalQ = TRUE)
 plotErrors(errR, nominalQ = TRUE)
 
 # Infer sample composition
-dadaFs <- dada(filtFs_survived, err = errF, pool = TRUE, multithread = ncores)
-dadaRs <- dada(filtRs_survived, err = errR, pool = TRUE, multithread = ncores)
+dadaFs <- dada(filtFs_survived, err = errF, pool = TRUE, multithread = 24)
+dadaRs <- dada(filtRs_survived, err = errR, pool = TRUE, multithread = 24)
 
 #####################
 ### SEQUENCE TABLE ###
