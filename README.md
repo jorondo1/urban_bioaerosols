@@ -1,0 +1,1 @@
+Currently the repository will not stage any file ending in *.RDS (see .gitignore), but will for *.rds (lowercase). The purpose here is to avoid commiting large R files that were written as backups during intermediate dada2 processing steps. So if you need an R object of reasonable size (at most a few MBs) to be commited to the repo, make sure to use the lowercase extension.
