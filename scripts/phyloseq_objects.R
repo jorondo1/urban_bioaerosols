@@ -59,7 +59,7 @@ taxa_trnL_present <- taxa_trnL[asv_subset,]
 seqtab_trnL_present <- seqtab_trnL_samples[,asv_subset]
 
 # Remove samples with fewer than 5 sequences
-seqtab_trnL_final <- seqtab_trnL_present[rowSums(seqtab_trnL_present) > 5,]
+seqtab_trnL_final <- seqtab_trnL_present[rowSums(seqtab_trnL_present) > 10,]
 
 dim(taxa_trnL_present); dim(seqtab_trnL_final)
 
