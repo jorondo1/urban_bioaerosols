@@ -5,47 +5,28 @@ source('https://raw.githubusercontent.com/jorondo1/misc_scripts/refs/heads/main/
 source('https://raw.githubusercontent.com/jorondo1/misc_scripts/refs/heads/main/rarefy_even_depth2.R')
 source('scripts/myFunctions.R')
 
+tax_ranks <- c("Kingdom", "Phylum", "Class", "Order", "Family", "Genus")
+# 
+# ### PHYLOSEQ objects list 
+# #ps.list <- list()
+# ps.list[[paste0('trnL_Jo_',suffix)]] <- phyloseq(tax_table(taxa.subset),
+#          otu_table(seqtab.subset, taxa_are_rows = FALSE),
+#          sample_data(empty_df)) 
+# write_rds(ps.list, 'merge_parameters_tests.ps.rds')
+# 
+# ps.list[['ITS']] <- read_rds('data/sarah/phyloITS.rds') %>% 
+#   rarefy_even_depth2()
+# 
+# ps.list[['16S']] <- read_rds('data/sarah/phylo16S.rds') %>% 
+#   rarefy_even_depth2()
+# 
+# ps.list <- read_rds('data/merge_parameters_tests.ps.rds')
+# ps_sarah <- read_rds('data/metaITS.rds')
 
-#meta <- read_rds('data/meta_TrnL.rds') #not usable yet
-
-### TEMPORARY METADATA
-  # Some samples are nearly empty, choose a rowsums cutoff:
-  big_enough_samples <- rowSums(raw_sequences200)>1000
-  seqtab.subset <- raw_sequences200[big_enough_samples,]
-  
-  detectable_taxa <- colSums(seqtab.subset) >100 # at least 100 sequences overall
-  taxa.subset <- taxa[detectable_taxa,]
-  
-    # dummy samdata
-  empty_df <- data.frame(Sample = rownames(seqtab.subset)) %>% 
-    mutate(city = case_when(str_detect(Sample, 'MTL') ~ 'Montreal',
-                            str_detect(Sample, 'SHER')~ 'Sherbrooke',
-                            str_detect(Sample, 'QC') ~ 'Québec'),
-           time = case_when(str_detect(Sample, '-A-') ~ "Fall",
-                              str_detect(Sample, '-S-') ~ "Spring",
-                              str_detect(Sample, '-E-') ~ "Summer")) %>% 
-    column_to_rownames('Sample')
-### /TEMPORARY
-
-### PHYLOSEQ objects list 
-#ps.list <- list()
-ps.list[[paste0('trnL_Jo_',suffix)]] <- phyloseq(tax_table(taxa.subset),
-         otu_table(seqtab.subset, taxa_are_rows = FALSE),
-         sample_data(empty_df)) 
-write_rds(ps.list, 'merge_parameters_tests.ps.rds')
-
-ps.list[['ITS']] <- read_rds('data/sarah/phyloITS.rds') %>% 
-  rarefy_even_depth2()
-
-ps.list[['16S']] <- read_rds('data/sarah/phylo16S.rds') %>% 
-  rarefy_even_depth2()
-
-ps.list <- read_rds('data/merge_parameters_tests.ps.rds')
-ps_sarah <- read_rds('data/metaITS.rds')
 
 # Community composition overview
 which_taxrank <- 'Family'
-melted <- ps.list$trnL_Jo_rescued50_pooled_EE42 %>% 
+melted <- ps_trnL %>% 
   tax_glom(taxrank = which_taxrank) %>% 
   psmelt %>%
   filter(Abundance != 0) %>% 
@@ -55,7 +36,7 @@ melted <- ps.list$trnL_Jo_rescued50_pooled_EE42 %>%
   ungroup
   
 nTaxa <- 16
-top_taxa <- topTaxa(melted, which_taxrank, nTaxa)
+(top_taxa <- topTaxa(melted, which_taxrank, nTaxa))
 top_taxa_lvls <- top_taxa %>% 
   group_by(aggTaxo) %>% 
   aggregate(relAb ~ aggTaxo, data = ., FUN = sum) %>% 
@@ -83,46 +64,67 @@ melted %>%
 ggsave('out/composition_Class_200.pdf', bg = 'white', width = 3600, height = 2000, 
        units = 'px', dpi = 220)
 
+ps.list <- list()
+ps.list[['test']] <- ps_trnL
 
+### Relationship between ASV length and classifiability?
+length_classification <- ps_trnL@tax_table %>%
+  data.frame() %>% 
+  rownames_to_column('OTU') %>% 
+  rowwise %>% 
+  mutate(classification_resolution = {
+    # Get the vector of column names for non-"unclassified" values
+    valid_cols <- tax_ranks[unlist(across(all_of(tax_ranks), ~ .x != "Unclassified"))]
+    # Pick the last column name or NA if none exists
+    if (length(valid_cols) > 0) tail(valid_cols, 1) else 'No_classification'
+  }) %>%
+  ungroup() %>% 
+  mutate(asv_len = nchar(OTU),
+         classification_resolution = factor(classification_resolution,
+                                  levels = c('No_classification',tax_ranks))) %>% 
+  select(classification_resolution, asv_len)
 
+length_classification %>% 
+  ggplot(aes(x = classification_resolution, y = asv_len)) +
+  geom_violin() + theme_minimal()
+  
 ### What proportion of sequences are unclassified at each taxlev ?
 ### using all 3 datasets
 
-tax_ranks <- c("Kingdom", "Phylum", "Class", "Order", "Family", "Genus")
 
 # Full melt + dataset name as "marker" variable
-melted_all <- imap(ps.list, function(ps, dataset) {
-  psmelt(ps) %>% 
-    filter(Abundance != 0) %>% 
-    select(all_of(tax_ranks), Abundance, Sample, time, city) %>% 
-    mutate(marker = dataset,
-           across(all_of(tax_ranks),~ replace_na(., "Unclassified")))
-}) %>% list_rbind
+# melted_all <- imap(ps.list, function(ps, dataset) {
+#   psmelt(ps) %>% 
+#     filter(Abundance != 0) %>% 
+#     select(all_of(tax_ranks), Abundance, Sample, time, city) %>% 
+#     mutate(marker = dataset,
+#            across(all_of(tax_ranks),~ replace_na(., "Unclassified")))
+# }) %>% list_rbind
 
-tests_list <- c('trnL_Sarah', 'trnL_Jo_concat',  'trnL_Jo_fwd','trnL_Jo_rescued', 'trnL_Jo_rescued50_pooled_EE42')
-
-# Extract proportion of unclassified ASV for each rank per sample/approach
+melted_all <- psmelt(ps_trnL) %>% 
+  select(all_of(tax_ranks), Abundance, Sample, time, city) %>% 
+      mutate(across(all_of(tax_ranks),~ replace_na(., "Unclassified")))
+  
+# # Extract proportion of unclassified ASV for each rank per sample/approach
 test <- map_dfr(tax_ranks, function(taxRank) {
   melted_all %>%
-    filter(marker %in% tests_list) %>% 
-    group_by(Sample, !!sym(taxRank), time, marker) %>% 
-    summarise(Abundance = sum(Abundance), .groups = 'drop') %>% 
-    group_by(Sample, marker) %>% 
-    mutate(relAb = Abundance/sum(Abundance)) %>% 
+    group_by(Sample, !!sym(taxRank), time) %>%
+    summarise(Abundance = sum(Abundance), .groups = 'drop') %>%
+    group_by(Sample) %>%
+    mutate(relAb = Abundance/sum(Abundance)) %>%
     filter(!!sym(taxRank) == "Unclassified") %>%
-  #  summarise(unclassified = mean(relAb, na.rm = TRUE)) %>% 
     mutate(Rank = factor(taxRank, levels = tax_ranks))
-}) %>% 
-  mutate(marker = factor(marker, levels = tests_list))
+})
+
 
 # Boxplot
 test %>% 
-  filter(marker %in% tests_list &
+  filter(#marker %in% tests_list &
            time != 'NA') %>% 
   ggplot(aes(x = time, y = relAb, fill = time)) +
   geom_boxplot(linewidth = 0.2) +
   labs(y = 'Proportion of unclassified ASVs') +
-  facet_grid(marker~Rank) +
+  facet_grid(.~Rank) +
   theme_light() +
   labs(x = '') + 
   theme(
