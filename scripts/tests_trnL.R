@@ -1,5 +1,6 @@
 library(pacman)
-p_load(dada2, tidyverse, magrittr, RColorBrewer, phyloseq, ggh4x, Biostrings, ggridges, optparse)
+p_load(dada2, tidyverse, magrittr, RColorBrewer, ggdist, tidyquant,
+       phyloseq, ggh4x, Biostrings, ggridges, optparse)
 
 source('https://raw.githubusercontent.com/jorondo1/misc_scripts/refs/heads/main/tax_glom2.R')
 source('https://raw.githubusercontent.com/jorondo1/misc_scripts/refs/heads/main/rarefy_even_depth2.R')
@@ -61,17 +62,18 @@ melted %>%
         axis.ticks.x = element_blank(),
         panel.border = element_blank())
   
-ggsave('out/composition_Class_200.pdf', bg = 'white', width = 3600, height = 2000, 
+ggsave('~/Desktop/ip34/urbanBio/out/composition_Family.pdf', bg = 'white', width = 3600, height = 2000, 
        units = 'px', dpi = 220)
 
 ps.list <- list()
 ps.list[['test']] <- ps_trnL
 
 ### Relationship between ASV length and classifiability?
-length_classification <- ps_trnL@tax_table %>%
+tax_tibble <- ps_trnL@tax_table %>%
   data.frame() %>% 
-  rownames_to_column('OTU') %>% 
-  rowwise %>% 
+  rownames_to_column('OTU') %>% tibble
+
+length_classification <- tax_tibble %>% rowwise %>% 
   mutate(classification_resolution = {
     # Get the vector of column names for non-"unclassified" values
     valid_cols <- tax_ranks[unlist(across(all_of(tax_ranks), ~ .x != "Unclassified"))]
@@ -84,9 +86,30 @@ length_classification <- ps_trnL@tax_table %>%
                                   levels = c('No_classification',tax_ranks))) %>% 
   select(classification_resolution, asv_len)
 
+# classification resolution of our ASVs along their length.
+# This shows the length distribution at the highest classification 
+# (so each colour represents a distinct set of ASVs)
+
+# First, count ASVs per highest classification
+count_labels <- length_classification %>% 
+  dplyr::count(classification_resolution) %>% 
+  mutate(label = paste0(classification_resolution, " (n = ", n, ")")) %>%
+  select(-n) %>% 
+  deframe()
+
 length_classification %>% 
-  ggplot(aes(x = classification_resolution, y = asv_len)) +
-  geom_violin() + theme_minimal()
+  ggplot(aes(x = asv_len, y = classification_resolution)) +
+  geom_boxplot(position = position_nudge(y = 0.2), width = 0.4) +
+  geom_density_ridges2(
+    aes(fill = classification_resolution ),
+    alpha = 0.6, show.legend = FALSE,
+    scale = 3
+    ) +
+  scale_y_discrete(expand = c(0.01, 0),
+                   labels = count_labels) +
+  scale_x_continuous(expand = c(0.01, 0)) +
+  labs(x = 'ASV length', y = 'Highest classification resolution')+
+  theme_classic() 
   
 ### What proportion of sequences are unclassified at each taxlev ?
 ### using all 3 datasets
