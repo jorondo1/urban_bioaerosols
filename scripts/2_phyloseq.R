@@ -120,8 +120,8 @@ ps_trnL <- phyloseq(
   sample_data(meta %>% column_to_rownames('sample_id'))
 )
 ps.list <- list()
-ps.list[["16S"]] <- ps_16S
-ps.list[["ITS"]] <- ps_ITS
-ps.list[["trnL"]] <- ps_trnL
+ps.list[["BACT"]] <- ps_16S
+ps.list[["FUNG"]] <- ps_ITS
+ps.list[["PLAN"]] <- ps_trnL
 
-saveRDS(ps.list, file.path(urbanbio.path,'data/ps.list1.rds'))
+saveRDS(ps.list, file.path(urbanbio.path,'data/ps.list.rds'))
