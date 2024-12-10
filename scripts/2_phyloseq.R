@@ -27,13 +27,16 @@ subset_samples <- function(seqtab, samples) {
 }
 
 # ASVs classified at the kingdom level and present in seqtab
-subset_asvs <- function(taxonomy, seqtab) {
+subset_asvs <- function(taxonomy, seqtab, min_seq) {
   if (!is.data.frame(taxonomy)) {
     taxonomy <- as.data.frame(taxonomy)
   }
+  
   asvs <- subset(taxonomy, Kingdom != "Unclassified") %>% # subset needs the input to be a df
     rownames %>% 
-    intersect(colnames(seqtab)) # only keep asvs still present in seqtab
+    intersect(
+      colnames(seqtab)[colSums(seqtab) >= min_seq]
+      ) # only keep asvs still present in seqtab
   taxonomy[asvs, ] %>% as.matrix()
 }
 
@@ -59,7 +62,7 @@ taxa_16S <- cbind(taxa_16S_genus, Species_16S) %>% data.frame
 seqtab_16S_samples <- subset_samples(seqtab_16S, sample.names)
 
 # Subset ASVs
-taxa_16S_present <- subset_asvs(taxa_16S, seqtab_16S_samples) 
+taxa_16S_present <- subset_asvs(taxa_16S, seqtab_16S_samples, 100) 
 
 # Remove near-empty samples
 seqtab_16S_present <- remove_ultra_rare(seqtab_16S_samples, taxa_16S_present, 10)
@@ -83,7 +86,7 @@ seqtab_ITS <- read_rds(file.path(path_ITS, '4_taxonomy/seqtab.RDS'))
 seqtab_ITS_samples <- subset_samples(seqtab_ITS, sample.names)
 
 # Subset ASVs
-taxa_ITS_present <- subset_asvs(taxa_ITS, seqtab_ITS_samples)
+taxa_ITS_present <- subset_asvs(taxa_ITS, seqtab_ITS_samples, 100)
 
 # Remove near-empty samples
 seqtab_ITS_present <- remove_ultra_rare(seqtab_ITS_samples, taxa_ITS_present, 10)
@@ -107,7 +110,7 @@ seqtab_trnL <- read_rds(file.path(path_trnL, '4_taxonomy/seqtab.RDS'))
 seqtab_trnL_samples <- subset_samples(seqtab_trnL, sample.names)
 
 # Subset ASVs
-taxa_trnL_present <- subset_asvs(taxa_trnL, seqtab_trnL_samples)
+taxa_trnL_present <- subset_asvs(taxa_trnL, seqtab_trnL_samples, 100)
 
 # Remove near-empty samples
 seqtab_trnL_present <- remove_ultra_rare(seqtab_trnL_samples, taxa_trnL_present, 10)
