@@ -9,7 +9,7 @@ barcode <- '16S'
 FWD <- "AACMGGATTAGATACCCKG"
 REV <- "AGGGTTGCGCTCGTTG"
 
-ncores <- 72
+ncores <- 80
 path_data <- paste0('data/',barcode)
 path_raw <- paste0(path_data, '/0_raw')
 
@@ -22,10 +22,6 @@ write_delim(data.frame(sample.names), paste0('data/sample_names_',barcode,'.tsv'
 ########################
 # 1. N-FILTERING ########
 ##########################
-
-# Inspect qc
-plotQualityProfile(fnFs[10:21])
-plotQualityProfile(fnRs[10:21])
 
 ### PRE-FILTER (no qc, just remove Ns)
 fnFs.filtN <- file.path(path_data, "1_filtN", basename(fnFs)) # Put N-filterd files in filtN/ subdirectory
@@ -40,14 +36,12 @@ out.N <- filterAndTrim(fnFs, fnFs.filtN,
 # 2. PRIMER REMOVAL ########
 #############################
 
-# Identify primers
-FWD.RC <- dada2:::rc(FWD)
-REV.RC <- dada2:::rc(REV)
 # Analyse primer occurence
 primer_occurence(fnFs.filtN, fnRs.filtN, FWD, REV)
 
 ### CUTADAPT
-cutadapt <- "/Users/jorondo/miniconda3/envs/cutadapt/bin/cutadapt" # CHANGE ME to the cutadapt path on your machine
+# cutadapt <- "/Users/jorondo/miniconda3/envs/cutadapt/bin/cutadapt" # CHANGE ME to the cutadapt path on your machine
+cutadapt <- '/cvmfs/soft.mugqic/CentOS6/software/cutadapt/cutadapt-2.10/bin/cutadapt'
 system2(cutadapt, args = "--version") # Run shell commands from R
 
 path.cut <- file.path(path_data, "2_cutadapt")
@@ -56,13 +50,16 @@ if(!dir.exists(path.cut)) dir.create(path.cut)
 fnFs.cut <- file.path(path.cut, basename(fnFs))
 fnRs.cut <- file.path(path.cut, basename(fnRs))
 
+FWD.RC <- dada2:::rc(FWD)
+REV.RC <- dada2:::rc(REV)
+
 # Trim FWD and the reverse-complement of REV off of R1 (forward reads)
 R1.flags <- paste("-g", FWD, "-a", REV.RC) 
 # Trim REV and the reverse-complement of FWD off of R2 (reverse reads)
 R2.flags <- paste("-G", REV, "-A", FWD.RC) 
 
 # Run Cutadapt (custom function defined in myFunctions.R)
-mclapply(seq_along(fnFs), run_cutadapt, mc.cores = 8)
+mclapply(seq_along(fnFs), run_cutadapt, mc.cores = ncores)
 
 # Check if it worked?
 primer_occurence(fnFs.cut, fnRs.cut, FWD, REV)
@@ -77,8 +74,8 @@ cutFs <- sort(list.files(path.cut, pattern = "_R1_001.fastq.gz", full.names = TR
 cutRs <- sort(list.files(path.cut, pattern = "_R2_001.fastq.gz", full.names = TRUE))
 
 # Check quality
-plotQualityProfile(cutFs[10:21])
-plotQualityProfile(cutRs[10:21])
+plotQualityProfile(cutFs[10:15])
+plotQualityProfile(cutRs[10:15])
 
 # Filter samples; define out files
 filtFs <- file.path(path_data, "3_filtered", basename(cutFs))
@@ -87,13 +84,15 @@ names(filtFs) <- sample.names
 names(filtRs) <- sample.names
 
 out <- filterAndTrim(cutFs, filtFs, cutRs, filtRs, 
-                     maxN = 0, maxEE = c(1, 1), truncQ = 2,
-                     truncLen = c(260, 150),
-                     rm.phix = TRUE, 
+                     maxN = 0, 
+                     maxEE = c(2, 2), 
+                     truncQ = 2,
+                     truncLen = c(230, 120),
+                     rm.phix = TRUE,
                      compress = TRUE, multithread = ncores) 
 
-plotQualityProfile(filtFs[10:21])
-plotQualityProfile(filtRs[10:21])
+plotQualityProfile(filtFs[10:15])
+plotQualityProfile(filtRs[10:15])
 
 ####################################
 # 4. ERROR MODEL AND CLEANUP ########
@@ -112,49 +111,59 @@ plotErrors(errF, nominalQ = TRUE)
 plotErrors(errR, nominalQ = TRUE)
 
 # Infer sample composition
-dadaFs <- dada(filtFs_survived, err = errF, pool = 'pseudo', multithread = 36, verbose = TRUE)
-dadaRs <- dada(filtRs_survived, err = errR, pool = 'pseudo', multithread = 36, verbose = TRUE)
+dadaFs <- dada(filtFs_survived, errF, pool = 'pseudo', 
+               multithread = min(ncores,36), verbose = TRUE)
+dadaRs <- dada(filtRs_survived, errR, pool = 'pseudo', 
+               multithread = min(ncores,36), verbose = TRUE)
 
 # Merge pairs
-mergers <- mergePairs(dadaFs, filtFs_survived, dadaRs, filtRs_survived, verbose=TRUE)
-write_rds(mergers, paste0('data/mergers_',barcode,'.RDS'))
+mergers <- mergePairs(
+  dadaFs, filtFs_survived, 
+  dadaRs, filtRs_survived,
+  verbose=TRUE)
 
 # Sequence table
+path.tax <- file.path(path_data, "4_taxonomy")
+if(!dir.exists(path.tax)) dir.create(path.tax)
+
 seqtab <- makeSequenceTable(mergers)
-rownames(seqtab) <- sample.names
-dim(seqtab) # 174 27683
-table(nchar(getSequences(seqtab))) %>% sort %>% plot # distrib of seq len
 
 # Clean chimeras
 seqtab.nochim <- removeBimeraDenovo(
   seqtab, method="consensus", multithread = ncores, verbose=TRUE
   )
-table(nchar(getSequences(seqtab.nochim))) %>% sort %>% plot # distrib of seq len
+
+dim(seqtab); dim(seqtab.nochim) # 174 27683
+#table(nchar(getSequences(seqtab))) %>% sort %>% plot # distrib of seq len
+#table(nchar(getSequences(seqtab.nochim))) %>% sort %>% plot # distrib of seq len
 
 # Writeout
-write_rds(seqtab.nochim, paste0('data/',barcode,'/seqtab_', barcode,'.RDS'))
+write_rds(seqtab.nochim, file.path(path.tax,'seqtab.RDS'))
 
 ### TRACK PIPELINE READS
 track_change <- track_dada(out.N = out.N, out = out,
                            dadaFs = dadaFs, dadaRs = dadaRs,
-                           mergers = mergers_pooled,
+                           mergers = mergers,
                            seqtab.nochim = seqtab.nochim)
-# samples lost at merge stage
-track_change %>%  filter(lost_merged>0.1) %>% dim 
-
-# Check chimera proportion
 track_change %>% 
-  pivot_longer(names_to = 'variable', values_to = 'values') %>% 
-  ggplot(aes(x = variable, y = values)) +
-  geom_boxplot() + theme_minimal() # overall very low chimeric rate
+  filter(values>=0) %>% 
+  plot_track_change() %>% 
+  ggsave(paste0('out/change_',barcode,'.pdf'), plot = ., 
+         bg = 'white', width = 1600, height = 1200, 
+         units = 'px', dpi = 180)
 
 ### ASSIGN TAXONOMY
-taxa <- assignTaxonomy(seqtab.nochim, 
-                          'data/16S/4_taxonomy/silva_nr99_v138.2_toGenus_trainset.fa.gz', 
+taxa <- assignTaxonomy(
+  seqtab.nochim,
+  file.path(path_data, 'silva_nr99_v138.2_toGenus_trainset.fa.gz'), 
                           multithread = ncores, tryRC = TRUE, verbose = TRUE)
 
-taxa_species <- assignSpecies(taxaITS, "data/16S/4_taxonomy/silva_v138.2_assignSpecies.fa.gz", verbose = TRUE, tryRC = TRUE, n = 5000)
+taxa_species <- assignSpecies(
+  taxa, 
+  file.path(path_data, "silva_v138.2_assignSpecies.fa.gz"), 
+  verbose = TRUE, tryRC = TRUE, n = 20000)
 
-
+write_rds(taxa, file.path(path.tax, 'taxonomy.RDS'))
+write_rds(taxa_species, file.path(path.tax, 'taxonomy_species.RDS'))
 
 

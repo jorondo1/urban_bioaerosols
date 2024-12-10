@@ -1,4 +1,5 @@
 #ITS
+#  ml StdEnv/2023 r/4.4.0 mugqic/cutadapt/2.10
 library(pacman)
 p_load(dada2, tidyverse, Biostrings, ShortRead, parallel)
 source('scripts/myFunctions.R')
@@ -9,7 +10,7 @@ barcode <- 'ITS'
 FWD <- "CTTGGTCATTTAGAGGAAGTAA"
 REV <- "GCTGCGTTCTTCATCGATGC"
 
-ncores <- 72
+ncores <- 80
 path_data <- paste0('data/',barcode)
 path_raw <- paste0(path_data, '/0_raw')
 
@@ -23,10 +24,6 @@ write_delim(data.frame(sample.names), paste0('data/sample_names_',barcode,'.tsv'
 # 1. N-FILTERING ########
 ##########################
 
-# Inspect qc
-plotQualityProfile(fnFs[5:10])
-plotQualityProfile(fnRs[5:10])
-
 ### PRE-FILTER (no qc, just remove Ns)
 fnFs.filtN <- file.path(path_data, "1_filtN", basename(fnFs)) # Put N-filterd files in filtN/ subdirectory
 fnRs.filtN <- file.path(path_data, "1_filtN", basename(fnRs))
@@ -35,7 +32,7 @@ out.N <- filterAndTrim(fnFs, fnFs.filtN,
                          rm.lowcomplex = TRUE, # added because of https://github.com/benjjneb/dada2/issues/2045#issuecomment-2452299127
                          maxN = 0, 
                          multithread = ncores)
-head(out.N)
+#head(out.N)
 
 ###########################
 # 2. PRIMER REMOVAL ########
@@ -45,8 +42,9 @@ head(out.N)
 primer_occurence(fnFs.filtN, fnRs.filtN, FWD, REV)
 
 ### CUTADAPT
-cutadapt_path <- "/Users/jorondo/miniconda3/envs/cutadapt/bin/cutadapt" # CHANGE ME to the cutadapt path on your machine
-system2(cutadapt_path, args = "--version") # Run shell commands from R
+#cutadapt_path <- "/Users/jorondo/miniconda3/envs/cutadapt/bin/cutadapt" # CHANGE ME to the cutadapt path on your machine
+cutadapt <- '/cvmfs/soft.mugqic/CentOS6/software/cutadapt/cutadapt-2.10/bin/cutadapt'
+system2(cutadapt, args = "--version") # Run shell commands from R
 
 path.cut <- file.path(path_data, "2_cutadapt")
 
@@ -63,7 +61,7 @@ R1.flags <- paste("-g", FWD, "-a", REV.RC)
 R2.flags <- paste("-G", REV, "-A", FWD.RC) 
 
 # Run Cutadapt multicore (each sample is run single-core)
-mclapply(seq_along(fnFs), run_cutadapt, mc.cores = 8)
+mclapply(seq_along(fnFs), run_cutadapt, mc.cores = ncores)
 
 # Check if it worked?
 primer_occurence(fnFs.cut, fnRs.cut, FWD, REV)
@@ -77,11 +75,6 @@ primer_occurence(fnFs.cut, fnRs.cut, FWD, REV)
 cutFs <- sort(list.files(path.cut, pattern = "_R1_001.fastq.gz", full.names = TRUE))
 cutRs <- sort(list.files(path.cut, pattern = "_R2_001.fastq.gz", full.names = TRUE))
 
-# Extract sample names, assuming filenames have format:
-get.sample.name <- function(fname) strsplit(basename(fname), "_")[[1]][1]
-sample.names <- unname(sapply(cutFs, get.sample.name))
-head(sample.names)
-
 # Check quality
 plotQualityProfile(cutFs[10:21])
 plotQualityProfile(cutRs[10:21])
@@ -93,7 +86,8 @@ names(filtFs) <- sample.names
 names(filtRs) <- sample.names
 
 out <- filterAndTrim(cutFs, filtFs, cutRs, filtRs, 
-                     maxN = 0, maxEE = c(4, 4), truncQ = 2,
+                     maxEE = c(2, 2), 
+                     truncQ = 2,
                      minLen = 100, 
                      rm.phix = TRUE, 
                      compress = TRUE, multithread = ncores) 
@@ -117,35 +111,38 @@ plotErrors(errF, nominalQ = TRUE)
 plotErrors(errR, nominalQ = TRUE)
 
 # Infer sample composition
-dadaFs <- dada(filtFs_survived, err = errF, pool = TRUE, multithread = ncores)
-dadaRs <- dada(filtRs_survived, err = errR, pool = TRUE, multithread = ncores)
+dadaFs <- dada(filtFs_survived, err = errF, 
+               pool = 'pseudo', multithread = ncores)
+dadaRs <- dada(filtRs_survived, err = errR, 
+               pool = 'pseudo', multithread = ncores)
 
 # Modified version of mergePairs that rescues non-merged reads by concatenation
 # source('scripts/mergePairsRescue.R')
-mergers_pooled <- mergePairsRescue(dadaFs, filtFs_survived, dadaRs, filtRs_survived,
-                 returnRejects = TRUE,
-                 minOverlap = 12,
-                 maxMismatch = 0,
-                 rescueUnmerged = TRUE
+mergers_pooled <- mergePairsRescue(
+  dadaFs, filtFs_survived, 
+  dadaRs, filtRs_survived,
+  returnRejects = TRUE,
+  minOverlap = 12,
+  maxMismatch = 0,
+  rescueUnmerged = TRUE
 )
 
 # Intersect the merge and concat; allows merge to fail when overlap is mismatched,
 # but recovers non-overlapping pairs by concatenating them. 
 # Motivated by https://github.com/benjjneb/dada2/issues/537#issuecomment-412530338
+path.tax <- file.path(path_data, "4_taxonomy")
+if(!dir.exists(path.tax)) dir.create(path.tax)
 
-seqtab <- makeSequenceTable(mergers_pooled)
-dim(seqtab) # 220 25606
-table(nchar(getSequences(seqtab))) %>% sort %>% plot # distrib of seq len
+seqtab <- makeSequenceTable(mergers_pooled) # makeSequenceTable(dadaFs) ## to use FWD READS ONLY
 
-# Clean chimeras
+# Remove chimeras
 seqtab.nochim <- removeBimeraDenovo(
-  seqtab, method="consensus", multithread=TRUE, verbose=TRUE
-  )
-table(nchar(getSequences(seqtab.nochim))) %>% sort %>% plot # distrib of seq len
+  seqtab, method="consensus", multithread = ncores, verbose = TRUE
+)
 
-# Writeout
-write_rds(seqtab.nochim, paste0('data/seqtab_', barcode,'.rds'))
-seqtab.nochim <- read_rds(paste0('data/seqtab_', barcode,'.rds'))
+dim(seqtab); dim(seqtab.nochim) # from 11139 to 9043
+# WRITE OUT
+write_rds(seqtab.nochim, paste0(path.tax,'/seqtab.RDS'))
 
 ### TRACK PIPELINE READS
 track_change <- track_dada(out.N = out.N, out = out,
@@ -153,15 +150,21 @@ track_change <- track_dada(out.N = out.N, out = out,
                            mergers = mergers_pooled,
                            seqtab.nochim = seqtab.nochim)
 
-plot_track_change(track_change)
+track_change %>% 
+  filter(values>=0) %>% 
+  plot_track_change() %>% 
+  ggsave(paste0('out/change_',barcode,'.pdf'), plot = ., 
+         bg = 'white', width = 1600, height = 1200, 
+         units = 'px', dpi = 180)
 
 ### ASSIGN TAXONOMY
-taxaITS <- assignTaxonomy(seqtab.nochim, 
-                          paste0(path_dbio, '/sh_general_release_dynamic_04.04.2024.fasta'), 
-                          multithread=TRUE, tryRC = TRUE, verbose = TRUE)
+taxa <- assignTaxonomy(
+  seqtab.nochim, 
+  paste0(path_data, '/sh_general_release_dynamic_04.04.2024_dev.fasta'), 
+  multithread= min(ncores, 72), tryRC = TRUE, verbose = TRUE)
 
-taxaITS %<>% as.data.frame() %>%
+taxa_fixed <- taxa %>% as.data.frame() %>%
   mutate(across(Kingdom:Species, ~ gsub("^[a-z]__", "", .))) 
 
-
+write_rds(taxa_fixe, paste0(path.tax,'/taxonomy.RDS'))
 

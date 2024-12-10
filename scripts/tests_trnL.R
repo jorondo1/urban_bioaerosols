@@ -7,25 +7,11 @@ source('https://raw.githubusercontent.com/jorondo1/misc_scripts/refs/heads/main/
 source('scripts/myFunctions.R')
 
 tax_ranks <- c("Kingdom", "Phylum", "Class", "Order", "Family", "Genus")
-# 
-# ### PHYLOSEQ objects list 
-# #ps.list <- list()
-# ps.list[[paste0('trnL_Jo_',suffix)]] <- phyloseq(tax_table(taxa.subset),
-#          otu_table(seqtab.subset, taxa_are_rows = FALSE),
-#          sample_data(empty_df)) 
-# write_rds(ps.list, 'merge_parameters_tests.ps.rds')
-# 
-# ps.list[['ITS']] <- read_rds('data/sarah/phyloITS.rds') %>% 
-#   rarefy_even_depth2()
-# 
-# ps.list[['16S']] <- read_rds('data/sarah/phylo16S.rds') %>% 
-#   rarefy_even_depth2()
-# 
-# ps.list <- read_rds('data/merge_parameters_tests.ps.rds')
-# ps_sarah <- read_rds('data/metaITS.rds')
 
+###################################
+# Community composition overview ###
+#####################################
 
-# Community composition overview
 which_taxrank <- 'Family'
 melted <- ps_trnL %>% 
   tax_glom(taxrank = which_taxrank) %>% 
@@ -35,16 +21,18 @@ melted <- ps_trnL %>%
   mutate(relAb = Abundance/sum(Abundance),
          time = factor(time, levels=c('Spring', 'Summer', 'Fall'))) %>% 
   ungroup
-  
+
+# Compute top taxa and create "Others" category
 nTaxa <- 10
 (top_taxa <- topTaxa(melted, which_taxrank, nTaxa))
 top_taxa_lvls <- top_taxa %>% 
   group_by(aggTaxo) %>% 
   aggregate(relAb ~ aggTaxo, data = ., FUN = sum) %>% 
   arrange(relAb) %$% aggTaxo %>% 
-  as.character %>% 
+  as.character %>% # Others first:
   setdiff(., c('Others', 'Unclassified')) %>% c('Others', 'Unclassified', .)
 
+# Plot !
 expanded_palette <- colorRampPalette(brewer.pal(12, 'Set3'))(nTaxa+2) 
 
 melted %>% 
@@ -62,12 +50,15 @@ melted %>%
         axis.ticks.x = element_blank(),
         panel.border = element_blank())
   
-ggsave(paste0('~/Desktop/ip34/urbanBio/out/composition_',which_taxrank,'.pdf'), bg = 'white', width = 3600, height = 2000, 
+ggsave(paste0('~/Desktop/ip34/urbanBio/out/composition_',which_taxrank,'.pdf'),
+       bg = 'white', width = 3600, height = 2000, 
        units = 'px', dpi = 220)
 
-### Digging into the community composition, 
-# showing main genera of the main families
-(top_families <- top_taxa[1:6,]$Family)
+########################################
+# Mean abundance of genera per family ###
+##########################################
+
+(top_families <- top_taxa[1:7,]$Family)
 
 melt_family <- psmelt(ps_trnL) %>% 
   filter(Abundance != 0 &
@@ -85,26 +76,26 @@ family_genera <- melt_family %>% tibble %>%
   group_by(Family) %>%
   mutate(relAbNorm = mean_relAb / sum(mean_relAb)) %>%
   ungroup()
-
-# Faceted pie chart
-family_genera %>% 
-  group_by(Family) %>%
-  mutate(
-    Rank = rank(-relAbNorm),
-    Genus = ifelse(Rank > 5, "Other", Genus)
-  ) %>%
-  group_by(Family, Genus) %>%
-  summarize(relAbNorm = sum(relAbNorm), .groups = "drop") %>% 
-
-
-  ggplot( aes(x = "", y = relAbNorm, fill = Genus)) +
-  geom_bar(stat = "identity", width = 1) +
-  coord_polar("y") +
-  facet_wrap(~ Family, ncol = 3) +  # Facet by category
-  scale_fill_viridis_d() +
-  labs(title = "Genus Proportions by Family") +
-  theme_void() +
-  theme(legend.position = "bottom")
+# 
+# # Faceted pie chart
+# family_genera %>% 
+#   group_by(Family) %>%
+#   mutate(
+#     Rank = rank(-relAbNorm),
+#     Genus = ifelse(Rank > 4, "Other", Genus)
+#   ) %>%
+#   group_by(Family, Genus) %>%
+#   summarize(relAbNorm = sum(relAbNorm), .groups = "drop") %>% 
+# 
+# 
+#   ggplot( aes(x = "", y = relAbNorm, fill = Genus)) +
+#   geom_bar(stat = "identity", width = 1) +
+#   coord_polar("y") +
+#   facet_wrap(~ Family, ncol = 3) +  # Facet by category
+#   scale_fill_viridis_d() +
+#   labs(title = "Genus Proportions by Family") +
+#   theme_void() +
+#   theme(legend.position = "bottom")
 
 # Treemap
 plots <- family_genera %>%
@@ -143,8 +134,10 @@ ggsave('~/Desktop/ip34/urbanBio/out/family_genus_prop.pdf', bg = 'white',
        units = 'px', dpi = 180)
 
 
+######################################
+### ASV length vs. classifiability ####
+########################################
 
-### Relationship between ASV length and classifiability?
 tax_tibble <- ps_trnL@tax_table %>%
   data.frame() %>% 
   rownames_to_column('OTU') %>% tibble
@@ -186,21 +179,13 @@ length_classification %>%
   scale_x_continuous(expand = c(0.01, 0)) +
   labs(x = 'ASV length', y = 'Highest classification resolution')+
   theme_classic() 
+
+ggsave(paste0('~/Desktop/ip34/urbanBio/out/classif_res.pdf'),
+       bg = 'white', width = 3600, height = 2000, 
+       units = 'px', dpi = 220)
+
   
 ### What proportion of sequences are unclassified at each taxlev ?
-### using all 3 datasets
-
-ps.list <- list()
-ps.list[['test']] <- ps_trnL
-
-# Full melt + dataset name as "marker" variable
-# melted_all <- imap(ps.list, function(ps, dataset) {
-#   psmelt(ps) %>% 
-#     filter(Abundance != 0) %>% 
-#     select(all_of(tax_ranks), Abundance, Sample, time, city) %>% 
-#     mutate(marker = dataset,
-#            across(all_of(tax_ranks),~ replace_na(., "Unclassified")))
-# }) %>% list_rbind
 
 melted_all <- psmelt(ps_trnL) %>% 
   select(all_of(tax_ranks), Abundance, Sample, time, city) %>% 
@@ -216,7 +201,6 @@ test <- map_dfr(tax_ranks, function(taxRank) {
     filter(!!sym(taxRank) == "Unclassified") %>%
     mutate(Rank = factor(taxRank, levels = tax_ranks))
 })
-
 
 # Boxplot
 test %>% 
@@ -263,28 +247,7 @@ test %>%
 ggsave('~/Desktop/ip34/urbanBio/out/unclassified_ridge.pdf', bg = 'white', width = 1600, height = 1200, 
        units = 'px', dpi = 180)
 
-# Or even 'survival' lines?
-test %>% 
-  filter(marker %in% tests_list &
-           time != 'NA') %>% 
-  group_by(Rank, marker) %>% 
-  summarise(
-    mean_unclassified = mean(relAb),
-    sd_unclassified = sd(relAb), 
-    .groups = 'drop'
-  ) %>% 
-  ggplot(aes(x = Rank, y = mean_unclassified, group = marker, colour = marker)) +
-  geom_line(linewidth = 1) +
-  geom_ribbon(aes(ymin = mean_unclassified - sd_unclassified,
-                  ymax = mean_unclassified + sd_unclassified,
-                  fill = marker), linetype = 'dotted',
-              alpha = 0.1) +
-  theme_minimal() +
-  labs(
-    y = 'Proportion of unclassified ASVs',
-    x = 'Taxonomic Rank'
-  )
-  
+
 # Look at sequence length in unclassified data :
 melted_length <- ps_trnL %>% 
   psmelt %>% 

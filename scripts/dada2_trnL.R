@@ -1,4 +1,5 @@
 # trnL
+#  ml StdEnv/2023 r/4.4.0 mugqic/cutadapt/2.10
 library(pacman)
 p_load(dada2, tidyverse, Biostrings, ShortRead, parallel)
 source('scripts/myFunctions.R')
@@ -22,16 +23,13 @@ write_delim(data.frame(sample.names), paste0('data/sample_names_',barcode,'.tsv'
 ########################
 # 1. N-FILTERING ########
 ##########################
-# Inspect qc
-plotQualityProfile(fnFs[1:2])
-plotQualityProfile(fnRs[1:2])
 
 ### PRE-FILTER (no qc, just remove Ns)
 fnFs.filtN <- file.path(path_data, "1_filtN", basename(fnFs)) # Put N-filterd files in filtN/ subdirectory
 fnRs.filtN <- file.path(path_data, "1_filtN", basename(fnRs))
 out.N <- filterAndTrim(fnFs, fnFs.filtN,
                        fnRs, fnRs.filtN, 
-                       trimLeft = c(nchar(FWD),nchar(REV)),
+                       #trimLeft = c(nchar(FWD),nchar(REV)),
                        rm.lowcomplex = TRUE, # added because of https://github.com/benjjneb/dada2/issues/2045#issuecomment-2452299127
                        maxN = 0, 
                        multithread = ncores)
@@ -49,7 +47,7 @@ primer_occurence(fnFs.filtN, fnRs.filtN, FWD, REV)
 cutadapt <- '/cvmfs/soft.mugqic/CentOS6/software/cutadapt/cutadapt-2.10/bin/cutadapt'
 system2(cutadapt, args = "--version") # Run shell commands from R
 
-path.cut <- file.path(path_data, "2_cutadapt_new")
+path.cut <- file.path(path_data, "2_cutadapt")
 
 if(!dir.exists(path.cut)) dir.create(path.cut)
 fnFs.cut <- file.path(path.cut, basename(fnFs))
@@ -134,31 +132,25 @@ mergers_pooled <- mergePairsRescue(
   rescueUnmerged = TRUE
 )
 
-mergers_cat <- mergePairs(dadaFs, filtFs_survived, 
-                              dadaRs, filtRs_survived,
-                              justConcatenate = TRUE)
-
 # Intersect the merge and concat; allows merge to fail when overlap is mismatched,
 # but recovers non-overlapping pairs by concatenating them. 
 # Motivated by https://github.com/benjjneb/dada2/issues/537#issuecomment-412530338
 path.tax <- file.path(path_data, "4_taxonomy_E22_100")
 if(!dir.exists(path.tax)) dir.create(path.tax)
 
-seqtab <- makeSequenceTable(mergers_pooled)
+seqtab <- makeSequenceTable(mergers_pooled) # makeSequenceTable(dadaFs) ## to use FWD READS ONLY
+dim(seqtab)
 
-##### USING FWD READS ONLY
-# seqtab <- makeSequenceTable(dadaFs)
-
-table(nchar(getSequences(seqtab))) %>% sort %>% plot # distrib of seq len
-
-# Clean chimeras
+# Remove chimeras
 seqtab.nochim <- removeBimeraDenovo(
   seqtab, method="consensus", multithread = ncores, verbose = TRUE
 )
 
-dim(seqtab); dim(seqtab.nochim) # 220 17846
-table(nchar(getSequences(seqtab.nochim))) %>% sort %>% plot # distrib of seq len
-  
+dim(seqtab); dim(seqtab.nochim) # from 17410 to 9024
+# distrib of seq len:
+# table(nchar(getSequences(seqtab.nochim))) %>% sort %>% plot 
+# table(nchar(getSequences(seqtab))) %>% sort %>% plot 
+
 # WRITE OUT
 write_rds(seqtab.nochim, paste0(path.tax,'/seqtab.RDS'))
 
@@ -169,15 +161,17 @@ track_change <- track_dada(out.N = out.N, out = out,
                            seqtab.nochim = seqtab.nochim)
 track_change %>% 
   filter(values>=0) %>% 
-  plot_track_change() %>% ggsave(paste0(path_data,'/out/change_trnL.pdf'), plot = ., 
-                                 bg = 'white', width = 1600, height = 1200, 
-                                 units = 'px', dpi = 180)
+  plot_track_change() %>% 
+  ggsave(paste0('out/change_',barcode,'.pdf'), plot = ., 
+         bg = 'white', width = 1600, height = 1200, 
+         units = 'px', dpi = 180)
+
 
 ###################################
 # TRNL: CUSTOM TAXONOMY DATABASE ###
 #####################################
-
-trnl.ref <- paste0(path_data,'/trnL_hits_reference2024.fa')
+# Using this custom reference database:
+trnl.ref <- paste0(path_data,'/trnL_hits.lineage.filtered.Genus.fa')
 
 # check sequence length distribution
 trnl.seq <- readDNAStringSet(trnl.ref, format = 'fasta')
@@ -188,7 +182,7 @@ ggplot(data.frame(length = seqlen), aes(x = length)) +
   theme_minimal()
 
 # filter within expected limits for trnL (???)
-filtered_sequences <- trnl.seq[seqlen >= 300 & 
+filtered_sequences <- trnl.seq[seqlen >= 200 & 
                                  width(trnl.seq) <= 800]
 filtered_sequences %>% width %>% sort %>% hist
 filt_trnL.path <- paste0(path_data,'/filtered_trnl_ref.fa')
@@ -197,9 +191,10 @@ writeXStringSet(filtered_sequences, filt_trnL.path)
 ######################
 ### ASSIGN TAXONOMY ###
 ########################
+
 # seqtab.nochim <- read_rds('data/trnL/4_taxonomy_E42_100/seqtab.RDS')
 # Filter out sequences smaller than 200bp
-keep <- nchar(colnames(seqtab.nochim)) >= 200
+keep <- nchar(colnames(seqtab.nochim)) >= 100
 seqtab200 <- seqtab.nochim[, keep, drop = FALSE]
 dim(seqtab200)
 
@@ -211,4 +206,3 @@ taxa[is.na(taxa)] <- 'Unclassified' # otherwise Tax_glom flushes out the NAs .
 write_rds(taxa, paste0(path.tax,'/taxonomy.RDS'))
 taxa <- read_rds(paste0(path.tax,'/taxonomy.RDS'))
 taxa %>% View
-
