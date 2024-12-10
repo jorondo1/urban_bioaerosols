@@ -50,7 +50,6 @@ run_cutadapt <- function(i) {
 }
 
 ### READS TRACKING
-
 getN <- function(x) sum(getUniques(x))
 
 track_dada <- function(out.N, out,
