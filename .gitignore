@@ -11,6 +11,7 @@ logs/
 *.fasta
 *.fastq
 *.fastq.gz
+*.tgz
 *.RData
 *.Rhistory
 *.RDataTmp
