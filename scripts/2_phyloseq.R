@@ -122,9 +122,9 @@ ps_trnL <- phyloseq(
   otu_table(seqtab_trnL_present, taxa_are_rows = FALSE),
   sample_data(meta %>% column_to_rownames('sample_id'))
 )
-ps.list <- list()
-ps.list[["BACT"]] <- ps_16S
-ps.list[["FUNG"]] <- ps_ITS
-ps.list[["PLAN"]] <- ps_trnL
+ps.ls <- list()
+ps.ls[["BACT"]] <- ps_16S
+ps.ls[["FUNG"]] <- ps_ITS
+ps.ls[["PLAN"]] <- ps_trnL
 
-saveRDS(ps.list, file.path(urbanbio.path,'data/ps.list.rds'))
+saveRDS(ps.ls, file.path(urbanbio.path,'data/ps.ls.rds'))
