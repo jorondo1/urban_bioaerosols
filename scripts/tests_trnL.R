@@ -4,55 +4,10 @@ p_load(dada2, tidyverse, magrittr, RColorBrewer, ggdist, tidyquant,
 
 source('https://raw.githubusercontent.com/jorondo1/misc_scripts/refs/heads/main/tax_glom2.R')
 source('https://raw.githubusercontent.com/jorondo1/misc_scripts/refs/heads/main/rarefy_even_depth2.R')
-source('scripts/myFunctions.R')
+source('Desktop/ip34/urbanBio/scripts/myFunctions.R')
 
 tax_ranks <- c("Kingdom", "Phylum", "Class", "Order", "Family", "Genus")
-
-###################################
-# Community composition overview ###
-#####################################
-
-which_taxrank <- 'Family'
-melted <- ps_trnL %>% 
-  tax_glom(taxrank = which_taxrank) %>% 
-  psmelt %>%
-  filter(Abundance != 0) %>% 
-  group_by(Sample) %>% 
-  mutate(relAb = Abundance/sum(Abundance),
-         time = factor(time, levels=c('Spring', 'Summer', 'Fall'))) %>% 
-  ungroup
-
-# Compute top taxa and create "Others" category
-nTaxa <- 10
-(top_taxa <- topTaxa(melted, which_taxrank, nTaxa))
-top_taxa_lvls <- top_taxa %>% 
-  group_by(aggTaxo) %>% 
-  aggregate(relAb ~ aggTaxo, data = ., FUN = sum) %>% 
-  arrange(relAb) %$% aggTaxo %>% 
-  as.character %>% # Others first:
-  setdiff(., c('Others', 'Unclassified')) %>% c('Others', 'Unclassified', .)
-
-# Plot !
-expanded_palette <- colorRampPalette(brewer.pal(12, 'Set3'))(nTaxa+2) 
-
-melted %>% 
-  left_join(top_taxa %>% select(-relAb), by = which_taxrank) %>%
-  filter(!is.na(time)) %>% 
-  mutate(aggTaxo = factor(aggTaxo, levels = top_taxa_lvls)) %>% 
-  ggplot(aes(x = Sample, y = relAb, fill = aggTaxo)) +
-  geom_col() +
-  theme_light() +
-  facet_nested(cols=vars(city,time), scales = 'free', space = 'free') +
-  scale_fill_manual(values = expanded_palette) +
-  labs(fill = which_taxrank) +
-  theme(panel.grid = element_blank(),
-        axis.text.x = element_blank(),
-        axis.ticks.x = element_blank(),
-        panel.border = element_blank())
-  
-ggsave(paste0('~/Desktop/ip34/urbanBio/out/composition_',which_taxrank,'.pdf'),
-       bg = 'white', width = 3600, height = 2000, 
-       units = 'px', dpi = 220)
+ps_trnL <- readRDS('~/Desktop/ip34/urbanBio/data/ps.ls.rds')
 
 ########################################
 # Mean abundance of genera per family ###

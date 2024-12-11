@@ -6,7 +6,7 @@ source("https://github.com/jorondo1/misc_scripts/raw/refs/heads/main/tax_glom2.R
 urbanbio.path <- '~/Desktop/ip34/urbanBio'
 meta <- read_delim(file.path(urbanbio.path,"data/metadata_2022_samples_final.csv"))
 #meta %<>% mutate(sample_id = paste0("X", sample_id))
-meta_controls <- meta %>% 
+meta_ctrl <- meta %>% 
   filter(time =="None") %>% 
   mutate(sample_id = case_when(sample_id == "Contrôle-blanc-12h00-PM" ~ "Controle-blanc-12h00-PM",
                                       TRUE ~ sample_id))
@@ -14,8 +14,7 @@ meta_samples <- meta %>%
   filter(time != "None")
   
 sample.names <- meta_samples$sample_id
-
-
+ctrl.names <- meta_ctrl$sample_id
 ###############
 # Functions ####
 #################
@@ -59,20 +58,30 @@ names(Species_16S) <- rownames(taxa_16S_species)
 taxa_16S <- cbind(taxa_16S_genus, Species_16S) %>% data.frame
 
 # Keep samples with metadata info
-seqtab_16S_samples <- subset_samples(seqtab_16S, sample.names)
+seqtab_16S_sam <- subset_samples(seqtab_16S, sample.names)
+seqtab_16S_ctrl <- subset_samples(seqtab_16S, ctrl.names)
 
 # Subset ASVs
-taxa_16S_present <- subset_asvs(taxa_16S, seqtab_16S_samples, 100) 
+taxa_16S_sam <- subset_asvs(taxa_16S, seqtab_16S_sam, 100) 
+taxa_16S_ctrl <- subset_asvs(taxa_16S, seqtab_16S_ctrl, 100) 
 
 # Remove near-empty samples
-seqtab_16S_present <- remove_ultra_rare(seqtab_16S_samples, taxa_16S_present, 10)
-dim(seqtab_16S_samples); dim(seqtab_16S_present); dim(taxa_16S_present)
+seqtab_16S_sam_filt <- remove_ultra_rare(seqtab_16S_sam, taxa_16S_sam, 10)
+seqtab_16S_ctrl_filt <- remove_ultra_rare(seqtab_16S_ctrl, taxa_16S_ctrl, 10)
+dim(seqtab_16S_sam); dim(seqtab_16S_sam_filt); dim(taxa_16S_sam)
+dim(seqtab_16S_ctrl); dim(seqtab_16S_ctrl_filt); dim(taxa_16S_ctrl)
 
 # Phyloseq object
 ps_16S <- phyloseq(
-  tax_table(taxa_16S_present),
-  otu_table(seqtab_16S_present, taxa_are_rows = FALSE),
-  sample_data(meta %>% column_to_rownames('sample_id'))
+  tax_table(taxa_16S_sam),
+  otu_table(seqtab_16S_sam_filt, taxa_are_rows = FALSE),
+  sample_data(meta_samples %>% column_to_rownames('sample_id'))
+)
+
+ps_16S_ctrl <- phyloseq(
+  tax_table(taxa_16S_ctrl),
+  otu_table(seqtab_16S_ctrl_filt, taxa_are_rows = FALSE),
+  sample_data(meta_controls %>% column_to_rownames('sample_id'))
 )
 
 #########
@@ -83,21 +92,33 @@ taxa_ITS <- read_rds(file.path(path_ITS, '4_taxonomy/taxonomy.RDS'))
 seqtab_ITS <- read_rds(file.path(path_ITS, '4_taxonomy/seqtab.RDS'))
 
 # Keep samples with metadata info
-seqtab_ITS_samples <- subset_samples(seqtab_ITS, sample.names)
+seqtab_ITS_sam <- subset_samples(seqtab_ITS, sample.names)
+seqtab_ITS_ctrl <- subset_samples(seqtab_ITS, ctrl.names)
 
 # Subset ASVs
-taxa_ITS_present <- subset_asvs(taxa_ITS, seqtab_ITS_samples, 100)
+taxa_ITS_sam <- subset_asvs(taxa_ITS, seqtab_ITS_sam, 100)
+taxa_ITS_ctrl <- subset_asvs(taxa_ITS, seqtab_ITS_ctrl, 100)
 
 # Remove near-empty samples
-seqtab_ITS_present <- remove_ultra_rare(seqtab_ITS_samples, taxa_ITS_present, 10)
-dim(seqtab_ITS_samples); dim(seqtab_ITS_present); dim(taxa_ITS_present)
+seqtab_ITS_sam_filt <- remove_ultra_rare(seqtab_ITS_sam, taxa_ITS_sam, 10)
+seqtab_ITS_ctrl_filt <- remove_ultra_rare(seqtab_ITS_ctrl, taxa_ITS_ctrl, 10)
+
+dim(seqtab_ITS_sam); dim(seqtab_ITS_sam_filt); dim(taxa_ITS_sam)
+dim(seqtab_ITS_ctrl); dim(seqtab_ITS_ctrl_filt); dim(taxa_ITS_ctrl)
 
 # Phyloseq object
 ps_ITS <- phyloseq(
-  tax_table(taxa_ITS_present),
-  otu_table(seqtab_ITS_present, taxa_are_rows = FALSE),
-  sample_data(meta %>% column_to_rownames('sample_id'))
+  tax_table(taxa_ITS_sam),
+  otu_table(seqtab_ITS_sam_filt, taxa_are_rows = FALSE),
+  sample_data(meta.samples %>% column_to_rownames('sample_id'))
   )
+
+# Phyloseq object
+ps_ITS_ctrl <- phyloseq(
+  tax_table(taxa_ITS_ctrl),
+  otu_table(seqtab_ITS_ctrl_filt, taxa_are_rows = FALSE),
+  sample_data(meta_ctrl %>% column_to_rownames('sample_id'))
+)
 
 ##########
 # trnL ####
@@ -107,24 +128,40 @@ taxa_trnL <- read_rds(file.path(path_trnL, '4_taxonomy/taxonomy.RDS'))
 seqtab_trnL <- read_rds(file.path(path_trnL, '4_taxonomy/seqtab.RDS'))
 
 # Keep samples with metadata info
-seqtab_trnL_samples <- subset_samples(seqtab_trnL, sample.names)
+seqtab_trnL_sam <- subset_samples(seqtab_trnL, sample.names)
+seqtab_trnL_ctrl <- subset_samples(seqtab_trnL, ctrl.names)
 
 # Subset ASVs
-taxa_trnL_present <- subset_asvs(taxa_trnL, seqtab_trnL_samples, 100)
+taxa_trnL_sam <- subset_asvs(taxa_trnL, seqtab_trnL_sam, 100)
+taxa_trnL_ctrl <- subset_asvs(taxa_trnL, seqtab_trnL_ctrl, 100)
 
 # Remove near-empty samples
-seqtab_trnL_present <- remove_ultra_rare(seqtab_trnL_samples, taxa_trnL_present, 10)
-dim(seqtab_trnL_samples); dim(seqtab_trnL_present); dim(taxa_trnL_present)
+seqtab_trnL_sam_filt <- remove_ultra_rare(seqtab_trnL_sam, taxa_trnL_sam, 10)
+seqtab_trnL_ctrl_filt <- remove_ultra_rare(seqtab_trnL_ctrl, taxa_trnL_ctrl, 10)
+dim(seqtab_trnL_sam); dim(seqtab_trnL_sam_filt); dim(taxa_trnL_sam)
+dim(seqtab_trnL_ctrl); dim(seqtab_trnL_ctrl_filt); dim(taxa_trnL_ctrl)
 
-# Phyloseq object
+# Phyloseq objects
 ps_trnL <- phyloseq(
-  tax_table(taxa_trnL_present),
-  otu_table(seqtab_trnL_present, taxa_are_rows = FALSE),
-  sample_data(meta %>% column_to_rownames('sample_id'))
+  tax_table(taxa_trnL_sam),
+  otu_table(seqtab_trnL_sam_filt, taxa_are_rows = FALSE),
+  sample_data(meta_samples %>% column_to_rownames('sample_id'))
 )
+
+ps_trnL_ctrl <- phyloseq(
+  tax_table(taxa_trnL_ctrl),
+  otu_table(seqtab_trnL_ctrl_filt, taxa_are_rows = FALSE),
+  sample_data(meta_ctrl %>% column_to_rownames('sample_id'))
+)
+
 ps.ls <- list()
 ps.ls[["BACT"]] <- ps_16S
 ps.ls[["FUNG"]] <- ps_ITS
 ps.ls[["PLAN"]] <- ps_trnL
-
 saveRDS(ps.ls, file.path(urbanbio.path,'data/ps.ls.rds'))
+
+ps_ctrl.ls <- list()
+ps_ctrl.ls[["BACT"]] <- ps_16S_ctrl
+ps_ctrl.ls[["FUNG"]] <- ps_ITS_ctrl
+ps_ctrl.ls[["PLAN"]] <- ps_trnL_ctrl
+saveRDS(ps_ctrl.ls, file.path(urbanbio.path,'data/ps_ctrl.ls.rds'))

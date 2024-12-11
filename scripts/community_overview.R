@@ -1,13 +1,21 @@
 library(pacman)
-p_load(dada2, tidyverse, magrittr, RColorBrewer, phyloseq, ggh4x, Biostrings, ggridges, optparse)
+p_load(dada2, tidyverse, magrittr, RColorBrewer, ggdist, tidyquant,
+       phyloseq, ggh4x, Biostrings, ggridges, optparse)
 
 source('https://raw.githubusercontent.com/jorondo1/misc_scripts/refs/heads/main/tax_glom2.R')
 source('https://raw.githubusercontent.com/jorondo1/misc_scripts/refs/heads/main/rarefy_even_depth2.R')
-source('scripts/myFunctions.R')
+source('Desktop/ip34/urbanBio/scripts/myFunctions.R')
 
-which_taxrank <- 'Family'
-melted <- read_rds('data/trnL/5_out/ps_genus.RDS') %>% 
-  tax_glom2(taxrank = which_taxrank)
+tax_ranks <- c("Kingdom", "Phylum", "Class", "Order", "Family", "Genus")
+ps_trnL <- readRDS('~/Desktop/ip34/urbanBio/data/ps.ls.rds')
+
+###################################
+# Community composition overview ###
+#####################################
+
+which_taxrank <- 'Genus'
+melted <- ps_trnL$PLAN %>% 
+  tax_glom(taxrank = which_taxrank) %>% 
   psmelt %>%
   filter(Abundance != 0) %>% 
   group_by(Sample) %>% 
@@ -15,16 +23,18 @@ melted <- read_rds('data/trnL/5_out/ps_genus.RDS') %>%
          time = factor(time, levels=c('Spring', 'Summer', 'Fall'))) %>% 
   ungroup
 
-nTaxa <- 16
-top_taxa <- topTaxa(melted, which_taxrank, nTaxa)
+# Compute top taxa and create "Others" category
+nTaxa <- 14
+(top_taxa <- topTaxa(melted, which_taxrank, nTaxa))
 top_taxa_lvls <- top_taxa %>% 
   group_by(aggTaxo) %>% 
   aggregate(relAb ~ aggTaxo, data = ., FUN = sum) %>% 
   arrange(relAb) %$% aggTaxo %>% 
-  as.character %>% 
+  as.character %>% # Others first:
   setdiff(., c('Others', 'Unclassified')) %>% c('Others', 'Unclassified', .)
 
-expanded_palette <- colorRampPalette(brewer.pal(12, 'Set3'))(nTaxa+2) 
+# Plot !
+expanded_palette <- colorRampPalette(brewer.pal(12, 'Paired'))(nTaxa+2) 
 
 melted %>% 
   left_join(top_taxa %>% select(-relAb), by = which_taxrank) %>%
@@ -40,3 +50,11 @@ melted %>%
         axis.text.x = element_blank(),
         axis.ticks.x = element_blank(),
         panel.border = element_blank())
+
+ggsave(paste0('~/Desktop/ip34/urbanBio/out/composition_',which_taxrank,'.pdf'),
+       bg = 'white', width = 3600, height = 2000, 
+       units = 'px', dpi = 220)
+
+###################################
+# Controls ###
+#####################################
