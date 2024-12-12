@@ -44,6 +44,13 @@ remove_ultra_rare <- function(seqtab, taxonomy, n) {
   seqtab[,rownames(taxonomy)] %>% .[rowSums(.) > 10, ]
 }
 
+add_seq_depth <- function(seqtab, meta) {
+  meta_subset <- meta[rownames(seqtab),]
+  seqtab %>% rowSums %>% 
+    data.frame(seqDepth = .) %>% 
+    cbind(meta_subset, .) 
+}
+
 #########
 # 16S ####
 ###########
@@ -71,17 +78,21 @@ seqtab_16S_ctrl_filt <- remove_ultra_rare(seqtab_16S_ctrl, taxa_16S_ctrl, 10)
 dim(seqtab_16S_sam); dim(seqtab_16S_sam_filt); dim(taxa_16S_sam)
 dim(seqtab_16S_ctrl); dim(seqtab_16S_ctrl_filt); dim(taxa_16S_ctrl)
 
+# Add sequencing effort to metadata
+meta_samples_16S <- add_seq_depth(seqtab_16S_sam_filt, meta_samples)
+meta_ctrl_16S <- add_seq_depth(seqtab_16S_ctrl_filt, meta_controls)
+
 # Phyloseq object
 ps_16S <- phyloseq(
   tax_table(taxa_16S_sam),
   otu_table(seqtab_16S_sam_filt, taxa_are_rows = FALSE),
-  sample_data(meta_samples %>% column_to_rownames('sample_id'))
+  sample_data(meta_samples_16S)
 )
 
 ps_16S_ctrl <- phyloseq(
   tax_table(taxa_16S_ctrl),
   otu_table(seqtab_16S_ctrl_filt, taxa_are_rows = FALSE),
-  sample_data(meta_controls %>% column_to_rownames('sample_id'))
+  sample_data(meta_ctrl_16S)
 )
 
 #########
@@ -106,18 +117,22 @@ seqtab_ITS_ctrl_filt <- remove_ultra_rare(seqtab_ITS_ctrl, taxa_ITS_ctrl, 10)
 dim(seqtab_ITS_sam); dim(seqtab_ITS_sam_filt); dim(taxa_ITS_sam)
 dim(seqtab_ITS_ctrl); dim(seqtab_ITS_ctrl_filt); dim(taxa_ITS_ctrl)
 
+# Add sequencing effort to metadata
+meta_samples_ITS <- add_seq_depth(seqtab_ITS_sam_filt, meta_samples)
+meta_ctrl_ITS <- add_seq_depth(seqtab_ITS_ctrl_filt, meta_controls)
+
 # Phyloseq object
 ps_ITS <- phyloseq(
   tax_table(taxa_ITS_sam),
   otu_table(seqtab_ITS_sam_filt, taxa_are_rows = FALSE),
-  sample_data(meta.samples %>% column_to_rownames('sample_id'))
+  sample_data(meta_samples_ITS)
   )
 
 # Phyloseq object
 ps_ITS_ctrl <- phyloseq(
   tax_table(taxa_ITS_ctrl),
   otu_table(seqtab_ITS_ctrl_filt, taxa_are_rows = FALSE),
-  sample_data(meta_ctrl %>% column_to_rownames('sample_id'))
+  sample_data(meta_ctrl_ITS)
 )
 
 ##########
@@ -141,17 +156,21 @@ seqtab_trnL_ctrl_filt <- remove_ultra_rare(seqtab_trnL_ctrl, taxa_trnL_ctrl, 10)
 dim(seqtab_trnL_sam); dim(seqtab_trnL_sam_filt); dim(taxa_trnL_sam)
 dim(seqtab_trnL_ctrl); dim(seqtab_trnL_ctrl_filt); dim(taxa_trnL_ctrl)
 
+# Add sequencing effort to metadata
+meta_samples_trnL <- add_seq_depth(seqtab_trnL_sam_filt, meta_samples)
+meta_ctrl_trnL <- add_seq_depth(seqtab_trnL_ctrl_filt, meta_controls)
+
 # Phyloseq objects
 ps_trnL <- phyloseq(
   tax_table(taxa_trnL_sam),
   otu_table(seqtab_trnL_sam_filt, taxa_are_rows = FALSE),
-  sample_data(meta_samples %>% column_to_rownames('sample_id'))
+  sample_data(meta_samples_trnL)
 )
 
 ps_trnL_ctrl <- phyloseq(
   tax_table(taxa_trnL_ctrl),
   otu_table(seqtab_trnL_ctrl_filt, taxa_are_rows = FALSE),
-  sample_data(meta_ctrl %>% column_to_rownames('sample_id'))
+  sample_data(meta_ctrl_trnL)
 )
 
 ps.ls <- list()
