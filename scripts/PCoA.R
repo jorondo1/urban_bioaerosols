@@ -51,7 +51,9 @@ pcoa.df <- imap(pcoa_bray_byCity.ls, function(pcoa.ls, city) {
       select(Sample, city, time, PCo1, PCo2) %>% 
       mutate(barcode = barcode)
   }) %>% list_rbind
-}) %>% list_rbind
+}) %>% list_rbind %>% 
+  mutate(time = factor(time, levels = names(seasons)),
+         barcode = recode(barcode, !!!barcodes)) 
 
 # Eigenvalues df
 eig.df <- imap(pcoa_bray_byCity.ls, function(pcoa.ls, city) {
@@ -74,21 +76,19 @@ eig.df <- imap(pcoa_bray_byCity.ls, function(pcoa.ls, city) {
   summarize(Eig = paste0(MDS, ": ", round(Eig, 1), "%"), .groups = "drop") %>%
   pivot_wider(names_from = MDS, values_from = Eig)
 
+# Plot !
 pcoa.df %>% 
-  mutate(time = factor(time, levels = names(seasons)),
-         barcode = recode(barcode, !!!barcodes)) %>% 
   ggplot(aes(x = PCo1, y = PCo2, colour = time)) +
   geom_point(size = 1) +
   stat_ellipse(level = 0.95, geom = 'polygon', 
                alpha = 0.2, aes(fill = time)) +
   theme_light() +
-  facet_grid(barcode~city, scales = 'free') +
+  facet_grid(barcode~city) +
   scale_colour_manual(values = seasons) +
   scale_fill_manual(values = seasons) +
   geom_text(data = eig.df, 
-            aes(x = -Inf, y = Inf, label = paste0(PCo1, ", ", PCo2)),
-            inherit.aes = FALSE,
-            hjust = -0.1, vjust = 35) +
+            aes(x = -1.8, y = -2.3, label = paste(PCo1, PCo2)),
+            inherit.aes = FALSE, hjust = 0, vjust = 0) +
   labs(colour = 'Season', fill = 'Season')
 
 ggsave('~/Desktop/ip34/urbanBio/out/pcoa_season.pdf',
@@ -109,14 +109,14 @@ plot_pcoa <- function(pcoa.ls, ellipse) {
     stat_ellipse(level = 0.95, geom = 'polygon', 
                  alpha = 0.2, aes(fill = !!sym(ellipse))) +
     theme_minimal() +
-    scale_colour_manual(values = seasons) +
-    scale_fill_manual(values = seasons) +
     labs(x = paste0('PCo1 (',eig[1],'% )'),
          y = paste0('PCo2 (',eig[2],'% )'))
 }
 
 # Example usage:
-plot_pcoa(pcoa_bray.ls$BACT, "time")
+plot_pcoa(pcoa_bray.ls$FUNG, "time") +
+  scale_colour_manual(values = seasons) +
+  scale_fill_manual(values = seasons)
 
 # Plot pcoas, save plots in list
 pcoa_bray_byCity.plot <- imap(
@@ -128,8 +128,6 @@ pcoa_bray_byCity.plot <- imap(
     )
   }
 )
-
-
 
 # Example for a single city
 ps.ls$FUNG %>% 
