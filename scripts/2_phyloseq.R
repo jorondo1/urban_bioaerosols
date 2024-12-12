@@ -6,7 +6,6 @@ source("https://github.com/jorondo1/misc_scripts/raw/refs/heads/main/tax_glom2.R
 # Functions ####
 #################
 
-
 # Keep samples with metadata
 subset_samples <- function(seqtab, samples) {
   seqtab[rownames(seqtab) %in% samples, ] %>% # subset
@@ -57,27 +56,24 @@ add_seq_depth <- function(seqtab, meta, dnaConc) {
     cbind(meta_subset, .) 
 }
 
-
 ##########
 # Setup ###
 ############
 
 urbanbio.path <- '~/Desktop/ip34/urbanBio'
+dna.path <- file.path(urbanbio.path,"data/metadata")
+
+# Metadata
 meta <- read_delim(file.path(urbanbio.path,"data/metadata/metadata_2022_samples_final.csv"))
 
-dna.path <- file.path(urbanbio.path,"data/metadata")
-dna_ITS <- Sys.glob(file.path(dna.path,'CERMO_*ITS*.xlsx')) %>% parse_CERMO_xlsx('FUNG')
-dna_16S <- Sys.glob(file.path(dna.path,'CERMO_*trnL*.xlsx')) %>% parse_CERMO_xlsx('PLAN')
-
-#meta %<>% mutate(sample_id = paste0("X", sample_id))
 meta_ctrl <- meta %>% 
-  filter(time =="None") %>% 
+  filter(time =="None" | control=='TRUE') %>% 
   mutate(sample_id = case_when(
     sample_id == "Contrôle-blanc-12h00-PM" ~ "Controle-blanc-12h00-PM",
     TRUE ~ sample_id))
 
 meta_samples <- meta %>% 
-  filter(time != "None")
+  filter(time != "None" & control == 'FALSE')
   
 sample.names <- meta_samples$sample_id
 ctrl.names <- meta_ctrl$sample_id
@@ -111,7 +107,7 @@ dim(seqtab_16S_sam); dim(seqtab_16S_sam_filt); dim(taxa_16S_sam)
 dim(seqtab_16S_ctrl); dim(seqtab_16S_ctrl_filt); dim(taxa_16S_ctrl)
 
 # Add sequencing effort and dna concentration to metadata
-dna_16S <- Sys.glob(file.path(dna.path,'CERMO_*16s*.xlsx')) %>% parse_CERMO_xlsx('BACT')
+dna_16S <- Sys.glob(file.path(dna.path,'CERMO_*16s*.xlsx')) %>% parse_CERMO_xlsx()
 meta_samples_16S <- add_seq_depth(seqtab_16S_sam_filt, meta_samples, dna_16S)
 meta_ctrl_16S <- add_seq_depth(seqtab_16S_ctrl_filt, meta_controls, dna_16S)
 
@@ -151,18 +147,18 @@ seqtab_ITS_ctrl_filt <- remove_ultra_rare(seqtab_ITS_ctrl, taxa_ITS_ctrl, 10)
 dim(seqtab_ITS_sam); dim(seqtab_ITS_sam_filt); dim(taxa_ITS_sam)
 dim(seqtab_ITS_ctrl); dim(seqtab_ITS_ctrl_filt); dim(taxa_ITS_ctrl)
 
-# Add sequencing effort to metadata
-meta_samples_ITS <- add_seq_depth(seqtab_ITS_sam_filt, meta_samples)
-meta_ctrl_ITS <- add_seq_depth(seqtab_ITS_ctrl_filt, meta_controls)
+# Add sequencing effort and dna concentration to metadata
+dna_ITS <- Sys.glob(file.path(dna.path,'CERMO_*ITS*.xlsx')) %>% parse_CERMO_xlsx
+meta_samples_ITS <- add_seq_depth(seqtab_ITS_sam_filt, meta_samples, dna_ITS)
+meta_ctrl_ITS <- add_seq_depth(seqtab_ITS_ctrl_filt, meta_controls, dna_ITS)
 
-# Phyloseq object
+# Phyloseq objects
 ps_ITS <- phyloseq(
   tax_table(taxa_ITS_sam),
   otu_table(seqtab_ITS_sam_filt, taxa_are_rows = FALSE),
   sample_data(meta_samples_ITS)
   )
 
-# Phyloseq object
 ps_ITS_ctrl <- phyloseq(
   tax_table(taxa_ITS_ctrl),
   otu_table(seqtab_ITS_ctrl_filt, taxa_are_rows = FALSE),
@@ -192,9 +188,10 @@ seqtab_trnL_ctrl_filt <- remove_ultra_rare(seqtab_trnL_ctrl, taxa_trnL_ctrl, 10)
 dim(seqtab_trnL_sam); dim(seqtab_trnL_sam_filt); dim(taxa_trnL_sam)
 dim(seqtab_trnL_ctrl); dim(seqtab_trnL_ctrl_filt); dim(taxa_trnL_ctrl)
 
-# Add sequencing effort to metadata
-meta_samples_trnL <- add_seq_depth(seqtab_trnL_sam_filt, meta_samples)
-meta_ctrl_trnL <- add_seq_depth(seqtab_trnL_ctrl_filt, meta_controls)
+# Add sequencing effort and dna concentration to metadata
+dna_trnL <- Sys.glob(file.path(dna.path,'CERMO_*trnL*.xlsx')) %>% parse_CERMO_xlsx
+meta_samples_trnL <- add_seq_depth(seqtab_trnL_sam_filt, meta_samples, dna_trnL)
+meta_ctrl_trnL <- add_seq_depth(seqtab_trnL_ctrl_filt, meta_controls, dna_trnL)
 
 # Phyloseq objects
 ps_trnL <- phyloseq(
