@@ -9,11 +9,12 @@ source('Desktop/ip34/urbanBio/scripts/myFunctions.R')
 tax_ranks <- c("Kingdom", "Phylum", "Class", "Order", "Family", "Genus")
 ps.ls <- readRDS('~/Desktop/ip34/urbanBio/data/ps.ls.rds')
 ps_ctrl.ls <- readRDS('~/Desktop/ip34/urbanBio/data/ps_ctrl.ls.rds')
+
 ###################################
 # Community composition overview ###
 #####################################
 
-which_taxrank <- 'Genus'
+which_taxrank <- 'Family'
 melted <- ps.ls$PLAN %>% 
   tax_glom(taxrank = which_taxrank) %>% 
   psmelt %>%
@@ -24,7 +25,7 @@ melted <- ps.ls$PLAN %>%
   ungroup
 
 # Compute top taxa and create "Others" category
-nTaxa <- 14
+nTaxa <- 10
 (top_taxa <- topTaxa(melted, which_taxrank, nTaxa))
 top_taxa_lvls <- top_taxa %>% 
   group_by(aggTaxo) %>% 
@@ -34,7 +35,7 @@ top_taxa_lvls <- top_taxa %>%
   setdiff(., c('Others', 'Unclassified')) %>% c('Others', 'Unclassified', .)
 
 # Plot !
-expanded_palette <- colorRampPalette(brewer.pal(12, 'Paired'))(nTaxa+2) 
+expanded_palette <- colorRampPalette(brewer.pal(12, 'Set3'))(nTaxa+2) 
 
 melted %>% 
   left_join(top_taxa %>% select(-relAb), by = which_taxrank) %>%
@@ -59,7 +60,7 @@ ggsave(paste0('~/Desktop/ip34/urbanBio/out/composition_',which_taxrank,'.pdf'),
 # Controls ###
 #####################################
 
-which_taxrank <- 'Family'
+which_taxrank <- 'Genus'
 
 control.melt <- imap(ps_ctrl.ls, function(ps, barcode) {
   ps %>% 
@@ -68,12 +69,13 @@ control.melt <- imap(ps_ctrl.ls, function(ps, barcode) {
     select(Sample, Abundance, site_id, !!sym(which_taxrank)) %>% 
     filter(Abundance != 0) %>% 
     group_by(Sample) %>% 
-    mutate(relAb = Abundance/sum(Abundance),
+    mutate(relAb = Abundance, # NOT RELATIVE ABUNDANCES HERE, keeping the var cause it's hardcoded in topTaxa
            barcode = barcode)
-}) %>% list_rbind
+}) %>% list_rbind %>% 
+  filter(!Sample %in% c('D8-3046', 'D8-3044', 'Couloir-D8-3225'))
 
 # Compute top taxa and create "Others" category
-nTaxa <- 14
+nTaxa <- 16
 (top_taxa <- topTaxa(control.melt, which_taxrank, nTaxa))
 top_taxa_lvls <- top_taxa %>% 
   group_by(aggTaxo) %>% 
@@ -87,17 +89,18 @@ expanded_palette <- colorRampPalette(brewer.pal(12, 'Paired'))(nTaxa+2)
 
 control.melt %>% 
   left_join(top_taxa %>% select(-relAb), by = which_taxrank) %>%
-  mutate(aggTaxo = factor(aggTaxo, levels = top_taxa_lvls)) %>% 
+  mutate(aggTaxo = factor(aggTaxo, levels = top_taxa_lvls),
+         barcode = recode(barcode, !!!barcodes)) %>% 
   ggplot(aes(y = Sample, x = Abundance, fill = aggTaxo)) +
   geom_col() +
   theme_light() +
-  facet_grid(~barcode, 
-            scales = 'free') +
+  facet_grid(~barcode, scales = 'free') +
   scale_fill_manual(values = expanded_palette) +
   labs(fill = which_taxrank) +
   theme(panel.grid = element_blank(),
         axis.ticks.x = element_blank(),
-        panel.border = element_blank())
+        panel.border = element_blank()) +
+  labs(x = 'Total number of sequences')
 
 ggsave(paste0('~/Desktop/ip34/urbanBio/out/composition_',which_taxrank,'_controls.pdf'),
        bg = 'white', width = 3600, height = 2000, 
