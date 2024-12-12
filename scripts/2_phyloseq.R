@@ -1,23 +1,11 @@
 library(pacman)
-p_load(tidyverse, phyloseq, magrittr)
-
+p_load(tidyverse, phyloseq, magrittr, decontam)
 source("https://github.com/jorondo1/misc_scripts/raw/refs/heads/main/tax_glom2.R")
 
-urbanbio.path <- '~/Desktop/ip34/urbanBio'
-meta <- read_delim(file.path(urbanbio.path,"data/metadata_2022_samples_final.csv"))
-#meta %<>% mutate(sample_id = paste0("X", sample_id))
-meta_ctrl <- meta %>% 
-  filter(time =="None") %>% 
-  mutate(sample_id = case_when(sample_id == "Contrôle-blanc-12h00-PM" ~ "Controle-blanc-12h00-PM",
-                                      TRUE ~ sample_id))
-meta_samples <- meta %>% 
-  filter(time != "None")
-  
-sample.names <- meta_samples$sample_id
-ctrl.names <- meta_ctrl$sample_id
 ###############
 # Functions ####
 #################
+
 
 # Keep samples with metadata
 subset_samples <- function(seqtab, samples) {
@@ -35,7 +23,7 @@ subset_asvs <- function(taxonomy, seqtab, min_seq) {
     rownames %>% 
     intersect(
       colnames(seqtab)[colSums(seqtab) >= min_seq]
-      ) # only keep asvs still present in seqtab
+    ) # only keep asvs still present in seqtab
   taxonomy[asvs, ] %>% as.matrix()
 }
 
@@ -44,16 +32,60 @@ remove_ultra_rare <- function(seqtab, taxonomy, n) {
   seqtab[,rownames(taxonomy)] %>% .[rowSums(.) > 10, ]
 }
 
-add_seq_depth <- function(seqtab, meta) {
-  meta_subset <- meta[rownames(seqtab),]
+# Parse DNA concentration xlsx files
+parse_CERMO_xlsx <- function(files) {
+  require(readxl, dplyr)
+  files %>% 
+    map(read_xlsx, range = "C13:D120", # CERMO-files specific
+        col_names = c('sample_id', 'concDNA')) %>% 
+    list_rbind %>% 
+    filter(!is.na(sample_id) 
+           & !concDNA %in% c('n/a', 'Too Low')) %>% 
+    mutate(sample_id = sub("_[^_]*$", "", sample_id))
+}
+
+# Add sequencing depth and dna concentration to sample metadata
+add_seq_depth <- function(seqtab, meta, dnaConc) {
+  require(tibble)
+  meta_subset <- meta %>% 
+    left_join(dnaConc, by = 'sample_id') %>% # adds seq depth column
+    column_to_rownames('sample_id') %>% 
+    .[rownames(seqtab),]
+  
   seqtab %>% rowSums %>% 
     data.frame(seqDepth = .) %>% 
     cbind(meta_subset, .) 
 }
 
+
+##########
+# Setup ###
+############
+
+urbanbio.path <- '~/Desktop/ip34/urbanBio'
+meta <- read_delim(file.path(urbanbio.path,"data/metadata/metadata_2022_samples_final.csv"))
+
+dna.path <- file.path(urbanbio.path,"data/metadata")
+dna_ITS <- Sys.glob(file.path(dna.path,'CERMO_*ITS*.xlsx')) %>% parse_CERMO_xlsx('FUNG')
+dna_16S <- Sys.glob(file.path(dna.path,'CERMO_*trnL*.xlsx')) %>% parse_CERMO_xlsx('PLAN')
+
+#meta %<>% mutate(sample_id = paste0("X", sample_id))
+meta_ctrl <- meta %>% 
+  filter(time =="None") %>% 
+  mutate(sample_id = case_when(
+    sample_id == "Contrôle-blanc-12h00-PM" ~ "Controle-blanc-12h00-PM",
+    TRUE ~ sample_id))
+
+meta_samples <- meta %>% 
+  filter(time != "None")
+  
+sample.names <- meta_samples$sample_id
+ctrl.names <- meta_ctrl$sample_id
+
 #########
 # 16S ####
 ###########
+
 path_16S <- file.path(urbanbio.path,'data/16S')
 taxa_16S_genus <- read_rds(file.path(path_16S, '4_taxonomy/taxonomy.RDS'))
 taxa_16S_species <- read_rds(file.path(path_16S, '4_taxonomy/taxonomy_species.RDS'))
@@ -78,9 +110,10 @@ seqtab_16S_ctrl_filt <- remove_ultra_rare(seqtab_16S_ctrl, taxa_16S_ctrl, 10)
 dim(seqtab_16S_sam); dim(seqtab_16S_sam_filt); dim(taxa_16S_sam)
 dim(seqtab_16S_ctrl); dim(seqtab_16S_ctrl_filt); dim(taxa_16S_ctrl)
 
-# Add sequencing effort to metadata
-meta_samples_16S <- add_seq_depth(seqtab_16S_sam_filt, meta_samples)
-meta_ctrl_16S <- add_seq_depth(seqtab_16S_ctrl_filt, meta_controls)
+# Add sequencing effort and dna concentration to metadata
+dna_16S <- Sys.glob(file.path(dna.path,'CERMO_*16s*.xlsx')) %>% parse_CERMO_xlsx('BACT')
+meta_samples_16S <- add_seq_depth(seqtab_16S_sam_filt, meta_samples, dna_16S)
+meta_ctrl_16S <- add_seq_depth(seqtab_16S_ctrl_filt, meta_controls, dna_16S)
 
 # Phyloseq object
 ps_16S <- phyloseq(
@@ -98,6 +131,7 @@ ps_16S_ctrl <- phyloseq(
 #########
 # ITS ####
 ###########
+
 path_ITS <- file.path(urbanbio.path,'data/ITS')
 taxa_ITS <- read_rds(file.path(path_ITS, '4_taxonomy/taxonomy.RDS'))
 seqtab_ITS <- read_rds(file.path(path_ITS, '4_taxonomy/seqtab.RDS'))
@@ -138,6 +172,7 @@ ps_ITS_ctrl <- phyloseq(
 ##########
 # trnL ####
 ############
+
 path_trnL <- file.path(urbanbio.path,'data/trnL')
 taxa_trnL <- read_rds(file.path(path_trnL, '4_taxonomy/taxonomy.RDS'))
 seqtab_trnL <- read_rds(file.path(path_trnL, '4_taxonomy/seqtab.RDS'))
@@ -153,6 +188,7 @@ taxa_trnL_ctrl <- subset_asvs(taxa_trnL, seqtab_trnL_ctrl, 100)
 # Remove near-empty samples
 seqtab_trnL_sam_filt <- remove_ultra_rare(seqtab_trnL_sam, taxa_trnL_sam, 10)
 seqtab_trnL_ctrl_filt <- remove_ultra_rare(seqtab_trnL_ctrl, taxa_trnL_ctrl, 10)
+
 dim(seqtab_trnL_sam); dim(seqtab_trnL_sam_filt); dim(taxa_trnL_sam)
 dim(seqtab_trnL_ctrl); dim(seqtab_trnL_ctrl_filt); dim(taxa_trnL_ctrl)
 
@@ -184,3 +220,19 @@ ps_ctrl.ls[["BACT"]] <- ps_16S_ctrl
 ps_ctrl.ls[["FUNG"]] <- ps_ITS_ctrl
 ps_ctrl.ls[["PLAN"]] <- ps_trnL_ctrl
 saveRDS(ps_ctrl.ls, file.path(urbanbio.path,'data/ps_ctrl.ls.rds'))
+
+# //DEV
+# Decontamination DECONTAM
+# https://benjjneb.github.io/decontam/vignettes/decontam_intro.html
+ps_16S_load <- ps_16S %>%
+  prune_samples(sample_data(.)$bacterial_load>0, .)
+contam_freq<- ps_16S_load %>% 
+  isContaminant(method = 'frequency', conc = 'bacterial_load')
+
+table(contam_freq$contaminant)
+head(which(contam_freq$contaminant))
+
+ps_16S_load %>% 
+  plot_frequency(., taxa_names(.)[c(516,1128)], conc="bacterial_load") + 
+  xlab("DNA Concentration (PicoGreen fluorescent intensity)")
+

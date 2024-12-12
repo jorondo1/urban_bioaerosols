@@ -8,23 +8,29 @@ urbanbio.path <- '~/Desktop/ip34/urbanBio'
 
 ps.ls <- read_rds(file.path(urbanbio.path, 'data/ps.ls.rds'))
 cities <- ps.ls$BACT@sam_data$city %>% unique
-seasons <- c('Spring' = 'springgreen3', 'Summer' = 'skyblue3', 'Fall' = 'violetred3')
+seasons <- c('Spring' = 'springgreen3', 'Summer' = 'skyblue3', 'Fall' = 'orange3')
 barcodes <- c('BACT' = 'Bacteria', 'FUNG' = 'Fungi', 'PLAN' = 'Plants')
 
+# Rarefied version
 ps_rare.ls <- lapply(ps.ls, function(ps) {
   set.seed(1234)
   prune_samples(sample_sums(ps) >= 2000, ps) %>% 
     rarefy_even_depth2(ncores = 7) 
 })
 
+# Compute pcoas for each dataset separately
 pcoa_bray.ls <- lapply(ps.ls, function(ps) {
   compute_pcoa(ps, dist = 'bray')
 })
 
-# Split dataset by city
-ps_byCity.ls <- list()
-ps_byCity.ls <- lapply(cities, function(city_name) {
-  lapply(ps.ls, function(ps) {
+pcoa_bray_rare.ls <- lapply(ps_rare.ls, function(ps) {
+  compute_pcoa(ps, dist = 'bray')
+})
+
+# Split every dataset by city
+ps_byCity.ls <- lapply(cities, function(city_name) { # 1st level: city
+  lapply(ps_rare.ls, function(ps) { # 2nd level: barcode
+    
     # Subset samples by city
     selected_samples <- rownames(sample_data(ps))[sample_data(ps)$city == city_name]
     
@@ -34,7 +40,7 @@ ps_byCity.ls <- lapply(cities, function(city_name) {
   })
 }); names(ps_byCity.ls) <- cities
 
-# Compute pcoa, save in same structure list
+# Compute pcoa for each city dataset
 pcoa_bray_byCity.ls <- imap(
   ps_byCity.ls, function(ps.ls, city) {
     imap(
@@ -44,18 +50,19 @@ pcoa_bray_byCity.ls <- imap(
 })
 
 # Mega dataframe with all results
+# Imap iterates over lists and creates a variable with the list name
 pcoa.df <- imap(pcoa_bray_byCity.ls, function(pcoa.ls, city) {
   imap(pcoa.ls, function(pcoa, barcode) {
     pcoa$metadata %>% 
       rownames_to_column('Sample') %>% 
       select(Sample, city, time, PCo1, PCo2) %>% 
-      mutate(barcode = barcode)
+      mutate(barcode = barcode) # add barcode name for each iteration
   }) %>% list_rbind
 }) %>% list_rbind %>% 
-  mutate(time = factor(time, levels = names(seasons)),
-         barcode = recode(barcode, !!!barcodes)) 
+  mutate(time = factor(time, levels = names(seasons)), 
+         barcode = recode(barcode, !!!barcodes)) # for plots
 
-# Eigenvalues df
+# Eigenvalues dataframe to annotate the plots
 eig.df <- imap(pcoa_bray_byCity.ls, function(pcoa.ls, city) {
   imap(pcoa.ls, function(pcoa, barcode) {
     pcoa$eig %>% 
@@ -65,10 +72,11 @@ eig.df <- imap(pcoa_bray_byCity.ls, function(pcoa.ls, city) {
       mutate(barcode = barcode,
              city = city) %>% 
       group_by(barcode, city) %>% 
-      mutate(Eig = 100*Eig/sum(Eig)) %>% 
-      filter(MDS %in% c('MDS1', 'MDS2'))
+      mutate(Eig = 100*Eig/sum(Eig)) %>% # Compute %eig
+      filter(MDS %in% c('MDS1', 'MDS2')) # keep the 1st two
     }) %>% list_rbind
 }) %>% list_rbind %>%
+  # Data formatting for the plot
   group_by(barcode, city, MDS) %>%
   mutate(barcode = recode(barcode, !!!barcodes),
          MDS = case_when(MDS == 'MDS1' ~ 'PCo1',
@@ -91,10 +99,9 @@ pcoa.df %>%
             inherit.aes = FALSE, hjust = 0, vjust = 0) +
   labs(colour = 'Season', fill = 'Season')
 
-ggsave('~/Desktop/ip34/urbanBio/out/pcoa_season.pdf',
+ggsave('~/Desktop/ip34/urbanBio/out/pcoa_season_rare.pdf',
        bg = 'white', width = 2200, height = 2000, 
        units = 'px', dpi = 220)
-
 
 # FUNCTION PLOT PCOA
 plot_pcoa <- function(pcoa.ls, ellipse) {
@@ -109,14 +116,27 @@ plot_pcoa <- function(pcoa.ls, ellipse) {
     stat_ellipse(level = 0.95, geom = 'polygon', 
                  alpha = 0.2, aes(fill = !!sym(ellipse))) +
     theme_minimal() +
-    labs(x = paste0('PCo1 (',eig[1],'% )'),
-         y = paste0('PCo2 (',eig[2],'% )'))
+    labs(x = paste0('PCo1 (',eig[1],'%)'),
+         y = paste0('PCo2 (',eig[2],'%)'))
 }
 
 # Example usage:
-plot_pcoa(pcoa_bray.ls$FUNG, "time") +
+plot_pcoa(pcoa_bray.ls$BACT, "time") +
   scale_colour_manual(values = seasons) +
   scale_fill_manual(values = seasons)
+
+pcoa_bray.ls$PLAN$metadata %>% 
+  #filter(seqDepth<20000) %>% 
+  ggplot(aes(x = PCo1, y = PCo2, colour = seqDepth)) +
+  geom_point(size = 2) +
+  theme_minimal()
+
+adonis2(pcoa_bray_rare.ls$PLAN$dist.mx~seqDepth,
+        permutations = 10000,
+        data = pcoa_bray_rare.ls$PLAN$metadata,
+        by = 'terms',
+        parallel = 8)
+
 
 # Plot pcoas, save plots in list
 pcoa_bray_byCity.plot <- imap(
