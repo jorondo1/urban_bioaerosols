@@ -18,7 +18,7 @@ fnFs <- sort(list.files(path_raw, pattern="_R1_001.fastq", full.names = TRUE))
 fnRs <- sort(list.files(path_raw, pattern="_R2_001.fastq", full.names = TRUE))
 
 (sample.names <- sapply(fnFs, get.sample.name, USE.NAMES = FALSE))
-write_delim(data.frame(sample.names), paste0('data/sample_names_',barcode,'.tsv'))
+# write_delim(data.frame(sample.names), paste0('data/sample_names_',barcode,'.tsv'))
 
 ########################
 # 1. N-FILTERING ########
@@ -42,8 +42,8 @@ out.N <- filterAndTrim(fnFs, fnFs.filtN,
 primer_occurence(fnFs.filtN, fnRs.filtN, FWD, REV)
 
 ### CUTADAPT
-#cutadapt_path <- "/Users/jorondo/miniconda3/envs/cutadapt/bin/cutadapt" # CHANGE ME to the cutadapt path on your machine
-cutadapt <- '/cvmfs/soft.mugqic/CentOS6/software/cutadapt/cutadapt-2.10/bin/cutadapt'
+#cutadapt <- "/Users/jorondo/miniconda3/envs/cutadapt/bin/cutadapt" 
+cutadapt <- '/cvmfs/soft.mugqic/CentOS6/software/cutadapt/cutadapt-2.10/bin/cutadapt' # CHANGE ME to the cutadapt path on your machine
 system2(cutadapt, args = "--version") # Run shell commands from R
 
 path.cut <- file.path(path_data, "2_cutadapt")

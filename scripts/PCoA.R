@@ -11,7 +11,7 @@ cities <- ps.ls$BACT@sam_data$city %>% unique
 seasons <- c('Spring' = 'springgreen3', 'Summer' = 'skyblue3', 'Fall' = 'orange3')
 barcodes <- c('BACT' = 'Bacteria', 'FUNG' = 'Fungi', 'PLAN' = 'Plants')
 
-# Rarefied version
+# Rarefy phyloseq tables
 ps_rare.ls <- lapply(ps.ls, function(ps) {
   set.seed(1234)
   prune_samples(sample_sums(ps) >= 2000, ps) %>% 

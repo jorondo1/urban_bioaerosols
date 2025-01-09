@@ -1,5 +1,5 @@
 library(pacman)
-p_load(tidyverse, phyloseq, magrittr, decontam)
+p_load(tidyverse, phyloseq, magrittr, decontam, Biostrings)
 source("https://github.com/jorondo1/misc_scripts/raw/refs/heads/main/tax_glom2.R")
 
 ###############
@@ -54,6 +54,15 @@ add_seq_depth <- function(seqtab, meta, dnaConc) {
   seqtab %>% rowSums %>% 
     data.frame(seqDepth = .) %>% 
     cbind(meta_subset, .) 
+}
+
+# Export ASVs as fasta
+asv_to_fasta <- function(seqtab, path.out) {
+  require(Biostrings)
+  seqs <- colnames(seqtab)
+  fasta <- DNAStringSet(seqs)
+  names(fasta) <- paste0("ASV_", seq_along(seqs))
+  writeXStringSet(fasta, path.out)
 }
 
 ##########
@@ -124,6 +133,8 @@ ps_16S_ctrl <- phyloseq(
   sample_data(meta_ctrl_16S)
 )
 
+# Export asvs as fasta
+asv_to_fasta(seqtab_16S_sam_filt, file.path(path_16S, '4_taxonomy/asv.fa'))
 #########
 # ITS ####
 ###########
@@ -165,6 +176,9 @@ ps_ITS_ctrl <- phyloseq(
   sample_data(meta_ctrl_ITS)
 )
 
+# Export asvs as fasta
+asv_to_fasta(seqtab_ITS_sam_filt, file.path(path_ITS, '4_taxonomy/asv.fa'))
+
 ##########
 # trnL ####
 ############
@@ -205,6 +219,9 @@ ps_trnL_ctrl <- phyloseq(
   otu_table(seqtab_trnL_ctrl_filt, taxa_are_rows = FALSE),
   sample_data(meta_ctrl_trnL)
 )
+
+# Export asvs as fasta
+asv_to_fasta(seqtab_trnL_sam_filt, file.path(path_trnL, '4_taxonomy/asv.fa'))
 
 ps.ls <- list()
 ps.ls[["BACT"]] <- ps_16S

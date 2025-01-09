@@ -1,3 +1,5 @@
+taxRanks <- c("Kingdom", "Phylum", "Class", "Order", "Family", "Genus", "Species_16S")
+
 ##########################
 ### PROCESSING DADA2 ####
 ########################
@@ -77,6 +79,12 @@ track_dada <- function(out.N, out,
            prop_chimera = (merged-nonchim)/merged) %>% 
     pivot_longer(where(is.numeric), names_to = 'variable', values_to = 'values')
 }
+
+barcode_mapping <- c(
+  '16S' = 'BACT',
+  'trnL' = 'PLAN',
+  'ITS' = 'FUNG'
+)
 
 
 ###############
