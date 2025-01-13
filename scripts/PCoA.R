@@ -10,6 +10,8 @@ ps.ls <- read_rds(file.path(urbanbio.path, 'data/ps.ls.rds'))
 cities <- ps.ls$BACT@sam_data$city %>% unique
 seasons <- c('Spring' = 'springgreen3', 'Summer' = 'skyblue3', 'Fall' = 'orange3')
 barcodes <- c('BACT' = 'Bacteria', 'FUNG' = 'Fungi', 'PLAN' = 'Plants')
+dist <- 'bray'
+
 
 # Rarefy phyloseq tables
 ps_rare.ls <- lapply(ps.ls, function(ps) {
@@ -20,11 +22,11 @@ ps_rare.ls <- lapply(ps.ls, function(ps) {
 
 # Compute pcoas for each dataset separately
 pcoa_bray.ls <- lapply(ps.ls, function(ps) {
-  compute_pcoa(ps, dist = 'bray')
+  compute_pcoa(ps, dist = dist)
 })
 
 pcoa_bray_rare.ls <- lapply(ps_rare.ls, function(ps) {
-  compute_pcoa(ps, dist = 'bray')
+  compute_pcoa(ps, dist = dist)
 })
 
 # Split every dataset by city
@@ -45,7 +47,7 @@ pcoa_bray_byCity.ls <- imap(
   ps_byCity.ls, function(ps.ls, city) {
     imap(
       ps.ls, function(ps, barcode) {
-        compute_pcoa(ps, 'bray')
+        compute_pcoa(ps, dist)
   })
 })
 
@@ -153,7 +155,7 @@ pcoa_bray_byCity.plot <- imap(
 ps.ls$FUNG %>% 
   subset_samples(city == "Québec") %>% 
   prune_taxa(taxa_sums(.) >0, .) %>% 
-  compute_pcoa(dist = 'bray') %$% metadata %>% 
+  compute_pcoa(dist = dist) %$% metadata %>% 
   ggplot(aes(x = PCo1, y = PCo2, colour = time)) +
   geom_point(size = 2) +
   stat_ellipse(level = 0.95, geom = 'polygon', alpha = 0.2, aes(fill = time)) +
