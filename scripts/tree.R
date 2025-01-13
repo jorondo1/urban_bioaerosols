@@ -4,7 +4,7 @@ urbanbio.path <- '~/Desktop/ip34/urbanBio'
 source(file.path(urbanbio.path, 'scripts/myFunctions.R'))
 ps.ls <- read_rds(file.path(urbanbio.path, 'data/ps.ls.rds'))
 
-barcode <- 'trnL'
+barcode <- '16S'
 barcode.path <- file.path(urbanbio.path,'data',barcode)
 ps <- ps.ls[[barcode_mapping[barcode]]]
 
@@ -104,6 +104,8 @@ ps_mASV <- phyloseq(
   phy_tree(unique_tree)
 )
 
+saveRDS(ps_mASV, file.path(urbanbio.path, 'data/ps_mASV.rds'), compress = 'gzip', )
+
 # Load the Newick tree
 # tree_ITS <- read.tree(file.path(urbanbio.path, 'data/ITS/5_tree/final_tree.raxml.support'))
 # plot(tree)
@@ -143,7 +145,7 @@ tree_plot <- tree_gg +
   geom_tippoint(aes(color = Taxrank), size = 1) + # Color tip nodes by Taxrank
   theme_tree2() + # Clean tree theme
   theme(legend.position = "right") + # Add legend for Taxrank
-  scale_color_manual(values = paletteer_d("ggsci::default_ucscgb")) +
+  scale_color_manual(values = expanded_palette) +
   geom_tiplab(aes(label = NA)) +# Suppress tip labels
   labs(color = which_taxrank)
 
