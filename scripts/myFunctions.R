@@ -5,7 +5,7 @@ taxRanks <- c("Kingdom", "Phylum", "Class", "Order", "Family", "Genus", "Species
 ########################
 
 # List and write out sample names
-get.sample.name <- function(fname) {
+get.sample.name <- function(fname, pattern) {
   base <- tools::file_path_sans_ext(basename(fname))
   sub("(_.*)?(-[^-]+)$", "", base)
 }
@@ -14,10 +14,12 @@ get.sample.name <- function(fname) {
 allOrients <- function(primer) {
   # Create all orientations of the input sequence
   require(Biostrings)
-  dnaTrnL <- DNAString(primer)  # The Biostrings works w/ DNAString objects rather than character vectors
-  orientsTrnL <- c(Forward = dnaTrnL, Complement = Biostrings::complement(dnaTrnL), Reverse = Biostrings::reverse(dnaTrnL), 
-                   RevComp = Biostrings::reverseComplement(dnaTrnL))
-  return(sapply(orientsTrnL, toString))  # Convert back to character vector
+  dna_string <- DNAString(primer)  # The Biostrings works w/ DNAString objects rather than character vectors
+  orients <- c(Forward = dna_string, 
+                   Complement = Biostrings::complement(dna_string), 
+                   Reverse = Biostrings::reverse(dna_string), 
+                   RevComp = Biostrings::reverseComplement(dna_string))
+  return(sapply(orients, toString))  # Convert back to character vector
 }
 
 ### Count the number of times the primers appear in the forward and reverse read, 
