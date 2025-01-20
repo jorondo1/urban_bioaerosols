@@ -54,12 +54,15 @@ run_cutadapt <- function(i) {
 }
 
 ### READS TRACKING
+
+### READS TRACKING
 getN <- function(x) sum(getUniques(x))
 
 track_dada <- function(out.N, out,
                        dadaFs, dadaRs,
                        mergers,
                        seqtab.nochim) {
+  require(dplyr, tibble, tidyr)
   
   track <- cbind(out.N, out[,2], 
                  sapply(dadaFs, getN), 
@@ -74,13 +77,14 @@ track_dada <- function(out.N, out,
     rownames_to_column('Sample') %>% 
     tibble %>% 
     filter(filtered>10) %>% 
-    mutate(lost_Ns = (input-removeNs)/input,
-           lost_filt = (removeNs-filtered)/removeNs,
-           lost_noise = (filtered-denoisedR)/filtered,
-           lost_merged = (denoisedR-merged)/denoisedR, # Proportion of reads lost to merging
-           prop_chimera = (merged-nonchim)/merged) %>% 
+    mutate(N_filtering = (input-removeNs)/input,
+           Quality_filtering = (removeNs-filtered)/removeNs,
+           Denoising = (filtered-denoisedR)/filtered,
+           Reads_merging = (denoisedR-merged)/denoisedR, # Proportion of reads lost to merging
+           Bimera_removal = (merged-nonchim)/merged) %>% 
     pivot_longer(where(is.numeric), names_to = 'variable', values_to = 'values')
 }
+
 
 barcode_mapping <- c(
   '16S' = 'BACT',
@@ -93,14 +97,21 @@ barcode_mapping <- c(
 ### PLOTS ######
 #################
 
+### Plot track changes 
 plot_track_change <- function(track_change) {
-  change_vars <- c('prop_chimera', 'lost_merged', 'lost_noise', 'lost_filt', 'lost_Ns')
+  require(dplyr, ggplot2)
+  
+  change_vars <- c('Bimera_removal', 'Reads_merging', 'Denoising', 'Quality_filtering', 'N_filtering')
+  
   track_change %>% 
     filter(variable %in% change_vars) %>% 
     mutate(variable = factor(variable, level = change_vars)) %>% 
     ggplot(aes(y = variable, x = values)) +
-    geom_jitter() + theme_minimal() # overall very low chimeric rate
+    geom_jitter() + theme_minimal() +
+    labs(title = 'Proportion of reads lost at a specific pipeline step.')
 }
+
+# Find Top taxa for community overview barplot
 
 topTaxa <- function(psmelt, taxLvl, topN) {
   psmelt %>% 
