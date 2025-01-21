@@ -88,9 +88,10 @@ names(filtRs) <- sample.names
 out <- filterAndTrim(cutFs, filtFs, cutRs, filtRs, 
                      maxEE = c(2, 2), 
                      truncQ = 2,
-                     minLen = 100, 
+                     minLen = 100,
                      rm.phix = TRUE, 
-                     compress = TRUE, multithread = ncores) 
+                     compress = TRUE, 
+                     multithread = ncores) 
 plotQualityProfile(filtFs[10:21])
 plotQualityProfile(filtRs[10:21])
 
