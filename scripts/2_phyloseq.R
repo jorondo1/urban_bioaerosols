@@ -12,17 +12,20 @@ subset_samples <- function(seqtab, samples) {
     .[, colSums(.) > 0] # Remove ASVs with no hits
 }
 
-# ASVs classified at the kingdom level and present in seqtab
+# Keep ASVs classified at the kingdom level and with
+# at least min_seq sequences across the table (Improvement : could be a % ?)
 subset_asvs <- function(taxonomy, seqtab, min_seq) {
   if (!is.data.frame(taxonomy)) {
-    taxonomy <- as.data.frame(taxonomy)
+    taxonomy <- as.data.frame(taxonomy) # subset needs the input to be a df
   }
   
-  asvs <- subset(taxonomy, Kingdom != "Unclassified") %>% # subset needs the input to be a df
-    rownames %>% 
-    intersect(
-      colnames(seqtab)[colSums(seqtab) >= min_seq]
-    ) # only keep asvs still present in seqtab
+  # Define ASV subset
+  asvs <- subset(taxonomy, Kingdom != "Unclassified") %>% # At least Kingdom-level classification
+    rownames %>% # rownames are ASVs
+    intersect( # intersect with ASVs having at least min_seq sequences overall
+      colnames(seqtab)[colSums(seqtab) >= min_seq] 
+    ) 
+  # Subset the tax table, output as matrix for phyloseq handoff
   taxonomy[asvs, ] %>% as.matrix()
 }
 
