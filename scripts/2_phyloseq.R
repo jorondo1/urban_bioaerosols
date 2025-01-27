@@ -29,9 +29,9 @@ subset_asvs <- function(taxonomy, seqtab, min_seq) {
   taxonomy[asvs, ] %>% as.matrix()
 }
 
-# Remove samples with fewer than n sequences once taxa removed
-remove_ultra_rare <- function(seqtab, taxonomy, n) {
-  seqtab[,rownames(taxonomy)] %>% .[rowSums(.) > 10, ]
+# Remove samples with fewer than n (default 10) sequences once taxa removed
+remove_ultra_rare <- function(seqtab, taxonomy, n = 100) {
+  seqtab[,rownames(taxonomy)] %>% .[rowSums(.) > n, ]
 }
 
 # Parse DNA concentration xlsx files
