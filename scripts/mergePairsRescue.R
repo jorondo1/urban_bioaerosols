@@ -1,4 +1,4 @@
-# Shamelessly stolen from https://github.com/h3abionet/TADA/blob/dev/dsl1/bin/VariableLenMergePairs-Pooled.R
+# Shamelessly stolen from https://github.com/h3abionet/TADA/blob/20f0255953606deb715b2cc21b752b4fc50c6e20/bin/VariableLenMergePairs-Pooled.R
 
 # This is a modified copy of the default mergePairs() method; this can
 # retain unmerged reads in case they don't overlap (this happens with some
