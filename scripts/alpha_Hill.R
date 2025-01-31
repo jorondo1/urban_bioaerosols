@@ -36,9 +36,9 @@ div_Hill <- imap(ps_rare.ls, function(ps, barcode) {
 for (bc in barcode_mapping) {
   p <- div_Hill %>% 
     filter(barcode == bc) %>% 
-    ggplot(aes(x = city, y = Effective_taxa, colour = city)) +
+    ggplot(aes(x = time, y = Effective_taxa, colour = time)) +
     geom_boxplot() +
-    facet_grid(time~Index, scales = 'free_y') +
+    facet_grid(city~Index, scales = 'free_y') +
     theme_light() +
     theme(axis.title.x = element_blank(),
           axis.text.x = element_blank(),

@@ -12,7 +12,6 @@ seasons <- c('Spring' = 'springgreen3', 'Summer' = 'skyblue3', 'Fall' = 'orange3
 barcodes <- c('BACT' = 'Bacteria', 'FUNG' = 'Fungi', 'PLAN' = 'Plants')
 dist <- 'bray'
 
-
 # Rarefy phyloseq tables
 ps_rare.ls <- lapply(ps.ls, function(ps) {
   set.seed(1234)
@@ -31,7 +30,7 @@ pcoa_bray_rare.ls <- lapply(ps_rare.ls, function(ps) {
 
 # Split every dataset by city
 ps_byCity.ls <- lapply(cities, function(city_name) { # 1st level: city
-  lapply(ps.ls, function(ps) { # 2nd level: barcode
+  lapply(ps_rare.ls, function(ps) { # 2nd level: barcode
     
     # Subset samples by city
     selected_samples <- rownames(sample_data(ps))[sample_data(ps)$city == city_name]
@@ -156,9 +155,9 @@ perm_out %<>%
 
 # Let's make a cool plot
 perm_out %>% 
-  ggplot(aes(x = Barcode, y = R2, fill = variable)) +
+  ggplot(aes(x = City, y = R2, fill = variable)) +
   geom_col() +
-  facet_grid(~City) +
+  facet_grid(~Barcode) +
   scale_fill_brewer(palette = 'Paired') +
   theme_light()
 
