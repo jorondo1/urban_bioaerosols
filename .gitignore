@@ -28,3 +28,8 @@ radEmu_scores*
 Maaslin2/
 
 .Rproj.user
+
+# tree files
+dist_mx.tsv
+*.mldist
+*.nex
