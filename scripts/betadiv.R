@@ -3,28 +3,23 @@ p_load(tidyverse, magrittr, purrr, patchwork, grid, MetBrewer)
 source("https://github.com/jorondo1/misc_scripts/raw/refs/heads/main/community_functions.R")
 source("https://github.com/jorondo1/misc_scripts/raw/refs/heads/main/tax_glom2.R")
 source("https://github.com/jorondo1/misc_scripts/raw/refs/heads/main/rarefy_even_depth2.R")
-
+source("https://raw.githubusercontent.com/knights-lab/LMdist/refs/heads/main/lib/lmdist_source.r")
 urbanbio.path <- '~/Desktop/ip34/urbanBio'
 
 ps.ls <- read_rds(file.path(urbanbio.path, 'data/ps.ls.rds'))
+ps_rare.ls <- read_rds(file.path(urbanbio.path, 'data/ps_rare.ls.rds'))
+
 cities <- ps.ls$BACT@sam_data$city %>% unique
 seasons <- c('Spring' = 'springgreen3', 'Summer' = 'skyblue3', 'Fall' = 'orange3')
 barcodes <- c('BACT' = 'Bacteria', 'FUNG' = 'Fungi', 'PLAN' = 'Plants')
 dist <- 'bray'
 
-# Rarefy phyloseq tables
-ps_rare.ls <- lapply(ps.ls, function(ps) {
-  set.seed(1234)
-  prune_samples(sample_sums(ps) >= 2000, ps) %>% 
-    rarefy_even_depth2(ncores = 7) 
-})
-
 # Compute pcoas for each dataset separately
-pcoa_bray.ls <- lapply(ps.ls, function(ps) {
+pcoa_bray.ls <- mclapply(ps.ls, function(ps) {
   compute_pcoa(ps, dist = dist)
 })
 
-pcoa_bray_rare.ls <- lapply(ps_rare.ls, function(ps) {
+pcoa_bray_rare.ls <- mclapply(ps_rare.ls, function(ps) {
   compute_pcoa(ps, dist = dist)
 })
 
@@ -93,8 +88,8 @@ pcoa.df %>%
                alpha = 0.2, aes(fill = time)) +
   theme_light() +
   facet_grid(barcode~city) +
-  scale_colour_manual(values = seasons) +
-  scale_fill_manual(values = seasons) +
+  scale_colour_manual(values = time) +
+  scale_fill_manual(values = time) +
   geom_text(data = eig.df, 
             aes(x = -1.8, y = -2.3, label = paste(PCo1, PCo2)),
             inherit.aes = FALSE, hjust = 0, vjust = 0) +
@@ -143,10 +138,11 @@ iterate_permanova <- function(pcoa.ls, vars, partType) {
   }) %>% list_rbind
 }
 
-model_vars <- c('date', 'median_income', 'population_density',
+model_vars <- c('date','median_income', 'population_density',
                 'mean_temperature' , 'mean_relative_humidity' , 
-                'vegetation_index_NDVI_landsat', 'mean_wind_speed', 
-                'concDNA')
+                'vegetation_index_NDVI_landsat', 'mean_wind_speed',
+                'precip',
+                'concDNA' )
 
 perm_out <- iterate_permanova(pcoa_bray_byCity.ls, model_vars, partType = 'terms') 
 
@@ -158,14 +154,23 @@ perm_out %>%
   ggplot(aes(x = City, y = R2, fill = variable)) +
   geom_col() +
   facet_grid(~Barcode) +
-  scale_fill_brewer(palette = 'Paired') +
+  scale_fill_brewer(palette = 'Set3') +
   theme_light()
 
 ggsave('~/Desktop/ip34/urbanBio/out/perMANOVA_terms.pdf',
        bg = 'white', width = 2400, height = 2000, 
-       units = 'px', dpi = 220)
+       units = 'px', dpi = 300)
 
 
+# Testing models
+test_perm <- adonis2(
+  pcoa_bray.ls$BACT$dist.mx ~ median_income*vegetation_index_NDVI_landsat + city + mean_temperature + precip + mean_relative_humidity,
+  data = pcoa_bray.ls$BACT$metadata,
+  by = 'terms'); test_perm
+
+pcoa_bray_rare.ls$BACT$metadata %>% 
+  ggplot(aes(x = PCo1, y = PCo2, colour = temp_moy)) + 
+  geom_point() 
 # 
 # test.pcoa <- pcoa_bray_byCity.ls$Montréal$FUNG
 # 
