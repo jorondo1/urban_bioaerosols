@@ -1,38 +1,16 @@
 library(pacman)
-p_load(tidyverse, phyloseq, magrittr, decontam, Biostrings, readxl, decontam)
-source("https://github.com/jorondo1/misc_scripts/raw/refs/heads/main/tax_glom2.R")
+p_load(tidyverse, phyloseq, magrittr, decontam, Biostrings,
+       readxl, decontam)
 
 ###############
 # Functions ####
 #################
 
-# Keep samples with metadata
-subset_samples <- function(seqtab, samples) {
-  seqtab[rownames(seqtab) %in% samples, ] %>% # subset
-    .[, colSums(.) > 0] # Remove ASVs with no hits
-}
+# Tax glom modified
+source("https://github.com/jorondo1/misc_scripts/raw/refs/heads/main/tax_glom2.R")
 
-# Keep ASVs classified at the kingdom level and with
-# at least min_seq sequences across the table (Improvement : could be a % ?)
-subset_asvs <- function(taxonomy, seqtab, min_seq) {
-  if (!is.data.frame(taxonomy)) {
-    taxonomy <- as.data.frame(taxonomy) # subset needs the input to be a df
-  }
-  
-  # Define ASV subset
-  asvs <- subset(taxonomy, Kingdom != "Unclassified") %>% # At least Kingdom-level classification
-    rownames %>% # rownames are ASVs
-    intersect( # intersect with ASVs having at least min_seq sequences overall
-      colnames(seqtab)[colSums(seqtab) >= min_seq] 
-    ) 
-  # Subset the tax table, output as matrix for phyloseq handoff
-  taxonomy[asvs, ] %>% as.matrix()
-}
-
-# Remove samples with fewer than n (default 10) sequences once taxa removed
-remove_ultra_rare <- function(seqtab, taxonomy, n = 100) {
-  seqtab[,rownames(taxonomy)] %>% .[rowSums(.) > n, ]
-}
+# Phyloseq prep functions
+source("https://github.com/jorondo1/misc_scripts/raw/refs/heads/main/phyloseq_functions.R")
 
 # Parse DNA concentration xlsx files
 parse_CERMO_xlsx <- function(files) {
@@ -58,15 +36,6 @@ add_seq_depth <- function(seqtab, meta, dnaConc) {
   seqtab %>% rowSums %>% 
     data.frame(seqDepth = .) %>% 
     cbind(meta_subset, .) 
-}
-
-# Export ASV sequences as fasta
-asv_to_fasta <- function(seqtab, path.out) {
-  require(Biostrings)
-  seqs <- colnames(seqtab)
-  fasta <- DNAStringSet(seqs)
-  names(fasta) <- paste0("ASV_", seq_along(seqs))
-  writeXStringSet(fasta, path.out)
 }
 
 ### Decontamination DECONTAM
@@ -123,10 +92,21 @@ dna.path <- file.path(urbanbio.path,"data/metadata")
 
 # Metadata
 meta <- read_delim(file.path(urbanbio.path,"data/metadata/metadata_2022_samples_final.csv")) 
-
+meteo <- Sys.glob(file.path(urbanbio.path,"data/metadata/meteo_*.csv")) %>% 
+  map_dfr(read_delim, locale = locale(decimal_mark = ","),show_col_types = FALSE) %>% 
+  mutate(city = case_when(
+    `Nom de la Station` == 'BEAUPORT' ~ 'Québec',
+    `Nom de la Station` == 'SHERBROOKE' ~ 'Sherbrooke',
+    `Nom de la Station` == 'MCTAVISH' ~ 'Montréal'
+  )) %>% 
+  transmute(city = city,
+            temp_moy = `Temp moy.(°C)`,
+            precip = `Précip. tot. (mm)`,
+            date = `Date/Heure`)
 meta %<>%
   mutate(across(where(is.character), as.factor)) %>% 
-  select(-bacterial_load, -log_bacterial_load, fungal_load, log_fungal_load)
+  select(-bacterial_load, -log_bacterial_load, fungal_load, log_fungal_load) %>% 
+  left_join(meteo, by = c('date', 'city')) # Add precipitations & temperature data
 
 meta_ctrl <- meta %>% 
   filter(time =="None" | control=='TRUE') %>% 
@@ -163,6 +143,10 @@ taxa_16S_sam <- subset_asvs(taxa_16S, seqtab_16S_sam, 10)
 taxa_16S_ctrl <- subset_asvs(taxa_16S, seqtab_16S_ctrl, 10) 
 
 seqtab_16S_sam %>% rowSums %>% sort %>% plot
+
+## Check distribution of sample depth
+hist(rowSums(seqtab_16S_sam), breaks = 100, xlab = "sample size", xaxt = "n")
+axis(1, at = pretty(rowSums(seqtab_16S_sam), n = 40))  # adding ticks 
 
 # Remove near-empty samples
 seqtab_16S_sam_filt <- remove_ultra_rare(seqtab_16S_sam, taxa_16S_sam, 10000)
@@ -214,9 +198,13 @@ taxa_ITS_ctrl <- subset_asvs(taxa_ITS, seqtab_ITS_ctrl, 10)
 seqtab_ITS_sam %>% rowSums %>% sort %>% data.frame(Y=.) %>% 
   ggplot(aes(x = Y)) + geom_histogram(bins=100)
 
+## Check distribution of sample depth
+hist(rowSums(seqtab_ITS_sam), breaks = 100, xlab = "sample size", xaxt = "n")
+axis(1, at = pretty(rowSums(seqtab_ITS_sam), n = 40))  # adding ticks 
+
 # Remove near-empty samples
-seqtab_ITS_sam_filt <- remove_ultra_rare(seqtab_ITS_sam, taxa_ITS_sam, 1400)
-seqtab_ITS_ctrl_filt <- remove_ultra_rare(seqtab_ITS_ctrl, taxa_ITS_ctrl, 1400)
+seqtab_ITS_sam_filt <- remove_ultra_rare(seqtab_ITS_sam, taxa_ITS_sam, 1200)
+seqtab_ITS_ctrl_filt <- remove_ultra_rare(seqtab_ITS_ctrl, taxa_ITS_ctrl, 1200)
 
 dim(seqtab_ITS_sam); dim(seqtab_ITS_sam_filt); dim(taxa_ITS_sam)
 dim(seqtab_ITS_ctrl); dim(seqtab_ITS_ctrl_filt); dim(taxa_ITS_ctrl)
@@ -266,8 +254,8 @@ seqtab_trnL_sam %>% rowSums %>% sort %>% data.frame(Y=.) %>%
   ggplot(aes(x = Y)) + geom_histogram(bins=100)
 
 # Remove near-empty samples
-seqtab_trnL_sam_filt <- remove_ultra_rare(seqtab_trnL_sam, taxa_trnL_sam, 2500)
-seqtab_trnL_ctrl_filt <- remove_ultra_rare(seqtab_trnL_ctrl, taxa_trnL_ctrl, 2500)
+seqtab_trnL_sam_filt <- remove_ultra_rare(seqtab_trnL_sam, taxa_trnL_sam, 2000)
+seqtab_trnL_ctrl_filt <- remove_ultra_rare(seqtab_trnL_ctrl, taxa_trnL_ctrl, 2000)
 
 dim(seqtab_trnL_sam); dim(seqtab_trnL_sam_filt); dim(taxa_trnL_sam)
 dim(seqtab_trnL_ctrl); dim(seqtab_trnL_ctrl_filt); dim(taxa_trnL_ctrl)
@@ -303,13 +291,45 @@ ps.ls[["FUNG"]] <- ps_ITS
 ps.ls[["PLAN"]] <- ps_trnL
 saveRDS(ps.ls, file.path(urbanbio.path,'data/ps.ls.rds'))
 
+# Rarefy phyloseq tables
+ps_rare.ls <- lapply(ps.ls, function(ps) {
+  set.seed(1234)
+  prune_samples(sample_sums(ps) >= 2000, ps) %>% 
+    rarefy_even_depth2(ncores = 7) 
+})
+write_rds(ps_rare.ls, file.path(urbanbio.path, 'data/ps_rare.ls.rds'),
+          compress = 'gz')
+
 ps_ctrl.ls <- list()
 ps_ctrl.ls[["BACT"]] <- ps_16S_ctrl
 ps_ctrl.ls[["FUNG"]] <- ps_ITS_ctrl
 ps_ctrl.ls[["PLAN"]] <- ps_trnL_ctrl
 saveRDS(ps_ctrl.ls, file.path(urbanbio.path,'data/ps_ctrl.ls.rds'))
 
+# Stats table
+
+imap(ps.ls, function(ps, barcode) {
+  asv <- ps %>% otu_table
+  seq_per_sam <- rowSums(asv)
+  asv_per_sam <- colSums(asv>0)
+  tibble(
+    Dataset = barcode,
+    Seq = sum(asv),
+    ASVs = ncol(asv),
+    N = nrow(asv),
+    Mean_seq = mean(seq_per_sam),
+    Min_seq = min(seq_per_sam),
+    Max_seq = max(seq_per_sam),
+    SD_seq = sd(seq_per_sam),
+    Mean_asv = mean(asv_per_sam),
+    Min_asv = min(asv_per_sam),
+    Max_asv = max(asv_per_sam),
+    SD_asv = sd(asv_per_sam)
+  )
+}) %>% list_rbind
+## Not sure why min is 0 ??
 # //DEV
+
 
 
 
