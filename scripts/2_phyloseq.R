@@ -306,28 +306,71 @@ ps_ctrl.ls[["FUNG"]] <- ps_ITS_ctrl
 ps_ctrl.ls[["PLAN"]] <- ps_trnL_ctrl
 saveRDS(ps_ctrl.ls, file.path(urbanbio.path,'data/ps_ctrl.ls.rds'))
 
-# Stats table
+####################
+# Stats table #######
+######################
+p_load(knitr, kableExtra, webshot2)
 
-imap(ps.ls, function(ps, barcode) {
-  asv <- ps %>% otu_table
+# Prep data
+ps.stats <- imap(ps.ls, function(ps, barcode) {
+  asv <- ps %>% otu_table 
   seq_per_sam <- rowSums(asv)
-  asv_per_sam <- colSums(asv>0)
+  asv_per_sam <- rowSums(asv>0)
+  asv_prevalence <- colSums(asv>0)
+  num_sam <- nrow(asv)
   tibble(
     Dataset = barcode,
     Seq = sum(asv),
     ASVs = ncol(asv),
-    N = nrow(asv),
+    N = num_sam,
     Mean_seq = mean(seq_per_sam),
+    SD_seq = sd(seq_per_sam),
     Min_seq = min(seq_per_sam),
     Max_seq = max(seq_per_sam),
-    SD_seq = sd(seq_per_sam),
     Mean_asv = mean(asv_per_sam),
+    SD_asv = sd(asv_per_sam),
     Min_asv = min(asv_per_sam),
     Max_asv = max(asv_per_sam),
-    SD_asv = sd(asv_per_sam)
+    Mean_prev = mean(asv_prevalence),
+    SD_prev = sd(asv_prevalence),
+    Min_prev = min(asv_prevalence),
+    Max_prev = max(asv_prevalence)
   )
 }) %>% list_rbind
-## Not sure why min is 0 ??
+
+ps.stats %<>%
+  mutate(across(where(is.numeric), ~ format(round(., 0),big.mark=',')))
+
+ps.stats.k <- kable(ps.stats, "html", align = "l") %>%
+  kable_styling(full_width = FALSE) %>%
+  add_header_above(c(
+    "Dataset" = 1, # specifies how many columns are covered
+    "Sequences" = 1,
+    "ASVs" = 1,
+    "Samples" = 1,
+    "Mean ± SD" = 2, 
+    "[Min, Max]" = 2, 
+    "Mean ± SD" = 2, 
+    "[Min, Max]" = 2, 
+    "Mean ± SD" = 2, 
+    "[Min, Max]" = 2
+  )) %>%  
+  add_header_above(c(
+    " " = 4, # no header for the first 4 columns
+    "Sequences per sample" = 4, 
+    "ASVs per sample" = 4, 
+    "ASV prevalence" = 4
+  )) %>%
+  row_spec(0, extra_css = "display: none;") ; ps.stats.k # Hide the original column names
+
+html_file <- file.path(urbanbio.path, "out/output_table.html")
+save_kable(ps.stats.k, file = html_file)
+
+# Use webshot to convert the HTML file to PDF
+webshot(html_file, 
+        file.path(urbanbio.path, "out/output_table.pdf"),
+        cliprect = "viewport")
+
 # //DEV
 
 
@@ -355,3 +398,8 @@ imap(ps.ls, function(ps, barcode) {
 #   data.frame %>%
 #   .[names(concDNA),]
 # 
+
+
+
+# Set browser
+# Sys.setenv(CHROMOTE_CHROME = "/Applications/Brave Browser.app/Contents/MacOS/Brave Browser")
