@@ -146,9 +146,6 @@ ps_16S_ctrl <- phyloseq(
   sample_data(meta_ctrl_16S)
 )
 
-# Export asvs as fasta
-asv_to_fasta(seqtab_16S_sam_filt, file.path(path_16S, '4_taxonomy/asv.fa'))
-
 ####################
 # 1.2. ITS samples ####
 ######################
@@ -180,10 +177,6 @@ dna_ITS <- Sys.glob(file.path(dna.path,'CERMO_*ITS*.xlsx')) %>% parse_CERMO_xlsx
 meta_samples_ITS <- add_seq_depth(seqtab_ITS_sam_filt, meta_samples, dna_ITS)
 meta_ctrl_ITS <- add_seq_depth(seqtab_ITS_ctrl_filt, meta_ctrl, dna_ITS)
 
-# Find contaminants
-# contam_freq_ITS <- decontaminate(seqtab_ITS_sam_filt, meta_samples_ITS, 'concDNA')
-# contam_freq_ITS$p # look at contaminants correlation with concDNA
-
 # Phyloseq objects
 ps_ITS <- phyloseq(
   tax_table(taxa_ITS_sam),
@@ -196,9 +189,6 @@ ps_ITS_ctrl <- phyloseq(
   otu_table(seqtab_ITS_ctrl_filt, taxa_are_rows = FALSE),
   sample_data(meta_ctrl_ITS)
 )
-
-# Export asvs as fasta
-asv_to_fasta(seqtab_ITS_sam_filt, file.path(path_ITS, '4_taxonomy/asv.fa'))
 
 #######################
 # 1.3. trnL samples ####
@@ -231,10 +221,6 @@ dna_trnL <- Sys.glob(file.path(dna.path,'CERMO_*trnL*.xlsx')) %>% parse_CERMO_xl
 meta_samples_trnL <- add_seq_depth(seqtab_trnL_sam_filt, meta_samples, dna_trnL)
 meta_ctrl_trnL <- add_seq_depth(seqtab_trnL_ctrl_filt, meta_ctrl, dna_trnL)
 
-# Find contaminants
-# contam_freq_trnL <- decontaminate(seqtab_trnL_sam_filt, meta_samples_trnL, 'concDNA')
-# contam_freq_trnL$p 
-
 # Phyloseq objects
 ps_trnL <- phyloseq(
   tax_table(taxa_trnL_sam),
@@ -248,12 +234,9 @@ ps_trnL_ctrl <- phyloseq(
   sample_data(meta_ctrl_trnL)
 ) # %>% prune_contam(contam_freq_trnL$decontam) # birch?!
 
-# Export asvs as fasta
-asv_to_fasta(seqtab_trnL_sam_filt, file.path(path_trnL, '4_taxonomy/asv.fa'))
-
-###########################################
-# 2.1. Export ps object lists and rarefy ###
-#############################################
+#####################
+# 2.1. Export data ###
+#######################
 
 ps.ls <- list()
 ps.ls[["BACT"]] <- ps_16S
@@ -267,11 +250,32 @@ ps_ctrl.ls[["FUNG"]] <- ps_ITS_ctrl
 ps_ctrl.ls[["PLAN"]] <- ps_trnL_ctrl
 saveRDS(ps_ctrl.ls, file.path(urbanbio.path,'data/ps_ctrl.ls.rds'))
 
-# //DEV
+# Also save raw seqtab, taxtable, metadata
+seqtab.ls <- list()
+seqtab.ls[['BACT']] <- seqtab_16S_sam_filt
+seqtab.ls[['FUNG']] <- seqtab_ITS_sam_filt
+seqtab.ls[['PLAN']] <- seqtab_trnL_sam_filt
+saveRDS(seqtab.ls, file.path(urbanbio.path,'data/seqtab.ls.rds'))
+
+taxtab.ls <- list()
+taxtab.ls[['BACT']] <- taxa_16S_sam
+taxtab.ls[['FUNG']] <- taxa_ITS_sam
+taxtab.ls[['PLAN']] <- taxa_trnL_sam
+saveRDS(taxtab.ls, file.path(urbanbio.path,'data/taxtab.ls.rds'))
+
+# Export asvs as fasta
+asv_to_fasta(seqtab_16S_sam_filt, file.path(path_16S, '4_taxonomy/asv.fa'))
+asv_to_fasta(seqtab_ITS_sam_filt, file.path(path_ITS, '4_taxonomy/asv.fa'))
+asv_to_fasta(seqtab_trnL_sam_filt, file.path(path_trnL, '4_taxonomy/asv.fa'))
 
 
 
 
+
+
+# Find contaminants
+# contam_freq_trnL <- decontaminate(seqtab_trnL_sam_filt, meta_samples_trnL, 'concDNA')
+# contam_freq_trnL$p 
 
 # 
 # # 
