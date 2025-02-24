@@ -19,9 +19,6 @@ library(pacman)
 p_load(tidyverse, phyloseq, magrittr, decontam, Biostrings,
        readxl, decontam)
 
-# Tax glom modified
-source("https://github.com/jorondo1/misc_scripts/raw/refs/heads/main/tax_glom2.R")
-
 # Phyloseq prep functions
 source("https://github.com/jorondo1/misc_scripts/raw/refs/heads/main/phyloseq_functions.R")
 
@@ -61,8 +58,19 @@ dna.path <- file.path(urbanbio.path,"data/metadata")
 # Metadata
 meta <- read_delim(file.path(urbanbio.path,"data/metadata/metadata_2022_samples_final.csv")) 
 
+# Rewrite time labels
+meta %>%
+  mutate(time = case_when(
+    date <= "2022-05-19" ~ 'May',
+    date > "2022-05-30" & date <= "2022-06-30" ~ 'June',
+    date > "2022-08-30" & date <= "2022-09-10" ~ 'September',
+    date > "2022-09-10" ~ 'October',
+    TRUE ~ NA
+  )) %>% filter(!is.na(time)) %>% 
+  ggplot(aes(x = date, y= city, colour = time)) + geom_jitter(width = 0, height = 0.3) + theme_light()
+
 # Weather data
-meteo <- Sys.glob(file.path(urbanbio.path,"data/metadata/meteo_*.csv")) %>% 
+weather <- Sys.glob(file.path(urbanbio.path,"data/metadata/meteo_*.csv")) %>% 
   map_dfr(read_delim, locale = locale(decimal_mark = ","),show_col_types = FALSE) %>% 
   mutate(city = case_when(
     `Nom de la Station` == 'BEAUPORT' ~ 'Québec',
@@ -73,10 +81,12 @@ meteo <- Sys.glob(file.path(urbanbio.path,"data/metadata/meteo_*.csv")) %>%
             temp_moy = `Temp moy.(°C)`,
             precip = `Précip. tot. (mm)`,
             date = `Date/Heure`)
+
+# Factors and weather data
 meta %<>%
   mutate(across(where(is.character), as.factor)) %>% 
   select(-bacterial_load, -log_bacterial_load, fungal_load, log_fungal_load) %>% 
-  left_join(meteo, by = c('date', 'city')) # Add precipitations & temperature data
+  left_join(weather, by = c('date', 'city')) # Add precipitations & temperature data
 
 # Non-control samples
 meta_samples <- meta %>% 

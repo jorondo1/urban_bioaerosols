@@ -5,6 +5,7 @@ library(pacman)
 p_load(phyloseq, tidyverse, kableExtra)
 
 # Import
+urbanbio.path <- '~/Desktop/ip34/urbanBio'
 ps.ls <- read_rds(file.path(urbanbio.path, 'data/ps.ls.rds'))
 
 # MANUAL CHECKS
@@ -81,7 +82,37 @@ webshot(html_file,
 # Taxonomic classification rates ###
 #####################################
 
+seqtab.ls <- read_rds(file.path(urbanbio.path, 'data/seqtab.ls.rds'))
 taxtab.ls <- read_rds(file.path(urbanbio.path, 'data/taxtab.ls.rds'))
+
+# Long df with sequence counts per ASV per sample, with taxonomy
+merge_seq_tax <- function(seqtab, taxtab) {
+  
+  # Long seq table
+  seqtab.long <- seqtab %>% 
+    as.data.frame %>% 
+    rownames_to_column('Sample') %>% 
+    pivot_longer(cols = -Sample,
+                 names_to = "ASV",
+                 values_to = "Abundance") %>% 
+    filter(Abundance>0) %>% 
+    group_by(Sample) %>% 
+    mutate(relAb = Abundance / sum(Abundance))
+  
+  # Tax table
+  taxtab.df <- taxtab %>% 
+    as.data.frame %>% 
+    rownames_to_column('ASV')
+  
+  # Merge taxonomy
+  left_join(
+    seqtab.long,
+    taxtab.df, 
+    by = 'ASV'
+  ) %>% return
+}
+
+merge_seq_tax(seqtab.ls$BACT, taxtab.ls$BACT)
 
 ####
 # Keep 
