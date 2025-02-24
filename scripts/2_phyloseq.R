@@ -12,23 +12,26 @@ subset_samples <- function(seqtab, samples) {
     .[, colSums(.) > 0] # Remove ASVs with no hits
 }
 
-# ASVs classified at the kingdom level and present in seqtab
+# Keep ASVs classified at the kingdom level and with
+# at least min_seq sequences across the table (Improvement : could be a % ?)
 subset_asvs <- function(taxonomy, seqtab, min_seq) {
   if (!is.data.frame(taxonomy)) {
-    taxonomy <- as.data.frame(taxonomy)
+    taxonomy <- as.data.frame(taxonomy) # subset needs the input to be a df
   }
   
-  asvs <- subset(taxonomy, Kingdom != "Unclassified") %>% # subset needs the input to be a df
-    rownames %>% 
-    intersect(
-      colnames(seqtab)[colSums(seqtab) >= min_seq]
-    ) # only keep asvs still present in seqtab
+  # Define ASV subset
+  asvs <- subset(taxonomy, Kingdom != "Unclassified") %>% # At least Kingdom-level classification
+    rownames %>% # rownames are ASVs
+    intersect( # intersect with ASVs having at least min_seq sequences overall
+      colnames(seqtab)[colSums(seqtab) >= min_seq] 
+    ) 
+  # Subset the tax table, output as matrix for phyloseq handoff
   taxonomy[asvs, ] %>% as.matrix()
 }
 
-# Remove samples with fewer than n sequences once taxa removed
-remove_ultra_rare <- function(seqtab, taxonomy, n) {
-  seqtab[,rownames(taxonomy)] %>% .[rowSums(.) > 10, ]
+# Remove samples with fewer than n (default 10) sequences once taxa removed
+remove_ultra_rare <- function(seqtab, taxonomy, n = 100) {
+  seqtab[,rownames(taxonomy)] %>% .[rowSums(.) > n, ]
 }
 
 # Parse DNA concentration xlsx files
@@ -121,6 +124,10 @@ dna.path <- file.path(urbanbio.path,"data/metadata")
 # Metadata
 meta <- read_delim(file.path(urbanbio.path,"data/metadata/metadata_2022_samples_final.csv")) 
 
+meta %<>%
+  mutate(across(where(is.character), as.factor)) %>% 
+  select(-bacterial_load, -log_bacterial_load, fungal_load, log_fungal_load)
+
 meta_ctrl <- meta %>% 
   filter(time =="None" | control=='TRUE') %>% 
   mutate(sample_id = case_when(
@@ -152,12 +159,14 @@ seqtab_16S_sam <- subset_samples(seqtab_16S, sample.names)
 seqtab_16S_ctrl <- subset_samples(seqtab_16S, ctrl.names)
 
 # Subset ASVs
-taxa_16S_sam <- subset_asvs(taxa_16S, seqtab_16S_sam, 100) 
-taxa_16S_ctrl <- subset_asvs(taxa_16S, seqtab_16S_ctrl, 100) 
+taxa_16S_sam <- subset_asvs(taxa_16S, seqtab_16S_sam, 10) 
+taxa_16S_ctrl <- subset_asvs(taxa_16S, seqtab_16S_ctrl, 10) 
+
+seqtab_16S_sam %>% rowSums %>% sort %>% plot
 
 # Remove near-empty samples
-seqtab_16S_sam_filt <- remove_ultra_rare(seqtab_16S_sam, taxa_16S_sam, 10)
-seqtab_16S_ctrl_filt <- remove_ultra_rare(seqtab_16S_ctrl, taxa_16S_ctrl, 10)
+seqtab_16S_sam_filt <- remove_ultra_rare(seqtab_16S_sam, taxa_16S_sam, 10000)
+seqtab_16S_ctrl_filt <- remove_ultra_rare(seqtab_16S_ctrl, taxa_16S_ctrl, 10000)
 dim(seqtab_16S_sam); dim(seqtab_16S_sam_filt); dim(taxa_16S_sam)
 dim(seqtab_16S_ctrl); dim(seqtab_16S_ctrl_filt); dim(taxa_16S_ctrl)
 
@@ -199,12 +208,15 @@ seqtab_ITS_sam <- subset_samples(seqtab_ITS, sample.names)
 seqtab_ITS_ctrl <- subset_samples(seqtab_ITS, ctrl.names)
 
 # Subset ASVs
-taxa_ITS_sam <- subset_asvs(taxa_ITS, seqtab_ITS_sam, 100)
-taxa_ITS_ctrl <- subset_asvs(taxa_ITS, seqtab_ITS_ctrl, 100)
+taxa_ITS_sam <- subset_asvs(taxa_ITS, seqtab_ITS_sam, 10)
+taxa_ITS_ctrl <- subset_asvs(taxa_ITS, seqtab_ITS_ctrl, 10)
+
+seqtab_ITS_sam %>% rowSums %>% sort %>% data.frame(Y=.) %>% 
+  ggplot(aes(x = Y)) + geom_histogram(bins=100)
 
 # Remove near-empty samples
-seqtab_ITS_sam_filt <- remove_ultra_rare(seqtab_ITS_sam, taxa_ITS_sam, 10)
-seqtab_ITS_ctrl_filt <- remove_ultra_rare(seqtab_ITS_ctrl, taxa_ITS_ctrl, 10)
+seqtab_ITS_sam_filt <- remove_ultra_rare(seqtab_ITS_sam, taxa_ITS_sam, 1400)
+seqtab_ITS_ctrl_filt <- remove_ultra_rare(seqtab_ITS_ctrl, taxa_ITS_ctrl, 1400)
 
 dim(seqtab_ITS_sam); dim(seqtab_ITS_sam_filt); dim(taxa_ITS_sam)
 dim(seqtab_ITS_ctrl); dim(seqtab_ITS_ctrl_filt); dim(taxa_ITS_ctrl)
@@ -247,12 +259,15 @@ seqtab_trnL_sam <- subset_samples(seqtab_trnL, sample.names)
 seqtab_trnL_ctrl <- subset_samples(seqtab_trnL, ctrl.names)
 
 # Subset ASVs
-taxa_trnL_sam <- subset_asvs(taxa_trnL, seqtab_trnL_sam, 100)
-taxa_trnL_ctrl <- subset_asvs(taxa_trnL, seqtab_trnL_ctrl, 100)
+taxa_trnL_sam <- subset_asvs(taxa_trnL, seqtab_trnL_sam, 10)
+taxa_trnL_ctrl <- subset_asvs(taxa_trnL, seqtab_trnL_ctrl, 10)
+
+seqtab_trnL_sam %>% rowSums %>% sort %>% data.frame(Y=.) %>% 
+  ggplot(aes(x = Y)) + geom_histogram(bins=100)
 
 # Remove near-empty samples
-seqtab_trnL_sam_filt <- remove_ultra_rare(seqtab_trnL_sam, taxa_trnL_sam, 10)
-seqtab_trnL_ctrl_filt <- remove_ultra_rare(seqtab_trnL_ctrl, taxa_trnL_ctrl, 10)
+seqtab_trnL_sam_filt <- remove_ultra_rare(seqtab_trnL_sam, taxa_trnL_sam, 2500)
+seqtab_trnL_ctrl_filt <- remove_ultra_rare(seqtab_trnL_ctrl, taxa_trnL_ctrl, 2500)
 
 dim(seqtab_trnL_sam); dim(seqtab_trnL_sam_filt); dim(taxa_trnL_sam)
 dim(seqtab_trnL_ctrl); dim(seqtab_trnL_ctrl_filt); dim(taxa_trnL_ctrl)

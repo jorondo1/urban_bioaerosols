@@ -1,5 +1,5 @@
 library(pacman)
-p_load(tidyverse, magrittr, purrr, patchwork, grid)
+p_load(tidyverse, magrittr, purrr, patchwork, grid, MetBrewer)
 source("https://github.com/jorondo1/misc_scripts/raw/refs/heads/main/community_functions.R")
 source("https://github.com/jorondo1/misc_scripts/raw/refs/heads/main/tax_glom2.R")
 source("https://github.com/jorondo1/misc_scripts/raw/refs/heads/main/rarefy_even_depth2.R")
@@ -11,7 +11,6 @@ cities <- ps.ls$BACT@sam_data$city %>% unique
 seasons <- c('Spring' = 'springgreen3', 'Summer' = 'skyblue3', 'Fall' = 'orange3')
 barcodes <- c('BACT' = 'Bacteria', 'FUNG' = 'Fungi', 'PLAN' = 'Plants')
 dist <- 'bray'
-
 
 # Rarefy phyloseq tables
 ps_rare.ls <- lapply(ps.ls, function(ps) {
@@ -104,6 +103,82 @@ pcoa.df %>%
 ggsave('~/Desktop/ip34/urbanBio/out/pcoa_season_rare.pdf',
        bg = 'white', width = 2200, height = 2000, 
        units = 'px', dpi = 220)
+
+
+### perMANOVA 
+iterate_permanova <- function(pcoa.ls, vars, partType) {
+  partType_choices = c(NULL, "terms", "margin", "onedf")
+  if (!partType %in% partType_choices){
+    stop(paste0("partType must be one of the following: ", paste0(partType_choices, collapse = ', ')))
+  }
+  
+  imap(pcoa.ls, function(pcoa_city.ls, city) {
+    imap(pcoa_city.ls, function(pcoa_barcode.ls, barcode) {
+      
+      dist.mx <- pcoa_barcode.ls$dist.mx
+      samData <- pcoa_barcode.ls$metadata
+      formula <- as.formula(paste("dist.mx ~", paste(vars, collapse = " + ")))
+      
+      res <- adonis2(formula = formula,
+                     permutations = 1000,
+                     data = samData,
+                     by = partType,
+                     na.action = na.exclude,
+                     parallel = 8)
+      
+      vars_res <- c(vars, 'Residual', 'Shared') # add residual to pickup value in summary table
+      shared_var = 1 - sum(res$R2[1:length(vars)]) - res$R2[length(vars)+1] # variance explained by variable interaction
+      lapply(seq_along(vars_res), function(i) {
+        tibble(
+          City = city,
+          Barcode = barcode,
+          variable = vars_res[i],
+          R2 = ifelse(
+            i == length(vars_res), shared_var ,
+            res$R2[i]#  when Shared position (last in vars_res)
+            ),
+          p = res$`Pr(>F)`[i]) 
+      }) %>% list_rbind
+    }) %>% list_rbind
+  }) %>% list_rbind
+}
+
+model_vars <- c('date', 'median_income', 'population_density',
+                'mean_temperature' , 'mean_relative_humidity' , 
+                'vegetation_index_NDVI_landsat', 'mean_wind_speed', 
+                'concDNA')
+
+perm_out <- iterate_permanova(pcoa_bray_byCity.ls, model_vars, partType = 'terms') 
+
+perm_out %<>% 
+  mutate(variable = factor(variable, levels = c(model_vars, 'Shared', 'Residual')))
+
+# Let's make a cool plot
+perm_out %>% 
+  ggplot(aes(x = City, y = R2, fill = variable)) +
+  geom_col() +
+  facet_grid(~Barcode) +
+  scale_fill_brewer(palette = 'Paired') +
+  theme_light()
+
+ggsave('~/Desktop/ip34/urbanBio/out/perMANOVA_terms.pdf',
+       bg = 'white', width = 2400, height = 2000, 
+       units = 'px', dpi = 220)
+
+
+# 
+# test.pcoa <- pcoa_bray_byCity.ls$Montréal$FUNG
+# 
+# res <- adonis2(formula = test.pcoa$dist.mx ~ time + mean_relative_humidity +mean_temperature + median_income_bracket. + veg_index_bracket. + mean_wind_speed + concDNA, 
+#                permutations = 1000,
+#                data = test.pcoa$metadata,
+#                by = 'margin',
+#                na.action = na.exclude,
+#                parallel = 8)
+# res
+
+###################################################################
+############## SANDBOX **##########################################
 
 # FUNCTION PLOT PCOA
 plot_pcoa <- function(pcoa.ls, ellipse) {

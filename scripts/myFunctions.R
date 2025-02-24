@@ -74,7 +74,6 @@ track_dada <- function(out.N, out,
   track %>% data.frame %>% 
     rownames_to_column('Sample') %>% 
     tibble %>% 
-    filter(filtered>10) %>% 
     mutate(N_filtering = (input-removeNs)/input,
            Quality_filtering = (removeNs-filtered)/removeNs,
            Denoising = (filtered-denoisedR)/filtered,
