@@ -1,10 +1,25 @@
+# Author : Jonathan Rondeau-Leclaire 2025
+
+##############
+# Contents ####
+################
+
+# 0.1. Load functions
+# 0.2. Setup / metadata parsing
+# 1.1. Process 16S samples
+# 1.2. Process ITS samples
+# 1.3. Process trnL samples
+# 2.1. Export ps objects 
+# 3.1. ASV stats table
+# 3.2. Taxonomic classification rate
+
+###############################
+# 0.1. Functions & packages ####
+#################################
+
 library(pacman)
 p_load(tidyverse, phyloseq, magrittr, decontam, Biostrings,
        readxl, decontam)
-
-###############
-# Functions ####
-#################
 
 # Tax glom modified
 source("https://github.com/jorondo1/misc_scripts/raw/refs/heads/main/tax_glom2.R")
@@ -38,9 +53,9 @@ add_seq_depth <- function(seqtab, meta, dnaConc) {
     cbind(meta_subset, .) 
 }
 
-##########
-# Setup ###
-############
+######################
+# 0.2. Parse metadata ###
+########################
 
 urbanbio.path <- '~/Desktop/ip34/urbanBio'
 dna.path <- file.path(urbanbio.path,"data/metadata")
@@ -75,9 +90,9 @@ meta_samples <- meta %>%
 sample.names <- meta_samples$sample_id
 ctrl.names <- meta_ctrl$sample_id
 
-#########
-# 16S ####
-###########
+####################
+# 1.1. 16S samples ####
+######################
 
 path_16S <- file.path(urbanbio.path,'data/16S')
 taxa_16S_genus <- read_rds(file.path(path_16S, '4_taxonomy/taxonomy.RDS'))
@@ -97,11 +112,8 @@ seqtab_16S_ctrl <- subset_samples(seqtab_16S, ctrl.names)
 taxa_16S_sam <- subset_asvs(taxa_16S, seqtab_16S_sam, 10) 
 taxa_16S_ctrl <- subset_asvs(taxa_16S, seqtab_16S_ctrl, 10) 
 
-seqtab_16S_sam %>% rowSums %>% sort %>% plot
-
-## Check distribution of sample depth
-hist(rowSums(seqtab_16S_sam), breaks = 100, xlab = "sample size", xaxt = "n")
-axis(1, at = pretty(rowSums(seqtab_16S_sam), n = 40))  # adding ticks 
+# Seq count distribution
+viz_seqdepth(seqtab_16S_sam)
 
 # Remove near-empty samples
 seqtab_16S_sam_filt <- remove_ultra_rare(seqtab_16S_sam, taxa_16S_sam, 10000)
@@ -134,9 +146,9 @@ ps_16S_ctrl <- phyloseq(
 # Export asvs as fasta
 asv_to_fasta(seqtab_16S_sam_filt, file.path(path_16S, '4_taxonomy/asv.fa'))
 
-#########
-# ITS ####
-###########
+####################
+# 1.2. ITS samples ####
+######################
 
 path_ITS <- file.path(urbanbio.path,'data/ITS')
 taxa_ITS <- read_rds(file.path(path_ITS, '4_taxonomy/taxonomy.RDS'))
@@ -150,12 +162,8 @@ seqtab_ITS_ctrl <- subset_samples(seqtab_ITS, ctrl.names)
 taxa_ITS_sam <- subset_asvs(taxa_ITS, seqtab_ITS_sam, 10)
 taxa_ITS_ctrl <- subset_asvs(taxa_ITS, seqtab_ITS_ctrl, 10)
 
-seqtab_ITS_sam %>% rowSums %>% sort %>% data.frame(Y=.) %>% 
-  ggplot(aes(x = Y)) + geom_histogram(bins=100)
-
-## Check distribution of sample depth
-hist(rowSums(seqtab_ITS_sam), breaks = 100, xlab = "sample size", xaxt = "n")
-axis(1, at = pretty(rowSums(seqtab_ITS_sam), n = 40))  # adding ticks 
+# Seq count distribution
+viz_seqdepth(seqtab_ITS_sam)
 
 # Remove near-empty samples
 seqtab_ITS_sam_filt <- remove_ultra_rare(seqtab_ITS_sam, taxa_ITS_sam, 1200)
@@ -170,8 +178,8 @@ meta_samples_ITS <- add_seq_depth(seqtab_ITS_sam_filt, meta_samples, dna_ITS)
 meta_ctrl_ITS <- add_seq_depth(seqtab_ITS_ctrl_filt, meta_ctrl, dna_ITS)
 
 # Find contaminants
-contam_freq_ITS <- decontaminate(seqtab_ITS_sam_filt, meta_samples_ITS, 'concDNA')
-contam_freq_ITS$p # look at contaminants correlation with concDNA
+# contam_freq_ITS <- decontaminate(seqtab_ITS_sam_filt, meta_samples_ITS, 'concDNA')
+# contam_freq_ITS$p # look at contaminants correlation with concDNA
 
 # Phyloseq objects
 ps_ITS <- phyloseq(
@@ -189,9 +197,9 @@ ps_ITS_ctrl <- phyloseq(
 # Export asvs as fasta
 asv_to_fasta(seqtab_ITS_sam_filt, file.path(path_ITS, '4_taxonomy/asv.fa'))
 
-##########
-# trnL ####
-############
+#######################
+# 1.3. trnL samples ####
+#########################
 
 path_trnL <- file.path(urbanbio.path,'data/trnL')
 taxa_trnL <- read_rds(file.path(path_trnL, '4_taxonomy/taxonomy.RDS'))
@@ -205,8 +213,8 @@ seqtab_trnL_ctrl <- subset_samples(seqtab_trnL, ctrl.names)
 taxa_trnL_sam <- subset_asvs(taxa_trnL, seqtab_trnL_sam, 10)
 taxa_trnL_ctrl <- subset_asvs(taxa_trnL, seqtab_trnL_ctrl, 10)
 
-seqtab_trnL_sam %>% rowSums %>% sort %>% data.frame(Y=.) %>% 
-  ggplot(aes(x = Y)) + geom_histogram(bins=100)
+# Seq count distribution
+viz_seqdepth(seqtab_16S_sam)
 
 # Remove near-empty samples
 seqtab_trnL_sam_filt <- remove_ultra_rare(seqtab_trnL_sam, taxa_trnL_sam, 2000)
@@ -221,8 +229,8 @@ meta_samples_trnL <- add_seq_depth(seqtab_trnL_sam_filt, meta_samples, dna_trnL)
 meta_ctrl_trnL <- add_seq_depth(seqtab_trnL_ctrl_filt, meta_ctrl, dna_trnL)
 
 # Find contaminants
-contam_freq_trnL <- decontaminate(seqtab_trnL_sam_filt, meta_samples_trnL, 'concDNA')
-contam_freq_trnL$p 
+# contam_freq_trnL <- decontaminate(seqtab_trnL_sam_filt, meta_samples_trnL, 'concDNA')
+# contam_freq_trnL$p 
 
 # Phyloseq objects
 ps_trnL <- phyloseq(
@@ -239,6 +247,10 @@ ps_trnL_ctrl <- phyloseq(
 
 # Export asvs as fasta
 asv_to_fasta(seqtab_trnL_sam_filt, file.path(path_trnL, '4_taxonomy/asv.fa'))
+
+###########################################
+# 2.1. Export ps object lists and rarefy ###
+#############################################
 
 ps.ls <- list()
 ps.ls[["BACT"]] <- ps_16S
@@ -261,9 +273,9 @@ ps_ctrl.ls[["FUNG"]] <- ps_ITS_ctrl
 ps_ctrl.ls[["PLAN"]] <- ps_trnL_ctrl
 saveRDS(ps_ctrl.ls, file.path(urbanbio.path,'data/ps_ctrl.ls.rds'))
 
-####################
-# Stats table #######
-######################
+#############################
+# 3.1. ASV stats table #######
+###############################
 p_load(knitr, kableExtra, webshot2)
 
 # Prep data
