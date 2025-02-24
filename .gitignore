@@ -33,3 +33,4 @@ Maaslin2/
 dist_mx.tsv
 *.mldist
 *.nex
+*.ckp.gz
