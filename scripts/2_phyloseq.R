@@ -114,7 +114,9 @@ seqtab_16S <- read_rds(file.path(path_16S, '4_taxonomy/seqtab.RDS'))
 # Somehow assignSpecies drops all ranks except genus... fix 
 Species_16S <- taxa_16S_species[,2]
 names(Species_16S) <- rownames(taxa_16S_species)
-taxa_16S <- cbind(taxa_16S_genus, Species_16S) %>% data.frame
+taxa_16S <- cbind(taxa_16S_genus, Species_16S) %>% 
+  data.frame %>% 
+  mutate(Species = Species_16S, .keep = 'unused')
 taxa_16S[is.na(taxa_16S)] <- 'Unclassified' 
 
 # Keep samples with metadata info

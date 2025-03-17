@@ -2,12 +2,12 @@
 # Before rarefaction, impossible trnLs 
 # Produce tables 
 library(pacman)
-p_load(phyloseq, tidyverse, kableExtra)
+p_load(phyloseq, tidyverse, kableExtra, ggridges)
 
 # Import
 urbanbio.path <- '~/Desktop/ip34/urbanBio'
 source(file.path(urbanbio.path, 'scripts/myFunctions.R'))
-
+theme_set(theme_light())
 ps.ls <- read_rds(file.path(urbanbio.path, 'data/ps.ls.rds'))
 
 # MANUAL CHECKS
@@ -120,22 +120,31 @@ classification.df <- map(c('BACT', 'FUNG', 'PLAN'), function(barcode){
   dataset <- merge_seq_tax(seqtab.ls[[barcode]], 
                        taxtab.ls[[barcode]])
   
+  ranks <- c('Class', 'Order', 'Family', 'Genus', 'Species')
   # LOOP over taxranks
-  map(c('Class', 'Order', 'Family', 'Genus'), function(rank) {
+  map(ranks, function(rank) {
+    if (!rank %in% colnames(dataset)) {
+      return(tibble())  # Return an empty tibble if the variable is absent
+    }
+    
     dataset %>%
       select(Sample, !!sym(rank), relAb) %>% 
-      mutate(classified = case_when(is.na(!!sym(rank)) ~ 0, TRUE ~ 1)) %>% 
+      mutate(classified = case_when(!!sym(rank)=='Unclassified' ~ 0, TRUE ~ 1)) %>% 
       summarise(  
         asv_prop = sum(classified)/n(), # proportion of classified asvs
         relAb_prop = sum(classified*relAb) # abundance-weighted prop of classified asvs
       ) %>%  
-      mutate(taxRank = rank) # add taxrank variable
+      pivot_longer(cols = c('asv_prop', 'relAb_prop'), 
+                   names_to = 'proportion_type') %>% 
+      mutate(taxRank = factor(rank, levels = ranks)) # add taxrank variable
   }) %>% list_rbind %>% 
     mutate(barcode = barcode) # add barcode variable
 }) %>% list_rbind
 
 classification.df %>% 
-  ggplot()
+  ggplot(aes(y = value, x = taxRank, colour = taxRank)) +
+  geom_boxplot() +
+  facet_grid(barcode~proportion_type)
 
 ############################
 # Rarefy phyloseq objects ###
