@@ -85,7 +85,6 @@ weather <- Sys.glob(file.path(urbanbio.path,"data/metadata/meteo_*.csv")) %>%
 # Factors and weather data
 meta %<>%
   mutate(across(where(is.character), as.factor)) %>% 
-  select(-bacterial_load, -log_bacterial_load, fungal_load, log_fungal_load) %>% 
   left_join(weather, by = c('date', 'city')) # Add precipitations & temperature data
 
 # Non-control samples
@@ -116,6 +115,7 @@ seqtab_16S <- read_rds(file.path(path_16S, '4_taxonomy/seqtab.RDS'))
 Species_16S <- taxa_16S_species[,2]
 names(Species_16S) <- rownames(taxa_16S_species)
 taxa_16S <- cbind(taxa_16S_genus, Species_16S) %>% data.frame
+taxa_16S[is.na(taxa_16S)] <- 'Unclassified' 
 
 # Keep samples with metadata info
 seqtab_16S_sam <- subset_samples(seqtab_16S, sample.names)
@@ -164,6 +164,8 @@ path_ITS <- file.path(urbanbio.path,'data/ITS')
 taxa_ITS <- read_rds(file.path(path_ITS, '4_taxonomy/taxonomy.RDS'))
 seqtab_ITS <- read_rds(file.path(path_ITS, '4_taxonomy/seqtab.RDS'))
 
+taxa_ITS[is.na(taxa_ITS)] <- 'Unclassified' 
+
 # Keep samples with metadata info
 seqtab_ITS_sam <- subset_samples(seqtab_ITS, sample.names)
 seqtab_ITS_ctrl <- subset_samples(seqtab_ITS, ctrl.names)
@@ -207,6 +209,7 @@ ps_ITS_ctrl <- phyloseq(
 path_trnL <- file.path(urbanbio.path,'data/trnL')
 taxa_trnL <- read_rds(file.path(path_trnL, '4_taxonomy/taxonomy.RDS'))
 seqtab_trnL <- read_rds(file.path(path_trnL, '4_taxonomy/seqtab.RDS'))
+taxa_trnL[is.na(taxa_trnL)] <- 'Unclassified' 
 
 # Keep samples with metadata info
 seqtab_trnL_sam <- subset_samples(seqtab_trnL, sample.names)
@@ -217,11 +220,11 @@ taxa_trnL_sam <- subset_asvs(taxa_trnL, seqtab_trnL_sam, 10)
 taxa_trnL_ctrl <- subset_asvs(taxa_trnL, seqtab_trnL_ctrl, 10)
 
 # Seq count distribution
-viz_seqdepth(seqtab_16S_sam)
+viz_seqdepth(seqtab_trnL_sam)
 
 # Remove near-empty samples
-seqtab_trnL_sam_filt <- remove_ultra_rare(seqtab_trnL_sam, taxa_trnL_sam, 2000)
-seqtab_trnL_ctrl_filt <- remove_ultra_rare(seqtab_trnL_ctrl, taxa_trnL_ctrl, 2000)
+seqtab_trnL_sam_filt <- remove_ultra_rare(seqtab_trnL_sam, taxa_trnL_sam, 2500)
+seqtab_trnL_ctrl_filt <- remove_ultra_rare(seqtab_trnL_ctrl, taxa_trnL_ctrl, 2500)
 
 dim(seqtab_trnL_sam); dim(seqtab_trnL_sam_filt); dim(taxa_trnL_sam)
 dim(seqtab_trnL_ctrl); dim(seqtab_trnL_ctrl_filt); dim(taxa_trnL_ctrl)
