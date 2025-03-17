@@ -6,6 +6,8 @@ p_load(phyloseq, tidyverse, kableExtra)
 
 # Import
 urbanbio.path <- '~/Desktop/ip34/urbanBio'
+source(file.path(urbanbio.path, 'scripts/myFunctions.R'))
+
 ps.ls <- read_rds(file.path(urbanbio.path, 'data/ps.ls.rds'))
 
 # MANUAL CHECKS
@@ -77,7 +79,6 @@ webshot(html_file,
         file.path(urbanbio.path, "out/output_table.pdf"),
         cliprect = "viewport")
 
-
 ###################################
 # Taxonomic classification rates ###
 #####################################
@@ -109,13 +110,32 @@ merge_seq_tax <- function(seqtab, taxtab) {
     seqtab.long,
     taxtab.df, 
     by = 'ASV'
-  ) %>% return
+  ) %>% return # a grouped tibble
 }
 
-merge_seq_tax(seqtab.ls$BACT, taxtab.ls$BACT)
+# LOOP over datasets
+classification.df <- map(c('BACT', 'FUNG', 'PLAN'), function(barcode){
+  
+  # Apply merging function:
+  dataset <- merge_seq_tax(seqtab.ls[[barcode]], 
+                       taxtab.ls[[barcode]])
+  
+  # LOOP over taxranks
+  map(c('Class', 'Order', 'Family', 'Genus'), function(rank) {
+    dataset %>%
+      select(Sample, !!sym(rank), relAb) %>% 
+      mutate(classified = case_when(is.na(!!sym(rank)) ~ 0, TRUE ~ 1)) %>% 
+      summarise(  
+        asv_prop = sum(classified)/n(), # proportion of classified asvs
+        relAb_prop = sum(classified*relAb) # abundance-weighted prop of classified asvs
+      ) %>%  
+      mutate(taxRank = rank) # add taxrank variable
+  }) %>% list_rbind %>% 
+    mutate(barcode = barcode) # add barcode variable
+}) %>% list_rbind
 
-####
-# Keep 
+classification.df %>% 
+  ggplot()
 
 ############################
 # Rarefy phyloseq objects ###
