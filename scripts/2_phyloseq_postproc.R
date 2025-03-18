@@ -7,6 +7,7 @@ p_load(phyloseq, tidyverse, kableExtra, ggridges)
 # Import
 urbanbio.path <- '~/Desktop/ip34/urbanBio'
 source(file.path(urbanbio.path, 'scripts/myFunctions.R'))
+source("https://github.com/jorondo1/misc_scripts/raw/refs/heads/main/rarefy_even_depth2.R")
 theme_set(theme_light())
 ps.ls <- read_rds(file.path(urbanbio.path, 'data/ps.ls.rds'))
 
@@ -134,17 +135,30 @@ classification.df <- map(c('BACT', 'FUNG', 'PLAN'), function(barcode){
         asv_prop = sum(classified)/n(), # proportion of classified asvs
         relAb_prop = sum(classified*relAb) # abundance-weighted prop of classified asvs
       ) %>%  
-      pivot_longer(cols = c('asv_prop', 'relAb_prop'), 
+      pivot_longer(cols = c('relAb_prop','asv_prop'), 
                    names_to = 'proportion_type') %>% 
       mutate(taxRank = factor(rank, levels = ranks)) # add taxrank variable
   }) %>% list_rbind %>% 
     mutate(barcode = barcode) # add barcode variable
-}) %>% list_rbind
+}) %>% list_rbind 
 
 classification.df %>% 
+  mutate(proportion_type = case_when(
+    proportion_type == 'asv_prop' ~ 'Proportion of assigned ASVs',
+    proportion_type == 'relAb_prop' ~ 'Proportion of assigned ASV reads'
+    )) %>% 
   ggplot(aes(y = value, x = taxRank, colour = taxRank)) +
   geom_boxplot() +
-  facet_grid(barcode~proportion_type)
+  ylim(0,NA)+
+  facet_grid(barcode~proportion_type) +
+  theme_light() +
+  theme(axis.text.x = element_blank(),
+        axis.ticks.x = element_blank()) 
+
+ggsave(file.path(urbanbio.path, 'out/classification_rates.pdf'), 
+       bg = 'white', width = 1400, height = 2000, 
+       units = 'px', dpi = 220)
+
 
 ############################
 # Rarefy phyloseq objects ###

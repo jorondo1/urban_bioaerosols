@@ -59,14 +59,16 @@ dna.path <- file.path(urbanbio.path,"data/metadata")
 meta <- read_delim(file.path(urbanbio.path,"data/metadata/metadata_2022_samples_final.csv")) 
 
 # Rewrite time labels
-meta %>%
+meta %<>%
   mutate(time = case_when(
     date <= "2022-05-19" ~ 'May',
     date > "2022-05-30" & date <= "2022-06-30" ~ 'June',
     date > "2022-08-30" & date <= "2022-09-10" ~ 'September',
     date > "2022-09-10" ~ 'October',
     TRUE ~ NA
-  )) %>% filter(!is.na(time)) %>% 
+  ))
+
+meta %>% filter(!is.na(time)) %>% 
   ggplot(aes(x = date, y= city, colour = time)) + geom_jitter(width = 0, height = 0.3) + theme_light()
 
 # Weather data
@@ -132,7 +134,7 @@ viz_seqdepth(seqtab_16S_sam)
 
 # Remove near-empty samples
 seqtab_16S_sam_filt <- remove_ultra_rare(seqtab_16S_sam, taxa_16S_sam, 10000)
-seqtab_16S_ctrl_filt <- remove_ultra_rare(seqtab_16S_ctrl, taxa_16S_ctrl, 10000)
+seqtab_16S_ctrl_filt <- remove_ultra_rare(seqtab_16S_ctrl, taxa_16S_ctrl, 10)
 dim(seqtab_16S_sam); dim(seqtab_16S_sam_filt); dim(taxa_16S_sam)
 dim(seqtab_16S_ctrl); dim(seqtab_16S_ctrl_filt); dim(taxa_16S_ctrl)
 
@@ -178,10 +180,11 @@ taxa_ITS_ctrl <- subset_asvs(taxa_ITS, seqtab_ITS_ctrl, 10)
 
 # Seq count distribution
 viz_seqdepth(seqtab_ITS_sam)
+viz_seqdepth(seqtab_ITS_ctrl)
 
 # Remove near-empty samples
 seqtab_ITS_sam_filt <- remove_ultra_rare(seqtab_ITS_sam, taxa_ITS_sam, 1200)
-seqtab_ITS_ctrl_filt <- remove_ultra_rare(seqtab_ITS_ctrl, taxa_ITS_ctrl, 1200)
+seqtab_ITS_ctrl_filt <- remove_ultra_rare(seqtab_ITS_ctrl, taxa_ITS_ctrl, 0)
 
 dim(seqtab_ITS_sam); dim(seqtab_ITS_sam_filt); dim(taxa_ITS_sam)
 dim(seqtab_ITS_ctrl); dim(seqtab_ITS_ctrl_filt); dim(taxa_ITS_ctrl)
@@ -212,6 +215,7 @@ path_trnL <- file.path(urbanbio.path,'data/trnL')
 taxa_trnL <- read_rds(file.path(path_trnL, '4_taxonomy/taxonomy.RDS'))
 seqtab_trnL <- read_rds(file.path(path_trnL, '4_taxonomy/seqtab.RDS'))
 taxa_trnL[is.na(taxa_trnL)] <- 'Unclassified' 
+taxa_trnL <- taxa_trnL[which(taxa_trnL[,1] != 'Bacteria'),] # Remove cyanobacteria
 
 # Keep samples with metadata info
 seqtab_trnL_sam <- subset_samples(seqtab_trnL, sample.names)
