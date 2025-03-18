@@ -352,46 +352,35 @@ period_colour_num <- c(
 
 for (ci in cities) {
   
-  p_dist.ls <- map(c('bray' = 'bray', 
-                     'r.aitchison' = 'robust.aitchison'), function(dist) {
-    p.ls <- map(barcodes, function(barcode) {
-      
-      PCo <- eig.df %>% 
-        filter(City == ci & Dist == dist & Barcode == barcode) %>% 
-        select(PCo1, PCo2) %>% as.vector
-      
-      pcoa.df %>% 
-        filter(City == ci & Dist == dist & Barcode == barcode) %>%
-        ggplot(aes(x = PCo1, y = PCo2, colour = time)) +
-        geom_point(size = 1) +
-        stat_ellipse(level = 0.95, geom = 'polygon', 
-                     alpha = 0.2, aes(fill = time)) +
-        theme_light() +
-        facet_grid(Dist~Barcode) +
-        scale_colour_manual(values = period_colour_num) +
-        scale_fill_manual(values = period_colour_num) +
-        labs(colour = 'Sampling\nperiod', fill = 'Sampling\nperiod', 
-             x = PCo$PCo1, y = PCo$PCo2) +
-        theme(axis.title.y = element_text(margin = margin(r = -5, l=5)))
-    })
+  p.ls <- map(barcodes, function(barcode) {
     
-    p1 <- p.ls$BACT + theme(strip.text.y = element_blank())
-    p2 <- p.ls$FUNG + theme(strip.text.y = element_blank())
-    p1 + p2 + p.ls$PLAN
+    PCo <- eig.df %>% 
+      filter(City == ci & Dist == 'bray' & Barcode == barcode) %>% 
+      select(PCo1, PCo2) %>% as.vector
+    
+    pcoa.df %>% 
+      filter(City == ci & Dist == 'bray' & Barcode == barcode) %>%
+      ggplot(aes(x = PCo1, y = PCo2, colour = time)) +
+      geom_point(size = 1) +
+      stat_ellipse(level = 0.95, geom = 'polygon', 
+                   alpha = 0.2, aes(fill = time)) +
+      theme_light() +
+      facet_grid(.~Barcode) +
+      scale_colour_manual(values = period_colour_num) +
+      scale_fill_manual(values = period_colour_num) +
+      labs(colour = 'Sampling\nperiod', fill = 'Sampling\nperiod', 
+           x = PCo$PCo1, y = PCo$PCo2) +
+      theme(axis.title.y = element_text(margin = margin(r = -5, l=5)))
   })
   
-  p1 <- p_dist.ls$bray 
-  p2 <- p_dist.ls$r.aitchison &
-    theme(strip.text.x = element_blank())
-  
-  p <- p1 / p2 +
+  p <- p.ls$BACT + p.ls$FUNG + p.ls$PLAN +
     plot_layout(guides = 'collect')
   
   ggsave(paste0('~/Desktop/ip34/urbanBio/out/pcoa_', ci,'.pdf'),
          plot = p, bg = 'white', width = 2400, height = 1200,
          units = 'px', dpi = 200)
 }
-
+ 
 # X4 Community composition all samples 
 # Same as 2., but order by date within facets, time period nested in barcode
 
