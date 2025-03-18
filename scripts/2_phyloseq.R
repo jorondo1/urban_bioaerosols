@@ -59,14 +59,14 @@ dna.path <- file.path(urbanbio.path,"data/metadata")
 meta <- read_delim(file.path(urbanbio.path,"data/metadata/metadata_2022_samples_final.csv")) 
 
 # Rewrite time labels
-meta %<>%
-  mutate(time = case_when(
-    date <= "2022-05-19" ~ 'May',
-    date > "2022-05-30" & date <= "2022-06-30" ~ 'June',
-    date > "2022-08-30" & date <= "2022-09-10" ~ 'September',
-    date > "2022-09-10" ~ 'October',
-    TRUE ~ NA
-  ))
+# meta %<>%
+#   mutate(time = case_when(
+#     date <= "2022-05-19" ~ 'May',
+#     date > "2022-05-30" & date <= "2022-06-30" ~ 'June',
+#     date > "2022-08-30" & date <= "2022-09-10" ~ 'September',
+#     date > "2022-09-10" ~ 'October',
+#     TRUE ~ NA
+#   ))
 
 meta %>% filter(!is.na(time)) %>% 
   ggplot(aes(x = date, y= city, colour = time)) + geom_jitter(width = 0, height = 0.3) + theme_light()
@@ -87,7 +87,12 @@ weather <- Sys.glob(file.path(urbanbio.path,"data/metadata/meteo_*.csv")) %>%
 # Factors and weather data
 meta %<>%
   mutate(across(where(is.character), as.factor)) %>% 
-  left_join(weather, by = c('date', 'city')) # Add precipitations & temperature data
+  left_join(weather, by = c('date', 'city')) %>% # Add precipitations & temperature data
+  mutate(
+    city = recode_factor(city, !!!c(
+      'Montréal' = 'Montreal', 
+      'Québec' = 'Quebec', 
+      'Sherbrooke'='Sherbrooke')))
 
 # Non-control samples
 meta_samples <- meta %>% 
