@@ -1,13 +1,23 @@
+# Author : Jonathan Rondeau-Leclaire 2025
+
+##############
+# Contents ####
+################
+
+# 0.1. Load functions
+# 0.2. Setup / metadata parsing
+# 1.1. Process 16S samples
+# 1.2. Process ITS samples
+# 1.3. Process trnL samples
+# 2.1. Export ps objects 
+
+###############################
+# 0.1. Functions & packages ####
+#################################
+
 library(pacman)
 p_load(tidyverse, phyloseq, magrittr, decontam, Biostrings,
        readxl, decontam)
-
-###############
-# Functions ####
-#################
-
-# Tax glom modified
-source("https://github.com/jorondo1/misc_scripts/raw/refs/heads/main/tax_glom2.R")
 
 # Phyloseq prep functions
 source("https://github.com/jorondo1/misc_scripts/raw/refs/heads/main/phyloseq_functions.R")
@@ -38,61 +48,31 @@ add_seq_depth <- function(seqtab, meta, dnaConc) {
     cbind(meta_subset, .) 
 }
 
-### Decontamination DECONTAM
-# https://benjjneb.github.io/decontam/vignettes/decontam_intro.html
-
-# 1. Find contaminants using the frequency method (based on DNA concentration)
-decontaminate <- function(seqtab, samdata, var, p = 0.1) {
-  require(decontam)
-  
-  idx <- which(samdata[,var] >0)
-  conc <- samdata[idx, var]
-  asv <- seqtab[idx,]
-  
-  out <- list()
-  out$decontam <- isContaminant(seqtab = asv, method = 'frequency', conc = conc, threshold = p)
-  how_many <- table(out$decontam$contaminant) # How many ASVs are contaminants ?
-  asv_rank <- which(out$decontam$contaminant) # What is the abundance ranks of contaminants
-  
-  # Short report on decontam's findings; produces a plot
-  out$p <- plot_frequency(asv, colnames(asv)[head(which(out$decontam$contaminant), n = 20)], conc=conc) + 
-    xlab("DNA Concentration")
-  
-  message(paste(how_many[2], 'ASVs identified as contaminants, out of', sum(how_many)))
-  message(paste('Top abundance ranks of contaminants: ', paste(head(asv_rank),collapse = ', '))) 
-        # bigger numbers = lowest abundance ranks
-  
-  return(out)
-}
-
-# 2. Remove contaminants from ps object
-prune_contam <- function(ps, decontam_table) {
-  require(dplyr, phyloseq)
-  
-  # Save non-contaminant ASVs
-  not_cont <- which(!decontam_table$contaminant) %>% 
-    decontam_table[.,] %>% rownames
-  
-  #Remove them
-  ps_clean <- prune_taxa(not_cont, ps)
-  
-  # Proportion of counts lost
-  message(paste(round(100*(1-sum(ps_clean@otu_table)/sum(ps@otu_table)),2), 
-                '% of reads were lost to decontamination.'))
-  
-  return(ps_clean)
-}
-
-##########
-# Setup ###
-############
+######################
+# 0.2. Parse metadata ###
+########################
 
 urbanbio.path <- '~/Desktop/ip34/urbanBio'
 dna.path <- file.path(urbanbio.path,"data/metadata")
 
 # Metadata
 meta <- read_delim(file.path(urbanbio.path,"data/metadata/metadata_2022_samples_final.csv")) 
-meteo <- Sys.glob(file.path(urbanbio.path,"data/metadata/meteo_*.csv")) %>% 
+
+# Rewrite time labels
+meta %<>%
+  mutate(time = case_when(
+    date <= "2022-05-19" ~ 'May',
+    date > "2022-05-30" & date <= "2022-06-30" ~ 'June',
+    date > "2022-08-30" & date <= "2022-09-10" ~ 'September',
+    date > "2022-09-10" ~ 'October',
+    TRUE ~ NA
+  ))
+
+meta %>% filter(!is.na(time)) %>% 
+  ggplot(aes(x = date, y= city, colour = time)) + geom_jitter(width = 0, height = 0.3) + theme_light()
+
+# Weather data
+weather <- Sys.glob(file.path(urbanbio.path,"data/metadata/meteo_*.csv")) %>% 
   map_dfr(read_delim, locale = locale(decimal_mark = ","),show_col_types = FALSE) %>% 
   mutate(city = case_when(
     `Nom de la Station` == 'BEAUPORT' ~ 'Québec',
@@ -103,26 +83,30 @@ meteo <- Sys.glob(file.path(urbanbio.path,"data/metadata/meteo_*.csv")) %>%
             temp_moy = `Temp moy.(°C)`,
             precip = `Précip. tot. (mm)`,
             date = `Date/Heure`)
+
+# Factors and weather data
 meta %<>%
   mutate(across(where(is.character), as.factor)) %>% 
-  select(-bacterial_load, -log_bacterial_load, fungal_load, log_fungal_load) %>% 
-  left_join(meteo, by = c('date', 'city')) # Add precipitations & temperature data
+  left_join(weather, by = c('date', 'city')) # Add precipitations & temperature data
 
+# Non-control samples
+meta_samples <- meta %>% 
+  filter(time != "None" & control == 'FALSE')
+
+sample.names <- meta_samples$sample_id
+
+# Controls
 meta_ctrl <- meta %>% 
   filter(time =="None" | control=='TRUE') %>% 
   mutate(sample_id = case_when(
     sample_id == "Contrôle-blanc-12h00-PM" ~ "Controle-blanc-12h00-PM",
     TRUE ~ sample_id))
 
-meta_samples <- meta %>% 
-  filter(time != "None" & control == 'FALSE')
-  
-sample.names <- meta_samples$sample_id
 ctrl.names <- meta_ctrl$sample_id
 
-#########
-# 16S ####
-###########
+####################
+# 1.1. 16S samples ####
+######################
 
 path_16S <- file.path(urbanbio.path,'data/16S')
 taxa_16S_genus <- read_rds(file.path(path_16S, '4_taxonomy/taxonomy.RDS'))
@@ -132,7 +116,10 @@ seqtab_16S <- read_rds(file.path(path_16S, '4_taxonomy/seqtab.RDS'))
 # Somehow assignSpecies drops all ranks except genus... fix 
 Species_16S <- taxa_16S_species[,2]
 names(Species_16S) <- rownames(taxa_16S_species)
-taxa_16S <- cbind(taxa_16S_genus, Species_16S) %>% data.frame
+taxa_16S <- cbind(taxa_16S_genus, Species_16S) %>% 
+  data.frame %>% 
+  mutate(Species = Species_16S, .keep = 'unused')
+taxa_16S[is.na(taxa_16S)] <- 'Unclassified' 
 
 # Keep samples with metadata info
 seqtab_16S_sam <- subset_samples(seqtab_16S, sample.names)
@@ -142,15 +129,12 @@ seqtab_16S_ctrl <- subset_samples(seqtab_16S, ctrl.names)
 taxa_16S_sam <- subset_asvs(taxa_16S, seqtab_16S_sam, 10) 
 taxa_16S_ctrl <- subset_asvs(taxa_16S, seqtab_16S_ctrl, 10) 
 
-seqtab_16S_sam %>% rowSums %>% sort %>% plot
-
-## Check distribution of sample depth
-hist(rowSums(seqtab_16S_sam), breaks = 100, xlab = "sample size", xaxt = "n")
-axis(1, at = pretty(rowSums(seqtab_16S_sam), n = 40))  # adding ticks 
+# Seq count distribution
+viz_seqdepth(seqtab_16S_sam)
 
 # Remove near-empty samples
 seqtab_16S_sam_filt <- remove_ultra_rare(seqtab_16S_sam, taxa_16S_sam, 10000)
-seqtab_16S_ctrl_filt <- remove_ultra_rare(seqtab_16S_ctrl, taxa_16S_ctrl, 10000)
+seqtab_16S_ctrl_filt <- remove_ultra_rare(seqtab_16S_ctrl, taxa_16S_ctrl, 10)
 dim(seqtab_16S_sam); dim(seqtab_16S_sam_filt); dim(taxa_16S_sam)
 dim(seqtab_16S_ctrl); dim(seqtab_16S_ctrl_filt); dim(taxa_16S_ctrl)
 
@@ -176,16 +160,15 @@ ps_16S_ctrl <- phyloseq(
   sample_data(meta_ctrl_16S)
 )
 
-# Export asvs as fasta
-asv_to_fasta(seqtab_16S_sam_filt, file.path(path_16S, '4_taxonomy/asv.fa'))
-
-#########
-# ITS ####
-###########
+####################
+# 1.2. ITS samples ####
+######################
 
 path_ITS <- file.path(urbanbio.path,'data/ITS')
 taxa_ITS <- read_rds(file.path(path_ITS, '4_taxonomy/taxonomy.RDS'))
 seqtab_ITS <- read_rds(file.path(path_ITS, '4_taxonomy/seqtab.RDS'))
+
+taxa_ITS[is.na(taxa_ITS)] <- 'Unclassified' 
 
 # Keep samples with metadata info
 seqtab_ITS_sam <- subset_samples(seqtab_ITS, sample.names)
@@ -195,16 +178,13 @@ seqtab_ITS_ctrl <- subset_samples(seqtab_ITS, ctrl.names)
 taxa_ITS_sam <- subset_asvs(taxa_ITS, seqtab_ITS_sam, 10)
 taxa_ITS_ctrl <- subset_asvs(taxa_ITS, seqtab_ITS_ctrl, 10)
 
-seqtab_ITS_sam %>% rowSums %>% sort %>% data.frame(Y=.) %>% 
-  ggplot(aes(x = Y)) + geom_histogram(bins=100)
-
-## Check distribution of sample depth
-hist(rowSums(seqtab_ITS_sam), breaks = 100, xlab = "sample size", xaxt = "n")
-axis(1, at = pretty(rowSums(seqtab_ITS_sam), n = 40))  # adding ticks 
+# Seq count distribution
+viz_seqdepth(seqtab_ITS_sam)
+viz_seqdepth(seqtab_ITS_ctrl)
 
 # Remove near-empty samples
 seqtab_ITS_sam_filt <- remove_ultra_rare(seqtab_ITS_sam, taxa_ITS_sam, 1200)
-seqtab_ITS_ctrl_filt <- remove_ultra_rare(seqtab_ITS_ctrl, taxa_ITS_ctrl, 1200)
+seqtab_ITS_ctrl_filt <- remove_ultra_rare(seqtab_ITS_ctrl, taxa_ITS_ctrl, 0)
 
 dim(seqtab_ITS_sam); dim(seqtab_ITS_sam_filt); dim(taxa_ITS_sam)
 dim(seqtab_ITS_ctrl); dim(seqtab_ITS_ctrl_filt); dim(taxa_ITS_ctrl)
@@ -213,10 +193,6 @@ dim(seqtab_ITS_ctrl); dim(seqtab_ITS_ctrl_filt); dim(taxa_ITS_ctrl)
 dna_ITS <- Sys.glob(file.path(dna.path,'CERMO_*ITS*.xlsx')) %>% parse_CERMO_xlsx()
 meta_samples_ITS <- add_seq_depth(seqtab_ITS_sam_filt, meta_samples, dna_ITS)
 meta_ctrl_ITS <- add_seq_depth(seqtab_ITS_ctrl_filt, meta_ctrl, dna_ITS)
-
-# Find contaminants
-contam_freq_ITS <- decontaminate(seqtab_ITS_sam_filt, meta_samples_ITS, 'concDNA')
-contam_freq_ITS$p # look at contaminants correlation with concDNA
 
 # Phyloseq objects
 ps_ITS <- phyloseq(
@@ -231,16 +207,15 @@ ps_ITS_ctrl <- phyloseq(
   sample_data(meta_ctrl_ITS)
 )
 
-# Export asvs as fasta
-asv_to_fasta(seqtab_ITS_sam_filt, file.path(path_ITS, '4_taxonomy/asv.fa'))
-
-##########
-# trnL ####
-############
+#######################
+# 1.3. trnL samples ####
+#########################
 
 path_trnL <- file.path(urbanbio.path,'data/trnL')
 taxa_trnL <- read_rds(file.path(path_trnL, '4_taxonomy/taxonomy.RDS'))
 seqtab_trnL <- read_rds(file.path(path_trnL, '4_taxonomy/seqtab.RDS'))
+taxa_trnL[is.na(taxa_trnL)] <- 'Unclassified' 
+taxa_trnL <- taxa_trnL[which(taxa_trnL[,1] != 'Bacteria'),] # Remove cyanobacteria
 
 # Keep samples with metadata info
 seqtab_trnL_sam <- subset_samples(seqtab_trnL, sample.names)
@@ -250,12 +225,12 @@ seqtab_trnL_ctrl <- subset_samples(seqtab_trnL, ctrl.names)
 taxa_trnL_sam <- subset_asvs(taxa_trnL, seqtab_trnL_sam, 10)
 taxa_trnL_ctrl <- subset_asvs(taxa_trnL, seqtab_trnL_ctrl, 10)
 
-seqtab_trnL_sam %>% rowSums %>% sort %>% data.frame(Y=.) %>% 
-  ggplot(aes(x = Y)) + geom_histogram(bins=100)
+# Seq count distribution
+viz_seqdepth(seqtab_trnL_sam)
 
 # Remove near-empty samples
-seqtab_trnL_sam_filt <- remove_ultra_rare(seqtab_trnL_sam, taxa_trnL_sam, 2000)
-seqtab_trnL_ctrl_filt <- remove_ultra_rare(seqtab_trnL_ctrl, taxa_trnL_ctrl, 2000)
+seqtab_trnL_sam_filt <- remove_ultra_rare(seqtab_trnL_sam, taxa_trnL_sam, 2500)
+seqtab_trnL_ctrl_filt <- remove_ultra_rare(seqtab_trnL_ctrl, taxa_trnL_ctrl, 2500)
 
 dim(seqtab_trnL_sam); dim(seqtab_trnL_sam_filt); dim(taxa_trnL_sam)
 dim(seqtab_trnL_ctrl); dim(seqtab_trnL_ctrl_filt); dim(taxa_trnL_ctrl)
@@ -264,10 +239,6 @@ dim(seqtab_trnL_ctrl); dim(seqtab_trnL_ctrl_filt); dim(taxa_trnL_ctrl)
 dna_trnL <- Sys.glob(file.path(dna.path,'CERMO_*trnL*.xlsx')) %>% parse_CERMO_xlsx()
 meta_samples_trnL <- add_seq_depth(seqtab_trnL_sam_filt, meta_samples, dna_trnL)
 meta_ctrl_trnL <- add_seq_depth(seqtab_trnL_ctrl_filt, meta_ctrl, dna_trnL)
-
-# Find contaminants
-contam_freq_trnL <- decontaminate(seqtab_trnL_sam_filt, meta_samples_trnL, 'concDNA')
-contam_freq_trnL$p 
 
 # Phyloseq objects
 ps_trnL <- phyloseq(
@@ -282,8 +253,9 @@ ps_trnL_ctrl <- phyloseq(
   sample_data(meta_ctrl_trnL)
 ) # %>% prune_contam(contam_freq_trnL$decontam) # birch?!
 
-# Export asvs as fasta
-asv_to_fasta(seqtab_trnL_sam_filt, file.path(path_trnL, '4_taxonomy/asv.fa'))
+#####################
+# 2.1. Export data ###
+#######################
 
 ps.ls <- list()
 ps.ls[["BACT"]] <- ps_16S
@@ -291,91 +263,38 @@ ps.ls[["FUNG"]] <- ps_ITS
 ps.ls[["PLAN"]] <- ps_trnL
 saveRDS(ps.ls, file.path(urbanbio.path,'data/ps.ls.rds'))
 
-# Rarefy phyloseq tables
-ps_rare.ls <- lapply(ps.ls, function(ps) {
-  set.seed(1234)
-  prune_samples(sample_sums(ps) >= 2000, ps) %>% 
-    rarefy_even_depth2(ncores = 7) 
-})
-write_rds(ps_rare.ls, file.path(urbanbio.path, 'data/ps_rare.ls.rds'),
-          compress = 'gz')
-
 ps_ctrl.ls <- list()
 ps_ctrl.ls[["BACT"]] <- ps_16S_ctrl
 ps_ctrl.ls[["FUNG"]] <- ps_ITS_ctrl
 ps_ctrl.ls[["PLAN"]] <- ps_trnL_ctrl
 saveRDS(ps_ctrl.ls, file.path(urbanbio.path,'data/ps_ctrl.ls.rds'))
 
-####################
-# Stats table #######
-######################
-p_load(knitr, kableExtra, webshot2)
+# Also save raw seqtab, taxtable, metadata
+seqtab.ls <- list()
+seqtab.ls[['BACT']] <- seqtab_16S_sam_filt
+seqtab.ls[['FUNG']] <- seqtab_ITS_sam_filt
+seqtab.ls[['PLAN']] <- seqtab_trnL_sam_filt
+saveRDS(seqtab.ls, file.path(urbanbio.path,'data/seqtab.ls.rds'))
 
-# Prep data
-ps.stats <- imap(ps.ls, function(ps, barcode) {
-  asv <- ps %>% otu_table 
-  seq_per_sam <- rowSums(asv)
-  asv_per_sam <- rowSums(asv>0)
-  asv_prevalence <- colSums(asv>0)
-  num_sam <- nrow(asv)
-  tibble(
-    Dataset = barcode,
-    Seq = sum(asv),
-    ASVs = ncol(asv),
-    N = num_sam,
-    Mean_seq = mean(seq_per_sam),
-    SD_seq = sd(seq_per_sam),
-    Min_seq = min(seq_per_sam),
-    Max_seq = max(seq_per_sam),
-    Mean_asv = mean(asv_per_sam),
-    SD_asv = sd(asv_per_sam),
-    Min_asv = min(asv_per_sam),
-    Max_asv = max(asv_per_sam),
-    Mean_prev = mean(asv_prevalence),
-    SD_prev = sd(asv_prevalence),
-    Min_prev = min(asv_prevalence),
-    Max_prev = max(asv_prevalence)
-  )
-}) %>% list_rbind
+taxtab.ls <- list()
+taxtab.ls[['BACT']] <- taxa_16S_sam
+taxtab.ls[['FUNG']] <- taxa_ITS_sam
+taxtab.ls[['PLAN']] <- taxa_trnL_sam
+saveRDS(taxtab.ls, file.path(urbanbio.path,'data/taxtab.ls.rds'))
 
-ps.stats %<>%
-  mutate(across(where(is.numeric), ~ format(round(., 0),big.mark=',')))
-
-ps.stats.k <- kable(ps.stats, "html", align = "l") %>%
-  kable_styling(full_width = FALSE) %>%
-  add_header_above(c(
-    "Dataset" = 1, # specifies how many columns are covered
-    "Sequences" = 1,
-    "ASVs" = 1,
-    "Samples" = 1,
-    "Mean ± SD" = 2, 
-    "[Min, Max]" = 2, 
-    "Mean ± SD" = 2, 
-    "[Min, Max]" = 2, 
-    "Mean ± SD" = 2, 
-    "[Min, Max]" = 2
-  )) %>%  
-  add_header_above(c(
-    " " = 4, # no header for the first 4 columns
-    "Sequences per sample" = 4, 
-    "ASVs per sample" = 4, 
-    "ASV prevalence" = 4
-  )) %>%
-  row_spec(0, extra_css = "display: none;") ; ps.stats.k # Hide the original column names
-
-html_file <- file.path(urbanbio.path, "out/output_table.html")
-save_kable(ps.stats.k, file = html_file)
-
-# Use webshot to convert the HTML file to PDF
-webshot(html_file, 
-        file.path(urbanbio.path, "out/output_table.pdf"),
-        cliprect = "viewport")
-
-# //DEV
+# Export asvs as fasta
+asv_to_fasta(seqtab_16S_sam_filt, file.path(path_16S, '4_taxonomy/asv.fa'))
+asv_to_fasta(seqtab_ITS_sam_filt, file.path(path_ITS, '4_taxonomy/asv.fa'))
+asv_to_fasta(seqtab_trnL_sam_filt, file.path(path_trnL, '4_taxonomy/asv.fa'))
 
 
 
 
+
+
+# Find contaminants
+# contam_freq_trnL <- decontaminate(seqtab_trnL_sam_filt, meta_samples_trnL, 'concDNA')
+# contam_freq_trnL$p 
 
 # 
 # # 
