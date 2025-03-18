@@ -131,16 +131,16 @@ seqtab_16S_sam <- subset_samples(seqtab_16S, sample.names)
 seqtab_16S_ctrl <- subset_samples(seqtab_16S, ctrl.names)
 
 # Subset ASVs
-taxa_16S_sam <- subset_asvs(taxa_16S, seqtab_16S_sam, 10) 
-taxa_16S_ctrl <- subset_asvs(taxa_16S, seqtab_16S_ctrl, 10) 
+taxa_16S_sam <- subset_asvs(taxa_16S, seqtab_16S_sam, 50) 
+taxa_16S_ctrl <- subset_asvs(taxa_16S, seqtab_16S_ctrl, 50) 
 
 # Seq count distribution
 viz_seqdepth(seqtab_16S_sam)
 
 # Remove near-empty samples
-seqtab_16S_sam_filt <- remove_ultra_rare(seqtab_16S_sam, taxa_16S_sam, 10000)
+seqtab_16S_sam_filt <- remove_ultra_rare(seqtab_16S_sam, taxa_16S_sam, 9000)
 seqtab_16S_ctrl_filt <- remove_ultra_rare(seqtab_16S_ctrl, taxa_16S_ctrl, 10)
-dim(seqtab_16S_sam); dim(seqtab_16S_sam_filt); dim(taxa_16S_sam)
+dim(seqtab_16S_sam); dim(seqtab_16S_sam_filt); dim(taxa_16S_sam); sum(seqtab_16S_sam_filt)/sum(seqtab_16S_sam)
 dim(seqtab_16S_ctrl); dim(seqtab_16S_ctrl_filt); dim(taxa_16S_ctrl)
 
 # Add sequencing effort and dna concentration to metadata
@@ -180,7 +180,7 @@ seqtab_ITS_sam <- subset_samples(seqtab_ITS, sample.names)
 seqtab_ITS_ctrl <- subset_samples(seqtab_ITS, ctrl.names)
 
 # Subset ASVs
-taxa_ITS_sam <- subset_asvs(taxa_ITS, seqtab_ITS_sam, 10)
+taxa_ITS_sam <- subset_asvs(taxa_ITS, seqtab_ITS_sam, 50)
 taxa_ITS_ctrl <- subset_asvs(taxa_ITS, seqtab_ITS_ctrl, 10)
 
 # Seq count distribution
@@ -188,10 +188,10 @@ viz_seqdepth(seqtab_ITS_sam)
 viz_seqdepth(seqtab_ITS_ctrl)
 
 # Remove near-empty samples
-seqtab_ITS_sam_filt <- remove_ultra_rare(seqtab_ITS_sam, taxa_ITS_sam, 1200)
+seqtab_ITS_sam_filt <- remove_ultra_rare(seqtab_ITS_sam, taxa_ITS_sam, 2000)
 seqtab_ITS_ctrl_filt <- remove_ultra_rare(seqtab_ITS_ctrl, taxa_ITS_ctrl, 0)
 
-dim(seqtab_ITS_sam); dim(seqtab_ITS_sam_filt); dim(taxa_ITS_sam)
+dim(seqtab_ITS_sam); dim(seqtab_ITS_sam_filt); dim(taxa_ITS_sam); sum(seqtab_ITS_sam_filt)/sum(seqtab_ITS_sam)
 dim(seqtab_ITS_ctrl); dim(seqtab_ITS_ctrl_filt); dim(taxa_ITS_ctrl)
 
 # Add sequencing effort and dna concentration to metadata
@@ -227,8 +227,8 @@ seqtab_trnL_sam <- subset_samples(seqtab_trnL, sample.names)
 seqtab_trnL_ctrl <- subset_samples(seqtab_trnL, ctrl.names)
 
 # Subset ASVs
-taxa_trnL_sam <- subset_asvs(taxa_trnL, seqtab_trnL_sam, 10)
-taxa_trnL_ctrl <- subset_asvs(taxa_trnL, seqtab_trnL_ctrl, 10)
+taxa_trnL_sam <- subset_asvs(taxa_trnL, seqtab_trnL_sam, 50)
+taxa_trnL_ctrl <- subset_asvs(taxa_trnL, seqtab_trnL_ctrl, 50)
 
 # Seq count distribution
 viz_seqdepth(seqtab_trnL_sam)
@@ -237,7 +237,7 @@ viz_seqdepth(seqtab_trnL_sam)
 seqtab_trnL_sam_filt <- remove_ultra_rare(seqtab_trnL_sam, taxa_trnL_sam, 2500)
 seqtab_trnL_ctrl_filt <- remove_ultra_rare(seqtab_trnL_ctrl, taxa_trnL_ctrl, 2500)
 
-dim(seqtab_trnL_sam); dim(seqtab_trnL_sam_filt); dim(taxa_trnL_sam)
+dim(seqtab_trnL_sam); dim(seqtab_trnL_sam_filt); dim(taxa_trnL_sam); sum(seqtab_trnL_sam_filt)/sum(seqtab_trnL_sam)
 dim(seqtab_trnL_ctrl); dim(seqtab_trnL_ctrl_filt); dim(taxa_trnL_ctrl)
 
 # Add sequencing effort and dna concentration to metadata

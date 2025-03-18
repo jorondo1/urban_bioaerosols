@@ -14,7 +14,6 @@ source("https://github.com/jorondo1/misc_scripts/raw/refs/heads/main/tax_glom2.R
 # Agglomerate
 ps_rare.ls <- read_rds(file.path(urbanbio.path, 'data/ps_rare.ls.rds'))
 
-
 barcodes <- c('BACT' = "Bacteria",
               'FUNG' = "Fungi",
               'PLAN' = "Plants")
