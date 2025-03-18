@@ -1,21 +1,34 @@
 library(pacman)
 p_load(dada2, tidyverse, magrittr, RColorBrewer, ggdist, tidyquant,
-       phyloseq, ggh4x, Biostrings, ggridges, optparse)
+       phyloseq, ggh4x, Biostrings, ggridges, optparse, treemapify)
 
 source('https://raw.githubusercontent.com/jorondo1/misc_scripts/refs/heads/main/tax_glom2.R')
+source('https://raw.githubusercontent.com/jorondo1/misc_scripts/refs/heads/main/community_functions.R')
 source('https://raw.githubusercontent.com/jorondo1/misc_scripts/refs/heads/main/rarefy_even_depth2.R')
-source('Desktop/ip34/urbanBio/scripts/myFunctions.R')
+source('~/Desktop/ip34/urbanBio/scripts/myFunctions.R')
 
 tax_ranks <- c("Kingdom", "Phylum", "Class", "Order", "Family", "Genus")
-ps_trnL <- readRDS('~/Desktop/ip34/urbanBio/data/ps.ls.rds')
+ps.ls <- readRDS('~/Desktop/ip34/urbanBio/data/ps.ls.rds')
 
 ########################################
 # Mean abundance of genera per family ###
 ##########################################
 
-(top_families <- top_taxa[1:7,]$Family)
+which_taxrank <- 'Family'
+melted <- ps.ls$PLAN %>% 
+  tax_glom(taxrank = which_taxrank) %>% 
+  psmelt %>%
+  filter(Abundance != 0) %>% 
+  group_by(Sample) %>% 
+  mutate(relAb = Abundance/sum(Abundance),
+         time = factor(time, levels=c('Spring', 'Summer', 'Fall'))) %>% 
+  ungroup
 
-melt_family <- psmelt(ps_trnL) %>% 
+(top_taxa <- topTaxa(melted, which_taxrank, 10))
+
+(top_families <- top_taxa[1:14,]$Family)
+
+melt_family <- psmelt(ps.ls$PLAN) %>% 
   filter(Abundance != 0 &
            Family %in% top_families)
 
@@ -31,26 +44,7 @@ family_genera <- melt_family %>% tibble %>%
   group_by(Family) %>%
   mutate(relAbNorm = mean_relAb / sum(mean_relAb)) %>%
   ungroup()
-# 
-# # Faceted pie chart
-# family_genera %>% 
-#   group_by(Family) %>%
-#   mutate(
-#     Rank = rank(-relAbNorm),
-#     Genus = ifelse(Rank > 4, "Other", Genus)
-#   ) %>%
-#   group_by(Family, Genus) %>%
-#   summarize(relAbNorm = sum(relAbNorm), .groups = "drop") %>% 
-# 
-# 
-#   ggplot( aes(x = "", y = relAbNorm, fill = Genus)) +
-#   geom_bar(stat = "identity", width = 1) +
-#   coord_polar("y") +
-#   facet_wrap(~ Family, ncol = 3) +  # Facet by category
-#   scale_fill_viridis_d() +
-#   labs(title = "Genus Proportions by Family") +
-#   theme_void() +
-#   theme(legend.position = "bottom")
+
 
 # Treemap
 plots <- family_genera %>%
@@ -62,7 +56,7 @@ plots <- family_genera %>%
     # Define a unique palette
     unique_colors <- scales::hue_pal()(length(unique(.x$Genus)) - has_unclassified)
     color_mapping <- setNames(
-      c(if (has_unclassified) unclassified_color else NULL, unique_colors),
+      c(if (has_unclassified) 'grey' else NULL, unique_colors),
       c(if (has_unclassified) "Unclassified" else NULL, setdiff(unique(.x$Genus), "Unclassified"))
     )
     

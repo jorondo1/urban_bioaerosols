@@ -1,5 +1,5 @@
 library(pacman)
-p_load(tidyverse, magrittr, purrr, patchwork, grid, MetBrewer)
+p_load(tidyverse, magrittr, purrr, patchwork, grid, MetBrewer, parallel)
 source("https://github.com/jorondo1/misc_scripts/raw/refs/heads/main/community_functions.R")
 source("https://github.com/jorondo1/misc_scripts/raw/refs/heads/main/tax_glom2.R")
 source("https://github.com/jorondo1/misc_scripts/raw/refs/heads/main/rarefy_even_depth2.R")
@@ -15,9 +15,9 @@ barcodes <- c('BACT' = 'Bacteria', 'FUNG' = 'Fungi', 'PLAN' = 'Plants')
 dist <- 'bray'
 
 # Compute pcoas for each dataset separately
-pcoa_bray.ls <- mclapply(ps.ls, function(ps) {
-  compute_pcoa(ps, dist = dist)
-})
+# pcoa_bray.ls <- mclapply(ps.ls, function(ps) {
+#   compute_pcoa(ps, dist = dist)
+# })
 
 pcoa_bray_rare.ls <- mclapply(ps_rare.ls, function(ps) {
   compute_pcoa(ps, dist = dist)
@@ -55,7 +55,7 @@ pcoa.df <- imap(pcoa_bray_byCity.ls, function(pcoa.ls, city) {
       mutate(barcode = barcode) # add barcode name for each iteration
   }) %>% list_rbind
 }) %>% list_rbind %>% 
-  mutate(time = factor(time, levels = names(seasons)), 
+  mutate(time = factor(time, levels = names(time)), 
          barcode = recode(barcode, !!!barcodes)) # for plots
 
 # Eigenvalues dataframe to annotate the plots
@@ -144,7 +144,7 @@ model_vars <- c('date','median_income', 'population_density',
                 'precip',
                 'concDNA' )
 
-perm_out <- iterate_permanova(pcoa_bray_byCity.ls, model_vars, partType = 'terms') 
+perm_out <- iterate_permanova(pcoa_bray_byCity.ls, model_vars, partType = 'margin') 
 
 perm_out %<>% 
   mutate(variable = factor(variable, levels = c(model_vars, 'Shared', 'Residual')))
@@ -157,7 +157,7 @@ perm_out %>%
   scale_fill_brewer(palette = 'Set3') +
   theme_light()
 
-ggsave('~/Desktop/ip34/urbanBio/out/perMANOVA_terms.pdf',
+ggsave('~/Desktop/ip34/urbanBio/out/perMANOVA_margin.pdf',
        bg = 'white', width = 2400, height = 2000, 
        units = 'px', dpi = 300)
 

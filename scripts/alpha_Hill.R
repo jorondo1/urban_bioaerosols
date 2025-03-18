@@ -8,50 +8,9 @@ source("https://github.com/jorondo1/misc_scripts/raw/refs/heads/main/community_f
 urbanbio.path <- '~/Desktop/ip34/urbanBio'
 source(file.path(urbanbio.path, 'scripts/myFunctions.R'))
 
-
 ps.ls <- read_rds(file.path(urbanbio.path, 'data/ps.ls.rds'))
 ps_rare.ls <- read_rds(file.path(urbanbio.path, 'data/ps_rare.ls.rds'))
 
-###################
-# Hill Numbers #####
-###################
-div_Hill <- imap(ps_rare.ls, function(ps, barcode) {
-  div.fun(ps,  c(0,1,2)) %>% 
-    data.frame %>% 
-    rownames_to_column('Sample') %>% 
-    left_join(samdat_as_tibble(ps), 
-              by = 'Sample') %>% 
-    mutate(barcode = barcode,
-           season = case_when(date < date("2022-07-01") ~ 'Spring',
-                              TRUE ~ 'Fall'),
-           season = factor(season, levels = c('Spring', 'Fall')),
-           time = factor(time, levels = c('Spring', 'Summer', 'Fall')))
-}) %>% list_rbind %>% 
-  pivot_longer(cols = c('H_0', 'H_1', 'H_2', 'Tail'), 
-               names_to = 'Index',
-               values_to = 'Effective_taxa')
-
-
-for (bc in barcode_mapping) {
-  p <- div_Hill %>% 
-    filter(barcode == bc & Index != 'Tail') %>% 
-    ggplot(aes(x = city, y = Effective_taxa, fill = time)) +
-    geom_violin(draw_quantiles = c('0.5')) +
-    #geom_jitter(aes(colour = time), width = 0.1, height = 0) +
-    facet_grid(Index~city, scales = 'free') +
-    theme_light() +
-    theme(axis.title.x = element_blank(),
-          axis.text.x = element_blank(),
-          legend.position = 'bottom') +
-    scale_fill_brewer(palette = 'Set2') +
-    labs(y = 'Effective number of taxa')
-  
-  print(p)
-  
-  ggsave(paste0('~/Desktop/ip34/urbanBio/out/alpha_', bc,'_Hill.pdf'),
-         plot = p, bg = 'white', width = 2000, height = 2000, 
-         units = 'px', dpi = 220)
-}
 
 ps.ls$BACT@sam_data %>% 
   as_tibble %>% 
