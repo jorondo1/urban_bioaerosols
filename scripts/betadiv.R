@@ -140,11 +140,11 @@ iterate_permanova <- function(pcoa.ls, vars, partType) {
 
 model_vars <- c('median_income', 'population_density',
                 'mean_temperature' , 
-                'vegetation_index_NDVI_landsat', 'mean_wind_speed',
+                'vegetation_index_NDVI_landsat', 'mean_wimnd_speed',
                 'precip','mean_relative_humidity' , 'date',
                 'concDNA' )
 
-perm_out <- iterate_permanova(pcoa_genus.ls, model_vars, partType = 'margin') 
+perm_out <- iterate_permanova(pcoa.ls, model_vars, partType = 'terms') 
 
 perm_out %<>% 
   #filter(variable != 'Shared') %>% 
@@ -162,7 +162,7 @@ perm_out %>%
   theme_light() +
   guides(alpha = 'none')
 
-ggsave('~/Desktop/ip34/urbanBio/out/perMANOVA_margin.pdf',
+ggsave('~/Desktop/ip34/urbanBio/out/perMANOVA_terms.pdf',
        bg = 'white', width = 2400, height = 2000, 
        units = 'px', dpi = 300)
 
