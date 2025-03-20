@@ -109,7 +109,7 @@ iterate_permanova <- function(pcoa.ls, vars, partType) {
   
   imap(pcoa.ls, function(pcoa_city.ls, city) {
     imap(pcoa_city.ls, function(pcoa_barcode.ls, barcode) {
-      
+      pcoa_barcode.ls <- pcoa_barcode.ls$bray
       dist.mx <- pcoa_barcode.ls$dist.mx
       samData <- pcoa_barcode.ls$metadata
       formula <- as.formula(paste("dist.mx ~", paste(vars, collapse = " + ")))
@@ -138,26 +138,31 @@ iterate_permanova <- function(pcoa.ls, vars, partType) {
   }) %>% list_rbind
 }
 
-model_vars <- c('date','median_income', 'population_density',
-                'mean_temperature' , 'mean_relative_humidity' , 
-                'vegetation_index_NDVI_landsat', 'mean_wind_speed',
-                'precip',
+model_vars <- c('median_income', 'population_density',
+                'mean_temperature' , 
+                'vegetation_index_NDVI_landsat', 'mean_wimnd_speed',
+                'precip','mean_relative_humidity' , 'date',
                 'concDNA' )
 
-perm_out <- iterate_permanova(pcoa_bray_byCity.ls, model_vars, partType = 'margin') 
+perm_out <- iterate_permanova(pcoa.ls, model_vars, partType = 'terms') 
 
 perm_out %<>% 
-  mutate(variable = factor(variable, levels = c(model_vars, 'Shared', 'Residual')))
+  #filter(variable != 'Shared') %>% 
+  mutate(variable = factor(variable, levels = c(model_vars, "Shared",'Residual')),
+         p_sig = as.factor(case_when(p < 0.05 ~ 'yes', TRUE~ 'no')))
 
 # Let's make a cool plot
 perm_out %>% 
-  ggplot(aes(x = City, y = R2, fill = variable)) +
+  ggplot(aes(x = City, y = R2, #alpha = p_sig,
+             fill = variable)) +
   geom_col() +
   facet_grid(~Barcode) +
   scale_fill_brewer(palette = 'Set3') +
-  theme_light()
+#  scale_alpha_manual(values = c("no" = 0.4, "yes" = 1)) +  # Map alpha values explicitly
+  theme_light() +
+  guides(alpha = 'none')
 
-ggsave('~/Desktop/ip34/urbanBio/out/perMANOVA_margin.pdf',
+ggsave('~/Desktop/ip34/urbanBio/out/perMANOVA_terms.pdf',
        bg = 'white', width = 2400, height = 2000, 
        units = 'px', dpi = 300)
 

@@ -159,7 +159,6 @@ ggsave(file.path(urbanbio.path, 'out/classification_rates.pdf'),
        bg = 'white', width = 1400, height = 2000, 
        units = 'px', dpi = 220)
 
-
 ############################
 # Rarefy phyloseq objects ###
 ##############################
