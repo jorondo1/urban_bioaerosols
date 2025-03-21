@@ -1,6 +1,6 @@
 library(pacman)
 p_load(dada2, tidyverse, magrittr, RColorBrewer, ggdist, tidyquant,
-       phyloseq, ggh4x, Biostrings, ggridges, optparse)
+       phyloseq, ggh4x, Biostrings, ggridges, optparse, forcats)
 
 source('https://raw.githubusercontent.com/jorondo1/misc_scripts/refs/heads/main/tax_glom2.R')
 source('https://raw.githubusercontent.com/jorondo1/misc_scripts/refs/heads/main/rarefy_even_depth2.R')
@@ -14,48 +14,65 @@ ps_ctrl.ls <- readRDS('~/Desktop/ip34/urbanBio/data/ps_ctrl.ls.rds')
 # Community composition overview ###
 #####################################
 
-which_taxrank <- 'Family'
-melted <- ps.ls$PLAN %>% 
-  tax_glom(taxrank = which_taxrank) %>% 
-  psmelt %>%
-  filter(Abundance != 0) %>% 
-  group_by(Sample) %>% 
-  mutate(relAb = Abundance/sum(Abundance),
-         time = factor(time, levels=c('Spring', 'Summer', 'Fall'))) %>% 
-  ungroup
+melted_glom.ls <- imap(ps.ls, function(ps, barcode){
+  melted.ls <- imap(tax_ranks, function(which_taxrank){### DOESNT WORK, need a named list
+    tax_glom(ps, taxrank = which_taxrank) %>% 
+      psmelt() %>% 
+      filter(Abundance !=0) %>% 
+      group_by(Sample) %>% 
+      mutate(relAb = Abundance/sum(Abundance))
+  })
+  melted.ls
+})
 
-# Compute top taxa and create "Others" category
-nTaxa <- 10
-(top_taxa <- topTaxa(melted, which_taxrank, nTaxa))
-top_taxa_lvls <- top_taxa %>% 
-  group_by(aggTaxo) %>% 
-  aggregate(relAb ~ aggTaxo, data = ., FUN = sum) %>% 
-  arrange(relAb) %$% aggTaxo %>% 
-  as.character %>% # Others first:
-  setdiff(., c('Others', 'Unclassified')) %>% c('Others', 'Unclassified', .)
-
-# Plot !
-expanded_palette <- colorRampPalette(brewer.pal(12, 'Set3'))(nTaxa+2) 
-
-melted %>% 
-  left_join(top_taxa %>% select(-relAb), by = which_taxrank) %>%
-  filter(!is.na(time)) %>% 
-  mutate(aggTaxo = factor(aggTaxo, levels = top_taxa_lvls)) %>% 
-  ggplot(aes(x = Sample, y = relAb, fill = aggTaxo)) +
-  geom_col() +
-  theme_light() +
-  facet_nested(cols=vars(city,time), scales = 'free', space = 'free') +
-  scale_fill_manual(values = expanded_palette) +
-  labs(fill = which_taxrank) +
-  theme(panel.grid = element_blank(),
-        axis.text.x = element_blank(),
-        axis.ticks.x = element_blank(),
-        panel.border = element_blank())
-
-ggsave(paste0('~/Desktop/ip34/urbanBio/out/composition_',which_taxrank,'.pdf'),
-       bg = 'white', width = 3600, height = 2000, 
-       units = 'px', dpi = 220)
-
+for (barcode in c('BACT', 'PLAN', 'FUNG')) {
+which_taxrank <- 'Genus'
+  melted <- ps.ls[[barcode]] %>% 
+    tax_glom(taxrank = which_taxrank) %>% 
+    psmelt %>%
+    filter(Abundance != 0) %>% 
+    group_by(Sample) %>% 
+    mutate(relAb = Abundance/sum(Abundance),
+           time = factor(time, levels=c('Spring', 'Summer', 'Fall'))) %>% 
+    ungroup %>% 
+    arrange(date) %>% 
+    mutate(site_date = fct_inorder(paste0(date,'_', site_id))
+           ) 
+  
+  # Compute top taxa and create "Others" category
+  nTaxa <- 20
+  (top_taxa <- topTaxa(melted, which_taxrank, nTaxa))
+  top_taxa_lvls <- top_taxa %>% 
+    group_by(aggTaxo) %>% 
+    aggregate(relAb ~ aggTaxo, data = ., FUN = sum) %>% 
+    arrange(relAb) %$% aggTaxo %>% 
+    as.character %>% # Others first:
+    setdiff(., c('Others', 'Unclassified')) %>% c('Others', 'Unclassified', .)
+  
+  # Plot !
+  expanded_palette <- colorRampPalette(brewer.pal(12, 'Set3'))(nTaxa+2) 
+  
+  melted %>% 
+    left_join(top_taxa %>% select(-relAb), by = which_taxrank) %>%
+    filter(!is.na(time)) %>% 
+    mutate(aggTaxo = factor(aggTaxo, levels = top_taxa_lvls)) %>%
+    group_by(Sample, aggTaxo) %>% 
+    summarise(relAb = sum(relAb), .groups = 'drop') %>% 
+    ggplot(aes(x = site_date, y = relAb, fill = aggTaxo)) +
+    geom_col() +
+    theme_light() +
+    facet_nested(cols=vars(city,time), scales = 'free', space = 'free') +
+    scale_fill_manual(values = expanded_palette) +
+    labs(fill = which_taxrank) +
+    theme(panel.grid = element_blank(),
+          axis.text.x = element_blank(),
+          axis.ticks.x = element_blank(),
+          panel.border = element_blank())
+  
+  ggsave(paste0('~/Desktop/ip34/urbanBio/out/composition_',which_taxrank,'_',barcode,'.pdf'),
+         bg = 'white', width = 3600, height = 2000, 
+         units = 'px', dpi = 220)
+} 
 ###################################
 # Controls ###
 #####################################
