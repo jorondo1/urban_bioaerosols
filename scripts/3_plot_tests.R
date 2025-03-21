@@ -24,15 +24,26 @@ Hill_indices <- c('H_0' = 'Richness',
 
 mutate_time <- function(data) {
   data %>% 
-    mutate(time = recode_factor(time, !!!c(
-      'Spring' = 'Sampling period 1',
-      'Summer' = 'Sampling period 2',
-      'Fall' = 'Sampling period 3')))
+    mutate(time = case_when(
+      city == "Montreal" ~ recode_factor(time, !!!c(
+        'Spring' = 'MTL1',
+        'Summer' = 'MTL2',
+        'Fall' = 'MTL3')),
+      city == "Quebec" ~ recode_factor(time, !!!c(
+        'Spring' = 'QBC1',
+        'Summer' = 'QBC2',
+        'Fall' = 'QBC3')),
+      city == "Sherbrooke" ~ recode_factor(time, !!!c(
+        'Spring' = 'SHB1',
+        'Summer' = 'SHB2 Y',
+        'Fall' = 'SHB3')),
+      TRUE ~ time  # Default case (if city doesn't match any condition)
+    ))
 }
 
-period_colour = c('Sampling period 1' = 'springgreen4', 
-                  'Sampling period 2' = 'skyblue3', 
-                  'Sampling period 3' = 'orange3')
+#period_colour = c('Sampling period 1' = 'springgreen4', 
+#                  'Sampling period 2' = 'skyblue3', 
+#                  'Sampling period 3' = 'orange3')
 
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # 
@@ -75,12 +86,65 @@ nTax_by_barcode <- c(
   'PLAN' = 8
 )
 
+# Define the bacteria palette with named colors
+bacteria_palette <- c(
+  Others = "#C6C2C2",
+  Unclassified = "#E6E5C1",
+  Beijerinckiaceae = "#FFFFFF",
+  `67-14` = "hotpink1",
+  Streptomycetaceae = "darkmagenta",
+  Acetobacteraceae = "brown2",
+  Oxalobacteraceae = "sienna2",
+  Sphingomonadaceae = "#FFA500",
+  Paracoccaceae = "tomato",
+  Pseudonocardiaceae = "#FFD700",
+  Kineosporiaceae = "lightslateblue",
+  Intrasporangiaceae = "mediumvioletred",
+  Hymenobacteraceae = "#D700D7",
+  Deinococcaceae = "#FF6B6B",
+  Microbacteriaceae = "#B2006B", 
+  Geodermatophilaceae = "#8A008A",
+  Micrococcaceae = "violet",
+  Nocardioidaceae = "#6A008A")
+
+fungi_palette <- c(Others="#C6C2C2",
+                   Phanerochaetaceae="#FFFFFF",
+                   Mycosphaerellaceae="paleturquoise1",
+                   Rickenellaceae="royalblue4",
+                   Omphalotaceae="lightsteelblue",
+                   Cortinariaceae="seagreen2",
+                   Discinellaceae="darkgreen",
+                   Gloeophyllaceae="palegreen4",
+                   Atheliaceae="seagreen",
+                   Strophariaceae="darkslategrey",
+                   Incrustoporiaceae="blue",
+                   Cerrenaceae="cyan1",
+                   Incrustoporiaceae="#00CED1",
+                   Ganodermataceae="#40E0D0",
+                   Peniophoraceae="#20B2AA",
+                   Irpicaceae="#008B8B",
+                   Pleosporaceae="#5F9EA0",
+                   Fomitopsidaceae="#4682B4",
+                   Polyporaceae="#1E90FF",
+                   Cladosporiaceae="deepskyblue4")
+
+pollen_palette <- c(Others="#C6C2C2",
+                    Unclassified = "#E6E5C1",
+                    Poaceae="#32CD32",
+                    Cupressaceae="#00FF00",
+                    Betulaceae="#ADFF2F",
+                    Equisetaceae="#74C476",
+                    Oleaceae="#238B45",
+                    Sapindaceae="#41AB5D",
+                    Asteraceae="#006D2C",
+                    Pinaceae="#00441B")
+
 cities <- c('Montreal' = 'Montreal', 
             'Quebec' = 'Quebec', 
             'Sherbrooke' = 'Sherbrooke')
 all_plots.ls <- map(cities, function(ci) {
   city_plots.ls <- imap(melted.ls, function(melted, barcode) {
-      
+    
     # Filter and add barcode variable for facets
     melted %<>% filter(city == ci) %>% 
       mutate(Barcode = barcode) %>% 
@@ -117,7 +181,7 @@ all_plots.ls <- map(cities, function(ci) {
       group_by(date, time, Barcode, aggTaxo) %>% 
       summarise(relAb = sum(relAb), .groups = 'drop') %>% 
       mutate(aggTaxo = factor(aggTaxo, levels = top_taxa_lvls),
-      #       date = as.factor(date)
+             #       date = as.factor(date)
       ) %>% 
       ggplot(aes(x = date, y = relAb, fill = aggTaxo)) +
       geom_col() +
@@ -130,23 +194,27 @@ all_plots.ls <- map(cities, function(ci) {
   })
   
   # Individual plot manip
+  
   p_bact <- city_plots.ls[['BACT']] + 
     theme(axis.title = element_blank(),
           axis.text.x = element_blank()) +
+    scale_fill_manual(values = bacteria_palette)+
     labs(title = ci)
   
   p_fung <- city_plots.ls[['FUNG']] +
     theme(axis.title.x = element_blank(),
           strip.text.x = element_blank(),
           axis.text.x = element_blank(),
-          legend.title = element_blank())
+          legend.title = element_blank())+
+    scale_fill_manual(values = fungi_palette)
   
   p_plan <- city_plots.ls[['PLAN']] +
     labs(x = 'Sampling date') +
     theme(strip.text.x = element_blank(),
           axis.title = element_blank(),
           legend.title = element_blank(),
-          axis.text.x = element_text(angle = 45, hjust = 1))
+          axis.text.x = element_text(angle = 45, hjust = 1))+
+    scale_fill_manual(values = pollen_palette)
   
   # Patchwork:
   p_bact / p_fung / p_plan 
