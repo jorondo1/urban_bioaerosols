@@ -4,6 +4,7 @@ urbanbio.path <- '~/Desktop/ip34/urbanBio'
 
 source(file.path(urbanbio.path, 'scripts/myFunctions.R'))
 source("https://github.com/jorondo1/misc_scripts/raw/refs/heads/main/community_functions.R")
+source("https://github.com/jorondo1/misc_scripts/raw/refs/heads/main/psflashmelt.R")
 source("https://github.com/jorondo1/misc_scripts/raw/refs/heads/main/myFunctions.R")
 source("https://github.com/jorondo1/misc_scripts/raw/refs/heads/main/tax_glom2.R")
 
@@ -16,34 +17,17 @@ ps_rare.ls <- read_rds(file.path(urbanbio.path, 'data/ps_rare.ls.rds'))
 
 barcodes <- c('BACT' = "Bacteria",
               'FUNG' = "Fungi",
-              'PLAN' = "Plants")
+              'PLAN' = "Pollen")
 
 Hill_indices <- c('H_0' = 'Richness',
                   'H_1' = 'exp^(Shannon)',
                   'H_2' = 'Inverse Simpson')
 
-mutate_time <- function(data) {
-  data %>% 
-    mutate(time = case_when(
-      city == "Montreal" ~ recode_factor(time, !!!c(
-        'Spring' = 'MTL1',
-        'Summer' = 'MTL2',
-        'Fall' = 'MTL3')),
-      city == "Quebec" ~ recode_factor(time, !!!c(
-        'Spring' = 'QBC1',
-        'Summer' = 'QBC2',
-        'Fall' = 'QBC3')),
-      city == "Sherbrooke" ~ recode_factor(time, !!!c(
-        'Spring' = 'SHB1',
-        'Summer' = 'SHB2 Y',
-        'Fall' = 'SHB3')),
-      TRUE ~ time  # Default case (if city doesn't match any condition)
-    ))
-}
+periods <- c('Spring', 'Summer', 'Fall')
 
-#period_colour = c('Sampling period 1' = 'springgreen4', 
-#                  'Sampling period 2' = 'skyblue3', 
-#                  'Sampling period 3' = 'orange3')
+#period_colour = c('Sampling time_period 1' = 'springgreen4', 
+#                  'Sampling time_period 2' = 'skyblue3', 
+#                  'Sampling time_period 3' = 'orange3')
 
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # 
@@ -61,24 +45,41 @@ mutate_time <- function(data) {
 #
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # 
 
-# Which level ?? Genus, Order
-# Sampling period 1, 2, 3
-# facet_grid(barcode~time)
+# Dataframe with taxrank mean relative abundance by (taxrank, city, date)
 which_taxrank <- 'Family'
-melted.ls <- lapply(ps_rare.ls, function(ps) {
+melted <- imap(ps_rare.ls, function(ps, barcode) {
   
-  psmelt(ps) %>%
-    filter(Abundance != 0) %>%
+  psflashmelt(ps) %>%
+    # filter(Abundance != 0) %>% # KEEP them !
+    # Sum abundance by taxrank for each sample
     group_by(Sample, date, city, time, !!sym(which_taxrank)) %>% 
-    summarise(Abundance = sum(Abundance), .groups = 'drop') %>% 
+    summarise(Abundance = sum(Abundance), .groups = 'drop') %>%
+    # Then for all samples within a date/city/time combination
     group_by(date, city, time, !!sym(which_taxrank)) %>% 
-    summarise(Abundance = sum(Abundance), .groups = 'drop') %>% 
+    summarise(Abundance = sum(Abundance), .groups = 'drop') %>%
+    # Compute relab
     group_by(date, time, city) %>% 
     mutate(relAb = Abundance/sum(Abundance)) %>% 
     select(!!sym(which_taxrank), relAb, city, time, date) %>% 
-    ungroup
-  
-})
+    ungroup() %>% 
+    mutate(Barcode = barcode, 
+           # To prevent gap in date x axis, we recode date. 
+           date_label = paste(month(date, label = TRUE, abbr=TRUE), 
+                            day(date)),
+         # Recode date as character factor 
+         date = as.character(date))
+}) %>% list_rbind
+
+# Count number of sample by unique (taxrank, city, date) for each barcode
+sample_counts <- imap(ps_rare.ls, function(ps, barcode){
+  samdat_as_tibble(ps) %>% 
+    group_by(date, city, time) %>% 
+    summarise(n_samples = n(), .groups = 'drop') %>% 
+    mutate(Barcode = barcode,
+           date_label = paste(month(date, label = TRUE, abbr=TRUE), 
+                              day(date)),
+           date = as.character(date))
+}) %>% list_rbind
 
 nTax_by_barcode <- c(
   'BACT' = 14,
@@ -87,7 +88,8 @@ nTax_by_barcode <- c(
 )
 
 # Define the bacteria palette with named colors
-bacteria_palette <- c(
+palettes <- list() 
+palettes$BACT <- c(
   Others = "#C6C2C2",
   Unclassified = "#E6E5C1",
   Beijerinckiaceae = "#FFFFFF",
@@ -107,123 +109,220 @@ bacteria_palette <- c(
   Micrococcaceae = "violet",
   Nocardioidaceae = "#6A008A")
 
-fungi_palette <- c(Others="#C6C2C2",
-                   Phanerochaetaceae="#FFFFFF",
-                   Mycosphaerellaceae="paleturquoise1",
-                   Rickenellaceae="royalblue4",
-                   Omphalotaceae="lightsteelblue",
-                   Cortinariaceae="seagreen2",
-                   Discinellaceae="darkgreen",
-                   Gloeophyllaceae="palegreen4",
-                   Atheliaceae="seagreen",
-                   Strophariaceae="darkslategrey",
-                   Incrustoporiaceae="blue",
-                   Cerrenaceae="cyan1",
-                   Incrustoporiaceae="#00CED1",
-                   Ganodermataceae="#40E0D0",
-                   Peniophoraceae="#20B2AA",
-                   Irpicaceae="#008B8B",
-                   Pleosporaceae="#5F9EA0",
-                   Fomitopsidaceae="#4682B4",
-                   Polyporaceae="#1E90FF",
-                   Cladosporiaceae="deepskyblue4")
+palettes$FUNG <- c(
+  Others="#C6C2C2",
+  Phanerochaetaceae="#FFFFFF",
+  Mycosphaerellaceae="paleturquoise1",
+  Rickenellaceae="royalblue4",
+  Omphalotaceae="lightsteelblue",
+  Cortinariaceae="seagreen2",
+  Discinellaceae="darkgreen",
+  Gloeophyllaceae="palegreen4",
+   Atheliaceae="seagreen",
+   Strophariaceae="darkslategrey",
+   Cerrenaceae="cyan1",
+   Incrustoporiaceae="#00CED1",
+   Ganodermataceae="#40E0D0",
+   Peniophoraceae="#20B2AA",
+   Irpicaceae="#008B8B",
+   Pleosporaceae="#5F9EA0",
+   Fomitopsidaceae="#4682B4",
+   Polyporaceae="#1E90FF",
+   Cladosporiaceae="deepskyblue4")
 
-pollen_palette <- c(Others="#C6C2C2",
-                    Unclassified = "#E6E5C1",
-                    Poaceae="#32CD32",
-                    Cupressaceae="#00FF00",
-                    Betulaceae="#ADFF2F",
-                    Equisetaceae="#74C476",
-                    Oleaceae="#238B45",
-                    Sapindaceae="#41AB5D",
-                    Asteraceae="#006D2C",
-                    Pinaceae="#00441B")
+palettes$PLAN <- c(
+  Others="#C6C2C2",
+  Unclassified = "#E6E5C1",
+  Poaceae="#32CD32",
+  Cupressaceae="#00FF00",
+  Betulaceae="#ADFF2F",
+  Equisetaceae="#74C476",
+  Oleaceae="#238B45",
+  Sapindaceae="#41AB5D",
+  Asteraceae="#006D2C",
+  Pinaceae="#00441B")
 
 cities <- c('Montreal' = 'Montreal', 
             'Quebec' = 'Quebec', 
-            'Sherbrooke' = 'Sherbrooke')
+          'Sherbrooke' = 'Sherbrooke')
+
+# Create all plots 
 all_plots.ls <- map(cities, function(ci) {
-  city_plots.ls <- imap(melted.ls, function(melted, barcode) {
+  
+  # Each timeslot needs to be created separately, to better manage the x (time) axis
+  time_plots.ls <- map(periods, function(time_period) {
     
-    # Filter and add barcode variable for facets
-    melted %<>% filter(city == ci) %>% 
-      mutate(Barcode = barcode) %>% 
-      mutate(Barcode = recode_factor(Barcode, !!!barcodes)) %>% 
-      mutate_time()
+    # Create custom (text) date labels for x axis with no date spacing
+    date_labels <- melted %>% 
+      filter(city == ci & time == time_period) %>% 
+      select(date, date_label) %>% distinct %>% 
+      deframe()
+      # This is required for vertical x axis consistency !
     
-    # How many taxa to display:
-    nTaxa <- nTax_by_barcode[barcode] 
-    top_taxa <- topTaxa(melted, taxLvl = which_taxrank, topN = nTaxa)
-    
-    # Define top taxa levels
-    top_taxa_lvls <- top_taxa %>% 
-      group_by(aggTaxo) %>% 
-      aggregate(relAb ~ aggTaxo, data = ., FUN = sum) %>% 
-      arrange(relAb) %$% aggTaxo %>% 
-      as.character %>% # Set Others and Unclassified first:
-      setdiff(., c('Others', 'Unclassified')) %>% c('Others', 'Unclassified', .)
-    
-    # Is Unclassified part of the topN? 
-    if(('Unclassified' %in% top_taxa$aggTaxo)) {
-      fixed_colours <- c("#C6C2C2", "#E6E5C1")
-    } else {
-      fixed_colours <- c("#C6C2C2")
+    if (ci == 'Quebec' & time_period == 'Summer') {
+      return(NULL)  # Skip this iteration
     }
     
-    # Define palette
-    expanded_palette <- colorRampPalette(brewer.pal(12, 'Set3'))(nTaxa) %>% 
-      setdiff(., fixed_colours) %>% # colours reserved
-      c(fixed_colours, .)
+    # Each city plot contains a subplot for each barcode
+    imap(barcodes, function(barcode_name, barcode) {
+      
+      # First for all periods in the barcode, define top taxa
+      # (redundant for each time iteration!)
+      melted_filt <- melted %>% 
+        filter(city == ci & Barcode == barcode) %>% 
+        mutate(Barcode = recode_factor(Barcode, !!!barcodes),
+               date = factor(date, levels = names(date_labels)))
+        
+      # How many taxa to display:
+      nTaxa <- nTax_by_barcode[barcode] 
+      top_taxa <- topTaxa(melted_filt, taxLvl = which_taxrank, topN = nTaxa)
+      
+      # Define top taxa levels
+      top_taxa_lvls <- top_taxa %>%
+        group_by(aggTaxo) %>% 
+        aggregate(relAb ~ aggTaxo, data = ., FUN = sum) %>% 
+        arrange(relAb) %$% aggTaxo %>% 
+        as.character %>% # Set Others and Unclassified first:
+        setdiff(., c('Others', 'Unclassified')) %>% c('Others', 'Unclassified', .)
+      
+      # Is Unclassified part of the topN? 
+      if(('Unclassified' %in% top_taxa$aggTaxo)) {
+        fixed_colours <- c("#C6C2C2", "#E6E5C1")
+      } else {
+        fixed_colours <- c("#C6C2C2")
+      }
+      
+      # Define palette
+      expanded_palette <- colorRampPalette(brewer.pal(12, 'Set3'))(nTaxa) %>% 
+        setdiff(., fixed_colours) %>% # colours reserved
+        c(fixed_colours, .)
+      
+      # 
+      plot.df <- melted_filt %>% 
+        left_join(top_taxa %>% select(-relAb), by = which_taxrank) %>%
+        group_by(date, time, Barcode, aggTaxo) %>% 
+        summarise(relAb = sum(relAb), .groups = 'drop') %>% 
+        mutate(aggTaxo = factor(aggTaxo, levels = top_taxa_lvls)
+        ) %>% # Filter at the end, to keep all taxa levels in the df
+        filter(time == time_period)
+      
+      sample_counts_filt <- sample_counts %>% 
+        filter(city == ci & Barcode == barcode & time == time_period) %>% 
+        select(date, n_samples)
+      
+      # MAIN PLOT
+      plot.df %>%
+        ggplot(aes(x = date, y = relAb, fill = aggTaxo)) +
+        geom_col() +
+        # Sample count labels:
+        geom_text(data = sample_counts_filt,
+                  aes(x = date,
+                      y = 1,  # Place at top of column
+                      label = paste0("N = ", n_samples)),
+          vjust = -1,  size = 2,
+          inherit.aes = FALSE  # Ignore fill aesthetic
+        ) +
+        facet_grid(Barcode~.) +
+        scale_fill_manual(values = palettes[[barcode]]) +
+        scale_x_discrete(labels = date_labels, drop = FALSE) +
+        labs(fill = which_taxrank, y = 'Mean relative amplicon sequence abundance') +
+        theme(panel.grid.minor = element_blank(),
+              axis.ticks.x = element_blank(),
+              panel.grid = element_blank(),
+              legend.justification = "left",
+              legend.box.spacing = unit(0, "cm"),
+              strip.text = element_text(size = 13))
+    })
+  }); names(time_plots.ls) <- periods
+  
+  # Remove empty lists (e.g. Québec summer)
+  time_plots.ls %<>% compact()
+  
+  # === COMPOSITION PLOTS
+  # BACTERIA (Top)
+  p_bact <- list(
+    time_plots.ls[['Spring']][['BACT']] + 
+      theme(strip.text.y = element_blank()) +
+      labs(title = ci),
     
-    # Generalised plot code
-    melted %>% 
-      left_join(top_taxa %>% select(-relAb), by = which_taxrank) %>%
-      group_by(date, time, Barcode, aggTaxo) %>% 
-      summarise(relAb = sum(relAb), .groups = 'drop') %>% 
-      mutate(aggTaxo = factor(aggTaxo, levels = top_taxa_lvls),
-             #       date = as.factor(date)
-      ) %>% 
-      ggplot(aes(x = date, y = relAb, fill = aggTaxo)) +
-      geom_col() +
-      facet_grid(Barcode~time, scales = 'free', space = 'free') +
-      scale_fill_manual(values = expanded_palette) +
-      labs(fill = which_taxrank, y = 'Relative amplicon sequence abundance') +
-      theme(panel.grid.minor = element_blank(),
-            axis.ticks.x = element_blank(),
-            legend.justification = "left")
+    # Conditionally include Summer
+    if (ci != 'Quebec') {
+      time_plots.ls[['Summer']][['BACT']] +
+        theme(strip.text.y = element_blank(),
+              axis.text.y = element_blank())
+    } else { NULL },
+    
+    time_plots.ls[['Fall']][['BACT']] +
+      theme(axis.text.y = element_blank())
+  ) %>% compact()
+  
+  p_bact <- reduce(p_bact, `|`) + 
+    plot_layout(guides = "collect") & 
+    theme(axis.text.x = element_blank(),
+          axis.title = element_blank())
+  
+  # FUNGI (Middle)
+  p_fung <- list(
+    time_plots.ls[['Spring']][['FUNG']] + 
+      theme(strip.text.y = element_blank()),
+    
+    if (ci != 'Quebec') {
+    time_plots.ls[['Summer']][['FUNG']] +
+      theme(strip.text.y = element_blank(),
+            axis.text.y = element_blank(),
+            axis.title = element_blank()) 
+    } else { NULL },
+    
+    time_plots.ls[['Fall']][['FUNG']] +
+      theme(axis.text.y = element_blank(),
+            axis.title = element_blank()) 
+  ) %>% compact()
+  
+  p_fung <- reduce(p_fung, `|`) + 
+    plot_layout(guides = "collect") & 
+    theme(axis.text.x = element_blank(),
+          axis.title.x = element_blank())
+  
+  # POLLEN (Bottom)
+  p_plan <- list(
+    time_plots.ls[['Spring']][['PLAN']] + 
+      theme(strip.text.y = element_blank()),
+  
+    if (ci != 'Quebec') {
+    time_plots.ls[['Summer']][['PLAN']] +
+      theme(strip.text.y = element_blank(),
+          axis.text.y = element_blank()
+          ) 
+    } else { NULL },
+  
+    time_plots.ls[['Fall']][['PLAN']] +
+      theme(axis.text.y = element_blank())
+  ) %>% compact
+  
+  p_plan <- reduce(p_plan, `|`) + 
+    plot_layout(guides = "collect") & 
+    theme(axis.text.x = element_text(angle = 90),
+          axis.title = element_blank())
+  
+  # ==== SUPER PATCHWORK
+  p_bact / p_fung / p_plan &
+    theme(
+      legend.position = "right",
+      legend.justification = "left",
+      legend.box.spacing = unit(0, "cm"),
+      legend.text = element_text(margin = margin(l = 5)))
+  
+})
+
+map(cities, function(ci) {
+  map(barcodes, function(barcode) {
+    
   })
-  
-  # Individual plot manip
-  
-  p_bact <- city_plots.ls[['BACT']] + 
-    theme(axis.title = element_blank(),
-          axis.text.x = element_blank()) +
-    scale_fill_manual(values = bacteria_palette)+
-    labs(title = ci)
-  
-  p_fung <- city_plots.ls[['FUNG']] +
-    theme(axis.title.x = element_blank(),
-          strip.text.x = element_blank(),
-          axis.text.x = element_blank(),
-          legend.title = element_blank())+
-    scale_fill_manual(values = fungi_palette)
-  
-  p_plan <- city_plots.ls[['PLAN']] +
-    labs(x = 'Sampling date') +
-    theme(strip.text.x = element_blank(),
-          axis.title = element_blank(),
-          legend.title = element_blank(),
-          axis.text.x = element_text(angle = 45, hjust = 1))+
-    scale_fill_manual(values = pollen_palette)
-  
-  # Patchwork:
-  p_bact / p_fung / p_plan 
-  
 })
 
 imap(all_plots.ls, function(a_plot, ci) {
   ggsave(paste0('~/Desktop/ip34/urbanBio/out/community', ci,'.pdf'),
-         plot = a_plot, bg = 'white', width = 2000, height = 2600,
+         plot = a_plot, bg = 'white', width = 2200, height = 2500,
          units = 'px', dpi = 200)
 })
 
@@ -239,8 +338,8 @@ imap(all_plots.ls, function(a_plot, ci) {
         #axis.text.x = element_blank(),
        axis.ticks.x = element_blank())
 
-# BFP grid / wrap with nested period, MQS rows, mean per time period
-# Time period represented by ~median date ? distinct by city
+# BFP grid / wrap with nested time_period, MQS rows, mean per time time_period
+# Time time_period represented by ~median date ? distinct by city
 
 
 ### From here on, individual plots will be patched together
@@ -299,7 +398,7 @@ for (ci in cities) {
       theme(axis.title.x = element_blank(),
             axis.text.x = element_blank(),
             legend.position = 'bottom') +
-      scale_fill_manual(values = period_colour) +
+     # scale_fill_manual(values = period_colour) +
       labs(y = 'Effective number of taxa') +
       ylim(0,NA) 
   }
@@ -449,7 +548,7 @@ for (ci in cities) {
 }
  
 # X4 Community composition all samples 
-# Same as 2., but order by date within facets, time period nested in barcode
+# Same as 2., but order by date within facets, time time_period nested in barcode
 
 
 # X2 Median income vs. vegetation index design (dotplot)
