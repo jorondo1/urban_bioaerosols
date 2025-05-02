@@ -93,6 +93,7 @@ imap(kingdom_names, function(k, barcode){
            Prev.QBC = paste0(Prev.QBC, " (",round(100*Prev.QBC/nsam_QBC,0), " %)"),
            Prev.SHB = paste0(Prev.SHB, " (",round(100*Prev.SHB/nsam_SHB,0), " %)")) %>%
     arrange(compound_score) %>%
+    head(n = 200) %>% 
     select(-compound_score, -ASV) %>% 
      knitr::kable(col.names = c(
        'Family',
@@ -110,20 +111,20 @@ imap(kingdom_names, function(k, barcode){
                             full_width = FALSE) %>%
   kableExtra::save_kable(paste0(urbanbio.path, "/out/ASV_prev_", barcode,".html"),
              self_contained = TRUE)
+
+  # Taxonomy table
+  joined_table %>% 
+    select(ASV_label, ASV) %>% 
+    left_join(melted %>% 
+                select(ASV, Genus, Family, Order, Class, Phylum) %>% 
+                unique,
+              by= 'ASV') %>% 
+    knitr::kable() %>% 
+    kableExtra::kable_styling('striped') %>% 
+    save_kable(paste0(urbanbio.path, "/out/ASV_labels_", barcode,".html"),
+               self_contained = TRUE)
 })
 
 
-
-
-# Taxonomy table
-joined_table %>% 
-  select(ASV_label, ASV) %>% 
-  left_join(melted %>% 
-              select(OTU, Genus, Family, Order, Class, Phylum) %>% 
-              unique,
-            join_by(ASV == OTU)) %>% 
-  knitr::kable() %>% 
-  kableExtra::kable_styling('striped') %>% 
-  save_kable("2023/out/ASV_labels.html",self_contained = TRUE)
 
 

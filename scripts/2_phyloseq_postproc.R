@@ -170,3 +170,7 @@ ps_rare.ls <- lapply(ps.ls, function(ps) {
 })
 write_rds(ps_rare.ls, file.path(urbanbio.path, 'data/ps_rare.ls.rds'),
           compress = 'gz')
+
+###################################
+# Most abundant taxa by barcode ###
+#####################################

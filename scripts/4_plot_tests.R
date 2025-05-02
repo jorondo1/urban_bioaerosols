@@ -23,7 +23,9 @@ Hill_indices <- c('H_0' = 'Richness',
                   'H_1' = 'exp^(Shannon)',
                   'H_2' = 'Inverse Simpson')
 
-periods <- c('Spring', 'Summer', 'Fall')
+period_colours <- c('Spring' = 'springgreen3',
+                    'Summer' = 'skyblue3', 
+                    'Fall' = 'orange3')
 
 #period_colour = c('Sampling time_period 1' = 'springgreen4', 
 #                  'Sampling time_period 2' = 'skyblue3', 
@@ -147,10 +149,10 @@ cities <- c('Montreal' = 'Montreal',
           'Sherbrooke' = 'Sherbrooke')
 
 # Create all plots 
-all_plots.ls <- map(cities, function(ci) {
+community_plots.ls <- map(cities, function(ci) {
   
   # Each timeslot needs to be created separately, to better manage the x (time) axis
-  time_plots.ls <- map(periods, function(time_period) {
+  time_plots.ls <- map(names(period_colours), function(time_period) {
     
     # Create custom (text) date labels for x axis with no date spacing
     date_labels <- melted %>% 
@@ -225,15 +227,13 @@ all_plots.ls <- map(cities, function(ci) {
         facet_grid(Barcode~.) +
         scale_fill_manual(values = palettes[[barcode]]) +
         scale_x_discrete(labels = date_labels, drop = FALSE) +
-        labs(fill = which_taxrank, y = 'Mean relative amplicon sequence abundance') +
+        labs(fill = which_taxrank, y = '') +
         theme(panel.grid.minor = element_blank(),
               axis.ticks.x = element_blank(),
               panel.grid = element_blank(),
-              legend.justification = "left",
-              legend.box.spacing = unit(0, "cm"),
               strip.text = element_text(size = 13))
     })
-  }); names(time_plots.ls) <- periods
+  }); names(time_plots.ls) <- names(period_colours)
   
   # Remove empty lists (e.g. Québec summer)
   time_plots.ls %<>% compact()
@@ -304,146 +304,29 @@ all_plots.ls <- map(cities, function(ci) {
     theme(axis.text.x = element_text(angle = 90),
           axis.title = element_blank())
   
-  # ==== SUPER PATCHWORK
+  # ==== SUPER PATCHWORK 
   p_bact / p_fung / p_plan &
     theme(
-      legend.position = "right",
-      legend.justification = "left",
-      legend.box.spacing = unit(0, "cm"),
-      legend.text = element_text(margin = margin(l = 5)))
-  
+      legend.text = element_text(margin = margin(l = 5),
+                                 size = 10),
+      legend.key.size = unit(12,"pt")) 
 })
 
-map(cities, function(ci) {
-  map(barcodes, function(barcode) {
-    
-  })
-})
 
-imap(all_plots.ls, function(a_plot, ci) {
-  ggsave(paste0('~/Desktop/ip34/urbanBio/out/community', ci,'.pdf'),
-         plot = a_plot, bg = 'white', width = 2200, height = 2500,
-         units = 'px', dpi = 200)
-})
-
- melted.ls$PLAN %>% 
-  left_join(top_taxa %>% select(-relAb), by = 'OTU') %>%
-  mutate(aggTaxo = factor(aggTaxo, levels = top_taxa_lvls)) %>% 
-  ggplot(aes(x = date, y = relAb, fill = aggTaxo)) +
-  geom_col() +
-  facet_grid(city~time, scales = 'free') +
-  scale_fill_manual(values = expanded_palette) +
-  labs(fill = 'OTU') +
-   theme(panel.grid.minor = element_blank(),
-        #axis.text.x = element_blank(),
-       axis.ticks.x = element_blank())
-
-# BFP grid / wrap with nested time_period, MQS rows, mean per time time_period
-# Time time_period represented by ~median date ? distinct by city
-
-
-### From here on, individual plots will be patched together
-### per city, to contain both diversity analyses as well as
-### some differential testing and maybe nestedness? 
-
-# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # 
-#
-#  /$$$$$$$  /$$        /$$$$$$  /$$$$$$$$        /$$$$$$ 
-# | $$__  $$| $$       /$$__  $$|__  $$__/       /$$__  $$
-# | $$  \ $$| $$      | $$  \ $$   | $$         |__/  \ $$
-# | $$$$$$$/| $$      | $$  | $$   | $$            /$$$$$/
-# | $$____/ | $$      | $$  | $$   | $$           |___  $$
-# | $$      | $$      | $$  | $$   | $$          /$$  \ $$
-# | $$      | $$$$$$$$|  $$$$$$/   | $$         |  $$$$$$/
-# |__/      |________/ \______/    |__/          \______/ 
-#
-#                  Alpha diversity 
-#
-# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # 
- 
-# ps_rare_Genus.ls <- lapply(ps_rare.ls, function(ps){
-#   tax_glom2(ps, taxrank = "Genus")
-# })
-
-# Compute diversity 
-div_Hill <- imap(ps_rare.ls, function(ps, barcode) {
-  div.fun(ps, c(0,1,2)) %>% 
-    data.frame %>% 
+# === COMPUTE ALPHA DIVERSITY
+diversity.df <- imap(ps_rare.ls, function(ps, barcode) {
+  estimate_diversity(ps, 'Shannon') %>% 
+    data.frame(Shannon = .) %>% 
     rownames_to_column('Sample') %>% 
     left_join(samdat_as_tibble(ps), # add samdat
               by = 'Sample') %>% 
-    mutate(barcode = barcode) # Add barcode
-}) %>% list_rbind %>% # long format:
-  pivot_longer(cols = c('H_0', 'H_1', 'H_2', 'Tail'), 
-               names_to = 'Index',
-               values_to = 'Effective_taxa')
-
-# Recode factors
-div_Hill %<>%
-  mutate_time %>% 
-  mutate(barcode = recode_factor(barcode, !!!barcodes),
-  Index = recode_factor(Index, !!!Hill_indices))
-
-# One plot per city
-for (ci in cities) {
-  p <- list()
-  # one subplot per barcode, because different scales prevent using facet_grid
-  for (bc in barcodes) {
-    p[[bc]] <- div_Hill %>% 
-      filter(city == ci & Index != 'Tail' & barcode == bc) %>% 
-      ggplot(aes(x = time, y = Effective_taxa, fill = time)) +
-      geom_boxplot(outliers = TRUE) +
-      facet_grid(Index~barcode, scales = 'free') +
-      theme_light() +
-      theme(axis.title.x = element_blank(),
-            axis.text.x = element_blank(),
-            legend.position = 'bottom') +
-     # scale_fill_manual(values = period_colour) +
-      labs(y = 'Effective number of taxa') +
-      ylim(0,NA) 
-  }
+    mutate(Barcode = barcode,
+           Barcode = recode(Barcode, !!!barcodes),
+           time = factor(time, names(period_colours)),
+           Hill_1 = exp(Shannon))
+}) %>% list_rbind 
   
-  # Some patchwork gymnastics to stitch them back together
-  # and make it look like a facet_grip with column-flexible y scale
-  p[[barcodes[1]]] <- p[[barcodes[1]]] +
-    theme(strip.text.y = element_blank())
-  
-  p[[barcodes[2]]] <- p[[barcodes[2]]] +
-    theme(strip.text.y = element_blank(),
-          axis.title.y = element_blank())
-  
-  p[[barcodes[3]]] <- p[[barcodes[3]]] +
-    theme(axis.title.y = element_blank())
-  
-  p2 <- p[[barcodes[1]]] + p[[barcodes[2]]] + p[[barcodes[3]]] +
-    plot_layout(guides = "collect") &
-    theme(legend.position = 'bottom')
-  
-  ggsave(paste0('~/Desktop/ip34/urbanBio/out/alpha_', ci,'_Hill.pdf'),
-         plot = p2, bg = 'white', width = 2000, height = 2000,
-         units = 'px', dpi = 220)
-}
-
-# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # 
-#
-#  /$$$$$$$  /$$        /$$$$$$  /$$$$$$$$       /$$   /$$
-# | $$__  $$| $$       /$$__  $$|__  $$__/      | $$  | $$
-# | $$  \ $$| $$      | $$  \ $$   | $$         | $$  | $$
-# | $$$$$$$/| $$      | $$  | $$   | $$         | $$$$$$$$
-# | $$____/ | $$      | $$  | $$   | $$         |_____  $$
-# | $$      | $$      | $$  | $$   | $$               | $$
-# | $$      | $$$$$$$$|  $$$$$$/   | $$               | $$
-# |__/      |________/ \______/    |__/               |__/
-#
-#                   Beta diversity
-# 
-# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # 
-
 # Betadiv en BFP
-# 2 rows : BC + Aitchison? Ou UniFrac pour les bact?
-# 3rd row : Turnover/nestedness
-# Include variance partitioning?
-
 # Split every dataset by city
 ps_byCity.ls <- lapply(cities, function(city_name) { # 1st level: city
   lapply(ps_rare.ls, function(ps) { # 2nd level: barcode
@@ -467,6 +350,7 @@ pcoa.ls <- imap(ps_byCity.ls, function(ps.ls, city) {
   })
 })
 
+# Compute eigenvalues and create strings for plots
 eig.df <- imap(pcoa.ls, function(pcoa_barcode.ls, city) {
   imap(pcoa_barcode.ls, function(pcoa_dist.ls, barcode) {
     imap(pcoa_dist.ls, function(pcoa, dist) {
@@ -488,7 +372,7 @@ eig.df <- imap(pcoa.ls, function(pcoa_barcode.ls, city) {
          MDS = case_when(MDS == 'MDS1' ~ 'PCo1',
                          MDS == 'MDS2' ~ 'PCo2')) %>% 
   summarize(Eig = paste0(MDS, ": ", round(Eig, 1), "%"), .groups = "drop") %>%
-  pivot_wider(names_from = MDS, values_from = Eig) %>% unnest(PCo1, PCo2)
+  pivot_wider(names_from = MDS, values_from = Eig) 
 
 # Compile pcoa data 
 pcoa.df <- imap(pcoa.ls, function(pcoa_barcode.ls, city) {
@@ -511,14 +395,23 @@ pcoa.df <- imap(pcoa.ls, function(pcoa_barcode.ls, city) {
          time = factor(time, levels = c('1', '2', '3')))
 
 period_colour_num <- c(
-  '1' = unname(period_colour[1]),
-  '2' = unname(period_colour[2]),
-  '3' = unname(period_colour[3])
+  '1' = unname(period_colours[1]),
+  '2' = unname(period_colours[2]),
+  '3' = unname(period_colours[3])
 )
 
-for (ci in cities) {
+
+#=== ADD DIVERSITIES TO COMMUNITY PLOT
+map(cities, function(ci) {
   
-  p.ls <- map(barcodes, function(barcode) {
+  adiv.plot <- diversity.df %>% 
+    filter(city == ci) %>% 
+    ggplot(aes(x = time, y = Shannon, fill = factor(veg_index_bracket.))) + 
+    geom_boxplot(linewidth = 0.2) +
+    facet_grid(.~Barcode) +
+    labs(fill = 'Vegetation index') 
+  
+  bdiv.plot.ls <- map(barcodes, function(barcode) {
     
     PCo <- eig.df %>% 
       filter(City == ci & Dist == 'bray' & Barcode == barcode) %>% 
@@ -531,22 +424,31 @@ for (ci in cities) {
       stat_ellipse(level = 0.95, geom = 'polygon', 
                    alpha = 0.2, aes(fill = time)) +
       theme_light() +
-      facet_grid(.~Barcode) +
       scale_colour_manual(values = period_colour_num) +
       scale_fill_manual(values = period_colour_num) +
       labs(colour = 'Sampling\nperiod', fill = 'Sampling\nperiod', 
            x = PCo$PCo1, y = PCo$PCo2) +
-      theme(axis.title.y = element_text(margin = margin(r = -5, l=5)))
+      theme(axis.title.y = element_text(margin = margin(r = -2, l=0)),
+            axis.text = element_blank())
   })
   
-  p <- p.ls$BACT + p.ls$FUNG + p.ls$PLAN +
+  bdiv.plot <- bdiv.plot.ls$BACT + bdiv.plot.ls$FUNG + bdiv.plot.ls$PLAN +
     plot_layout(guides = 'collect')
   
-  ggsave(paste0('~/Desktop/ip34/urbanBio/out/pcoa_', ci,'.pdf'),
-         plot = p, bg = 'white', width = 2400, height = 1200,
-         units = 'px', dpi = 200)
-}
- 
+  plot <- 
+    community_plots.ls[[ci]] / adiv.plot / bdiv.plot &
+    theme(legend.position = "right",
+          legend.justification = "left",
+          legend.box.spacing = unit(0, "cm"),
+    )
+  
+  
+   ggsave(paste0('~/Desktop/ip34/urbanBio/out/community', ci,'.pdf'),
+          plot = plot, bg = 'white', width = 2000, height = 2600,
+          units = 'px', dpi = 180)
+  
+})
+
 # X4 Community composition all samples 
 # Same as 2., but order by date within facets, time time_period nested in barcode
 
