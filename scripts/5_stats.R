@@ -7,7 +7,7 @@
 ###############
 
 library(pacman)
-p_load(tidyverse, magrittr, vegan, kableExtra)
+p_load(tidyverse, magrittr, vegan, kableExtra, rstatix, parallel)
 source('scripts/0_config.R') # Variable naming and such
 source('scripts/myFunctions.R')
 
@@ -16,6 +16,47 @@ source('scripts/myFunctions.R')
 #########################
 
 alphadiv.df <- read_rds('data/diversity/alpha_diversity.rds')
+
+wilcox_p <- alphadiv.df %>% 
+  group_by(City, Barcode) %>% 
+  wilcox_test(formula = Shannon ~ time)
+  
+wilcox_e <- alphadiv.df %>% 
+  group_by(City, Barcode) %>% 
+  wilcox_effsize(Shannon ~ time, ci = TRUE, ci.type = 'norm')
+  
+wilcox.df<- full_join(wilcox_p, wilcox_e, 
+          by = c('City', 'Barcode', 'group1', 'group2'))
+
+wilcox.df %>%
+  mutate(group_pair = paste0(group1,'_',group2)) %>% 
+  ggplot(aes(x = log10(p.adj), y = effsize, 
+             colour = Barcode, shape = City)) +
+  geom_vline(aes(xintercept = log10(0.05), linetype = "p = 0.05"), 
+             color = "red", linewidth = 0.3, alpha = 0.5) +
+  geom_vline(aes(xintercept = log10(0.01), linetype = "p = 0.01"), 
+             color = "blue", linewidth = 0.3, alpha = 0.5) +
+  geom_errorbar(aes(y = effsize,
+                    x = log10(p.adj),
+                    ymin = conf.low, 
+                    ymax = conf.high), 
+                width=.4, linewidth = 0.2,
+                inherit.aes = FALSE) +
+  geom_point(size = 3) +
+  facet_grid(group_pair~.) +
+  scale_linetype_manual(
+    values = c('dashed', 'dashed'),
+    name = 'Thresholds'
+  ) +
+  labs(x = 'Log(adjusted p-value)',
+       y = 'Effect size (r)', 
+       colour = 'Barcode',
+       caption = 'The r value varies from 0 to close to 1. The interpretation values for r commonly in published litterature are:
+       0.10 - < 0.3 (small effect), 0.30 - < 0.5 (moderate effect) and >= 0.5 (large effect).')
+
+ggsave('out/stats/wilcox.pdf',
+       bg = 'white', width = 2400, height = 2000, 
+       units = 'px', dpi = 300)
 
 
 ######################
@@ -144,7 +185,7 @@ map(c('terms', 'margin'), function(effect_type){
 
 
 # Let's make a cool plot
-perm_out$terms %>% 
+perm_out$margin %>% 
   ggplot(aes(x = City, y = R2, #alpha = p_sig,
              fill = variable)) +
   geom_col() +
@@ -154,7 +195,7 @@ perm_out$terms %>%
   theme_light() +
   guides(alpha = 'none')
 
-ggsave('out/perMANOVA_margin.pdf',
+ggsave('out/stats/perMANOVA_margin.pdf',
        bg = 'white', width = 2400, height = 2000, 
        units = 'px', dpi = 300)
 
