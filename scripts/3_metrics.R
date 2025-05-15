@@ -8,19 +8,9 @@ p_load(tidyverse, phyloseq)
 
 # Diversity functions:
 source("https://github.com/jorondo1/misc_scripts/raw/refs/heads/main/community_functions.R")
-urbanbio.path <- '~/Desktop/ip34/urbanBio'
+source('scripts/0_config.R') # Variable naming and such
 
-ps_rare.ls <- read_rds(file.path(urbanbio.path, 'data/ps_rare.ls.rds'))
-
-barcodes <- c('BACT' = "Bacteria",
-              'FUNG' = "Fungi",
-              'PLAN' = "Pollen")
-
-periods <- c('Spring' , 'Summer', 'Fall')
-
-cities <- c('Montreal' = 'Montreal', 
-            'Quebec' = 'Quebec', 
-            'Sherbrooke' = 'Sherbrooke')
+ps_rare.ls <- read_rds('data/ps_rare.ls.rds')
 
 #######################
 #=== ALPHA DIVERSITY ###
@@ -41,10 +31,11 @@ diversity.df <- imap(ps_rare.ls, function(ps, barcode) {
     mutate(Barcode = barcode,
            Barcode = recode(Barcode, !!!barcodes),
            time = factor(time, periods)) %>% 
+    rename(City = city) %>% 
     tibble()
 }) %>% list_rbind 
 
-write_rds(diversity.df, file.path(urbanbio.path,'data/diversity/alpha_diversity.rds'))
+write_rds(diversity.df, 'data/diversity/alpha_diversity.rds')
 
 ######################
 #=== BETA DIVERSITY ###

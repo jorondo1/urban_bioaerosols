@@ -1,101 +1,3 @@
-# PLOT 2-5 : Community composition + alpha + beta div  (one per city)
-
-#############
-# X. SETUP ###
-###############
-library(pacman)
-p_load(tidyverse, RColorBrewer, phyloseq, patchwork)
-urbanbio.path <- '~/Desktop/ip34/urbanBio'
-
-source(file.path(urbanbio.path, 'scripts/myFunctions.R'))
-source("https://github.com/jorondo1/misc_scripts/raw/refs/heads/main/psflashmelt.R")
-source("https://github.com/jorondo1/misc_scripts/raw/refs/heads/main/myFunctions.R")
-
-ps_rare.ls <- read_rds(file.path(urbanbio.path, 'data/ps_rare.ls.rds'))
-
-barcodes <- c('BACT' = "Bacteria",
-              'FUNG' = "Fungi",
-              'PLAN' = "Pollen")
-
-Hill_indices <- c('H_0' = 'Richness',
-                  'H_1' = 'exp^(Shannon)',
-                  'H_2' = 'Inverse Simpson')
-
-cities <- c('Montreal' = 'Montreal', 
-            'Quebec' = 'Quebec', 
-            'Sherbrooke' = 'Sherbrooke')
-
-# ==== COLOUR PALETTES
-nTax_by_barcode <- c(
-  'BACT' = 14,
-  'FUNG' = 10,
-  'PLAN' = 8
-)
-
-period_colours <- c('Spring' = 'springgreen3',
-                    'Summer' = 'skyblue3', 
-                    'Fall' = 'orange3')
-nvdi_colours <- c("#E1BE6A", "#40B0A6", "#E66100")
-# Define the bacteria palette with named colors
-palettes <- list() 
-palettes$BACT <- c(
-  Others = "#C6C2C2",
-  Unclassified = "#E6E5C1",
-  Beijerinckiaceae = "#FFFFFF",
-  `67-14` = "hotpink1",
-  Streptomycetaceae = "darkmagenta",
-  Acetobacteraceae = "brown2",
-  Oxalobacteraceae = "sienna2",
-  Sphingomonadaceae = "#FFA500",
-  Paracoccaceae = "tomato",
-  Pseudonocardiaceae = "#FFD700",
-  Kineosporiaceae = "lightslateblue",
-  Intrasporangiaceae = "mediumvioletred",
-  Hymenobacteraceae = "#D700D7",
-  Deinococcaceae = "#FF6B6B",
-  Microbacteriaceae = "#B2006B", 
-  Geodermatophilaceae = "#8A008A",
-  Micrococcaceae = "violet",
-  Nocardioidaceae = "#6A008A")
-
-palettes$FUNG <- c(
-  Others="#C6C2C2",
-  Phanerochaetaceae="#FFFFFF",
-  Mycosphaerellaceae="paleturquoise1",
-  Rickenellaceae="royalblue4",
-  Omphalotaceae="lightsteelblue",
-  Cortinariaceae="seagreen2",
-  Discinellaceae="darkgreen",
-  Gloeophyllaceae="palegreen4",
-  Atheliaceae="seagreen",
-  Strophariaceae="darkslategrey",
-  Cerrenaceae="cyan1",
-  Incrustoporiaceae="#00CED1",
-  Ganodermataceae="#40E0D0",
-  Peniophoraceae="#20B2AA",
-  Irpicaceae="#008B8B",
-  Pleosporaceae="#5F9EA0",
-  Fomitopsidaceae="#4682B4",
-  Polyporaceae="#1E90FF",
-  Cladosporiaceae="deepskyblue4")
-
-palettes$PLAN <- c(
-  Others="#C6C2C2",
-  Unclassified = "#E6E5C1",
-  Poaceae="#32CD32",
-  Cupressaceae="#00FF00",
-  Betulaceae="#ADFF2F",
-  Equisetaceae="#74C476",
-  Oleaceae="#238B45",
-  Sapindaceae="#41AB5D",
-  Asteraceae="#006D2C",
-  Pinaceae="#00441B")
-
-#period_colour = c('Sampling time_period 1' = 'springgreen4', 
-#                  'Sampling time_period 2' = 'skyblue3', 
-#                  'Sampling time_period 3' = 'orange3')
-
-
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # 
 # 
 #   /$$$$$$$ /$$       /$$$$$$ /$$$$$$$$/$$$$$$         /$$$$$$       /$$$$$$$ 
@@ -112,8 +14,33 @@ palettes$PLAN <- c(
 #
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # 
 
+#############
+# X. SETUP ###
+###############
+library(pacman)
+p_load(tidyverse, RColorBrewer, phyloseq, patchwork, magrittr)
+
+source('scripts/myFunctions.R')
+source("https://github.com/jorondo1/misc_scripts/raw/refs/heads/main/psflashmelt.R")
+source("https://github.com/jorondo1/misc_scripts/raw/refs/heads/main/community_functions.R")
+source("https://github.com/jorondo1/misc_scripts/raw/refs/heads/main/myFunctions.R")
+source('scripts/0_config.R') # Variable naming and such
+
+ps_rare.ls <- read_rds(file.path(urbanbio.path, 'data/ps_rare.ls.rds'))
+
 # Dataframe with taxrank mean relative abundance by (taxrank, city, date)
 which_taxrank <- 'Family'
+
+# Number of taxa to display by barcode
+nTax_by_barcode <- c(
+  'BACT' = 14,
+  'FUNG' = 10,
+  'PLAN' = 8
+)
+
+##############################
+# 1. Prepare plot dataframe ###
+################################
 
 # relAb by taxrank by sample with relevant metadata
 melted <- imap(ps_rare.ls, function(ps, barcode) {
@@ -152,6 +79,10 @@ sample_counts <- imap(ps_rare.ls, function(ps, barcode){
                               day(date)),
            date = as.character(date))
 }) %>% list_rbind
+
+###############################
+# 2. Community plots by city ###
+#################################
 
 # Compile community plots for each city 
 community_plots.ls <- map(cities, function(ci) {
@@ -310,19 +241,24 @@ community_plots.ls <- map(cities, function(ci) {
       legend.key.size = unit(12,"pt")) 
 })
 
-#=== ADD DIVERSITIES TO COMMUNITY PLOT
-alphadiv.df <- read_rds(file.path(urbanbio.path, 'data/diversity/alpha_diversity.rds'))
-betadiv.ls <- read_rds(file.path(urbanbio.path, 'data/diversity/beta_diversity.ls.rds'))
+#######################
+# 3. Diversity plots ###
+#########################
+
+# From scripts/3_metrics.R
+alphadiv.df <- read_rds('data/diversity/alpha_diversity.rds')
+betadiv.ls <- read_rds('data/diversity/beta_diversity.ls.rds')
 
 map(cities, function(ci) {
   
-  adiv.plot <- alphadiv.df %>%
+  adiv.plot <- 
+    alphadiv.df %>%
     filter(city == ci) %>% 
     ggplot(aes(x = time, y = Shannon, fill = factor(veg_index_bracket.))) + 
     scale_fill_manual(values = nvdi_colours) +
     geom_boxplot(linewidth = 0.2) +
     facet_grid(.~Barcode) +
-    labs(fill = 'Vegetation index') 
+    labs(fill = 'Vegetation index')
   
   bdiv.plot.ls <- map(barcodes, function(barcode) {
     
@@ -342,10 +278,12 @@ map(cities, function(ci) {
       labs(colour = 'Sampling\nperiod', fill = 'Sampling\nperiod', 
            x = PCo$PCo1, y = PCo$PCo2) +
       theme(axis.title.y = element_text(margin = margin(r = -2, l=0)),
-            axis.text = element_blank())
+            axis.text = element_blank()) %>% 
+      return()
   })
   
-  bdiv.plot <- bdiv.plot.ls$BACT + bdiv.plot.ls$FUNG + bdiv.plot.ls$PLAN +
+  bdiv.plot <- 
+    bdiv.plot.ls$BACT + bdiv.plot.ls$FUNG + bdiv.plot.ls$PLAN +
     plot_layout(guides = 'collect')
   
   plot <- 
@@ -355,7 +293,7 @@ map(cities, function(ci) {
           legend.box.spacing = unit(0, "cm"),
     )
   
-   ggsave(paste0('~/Desktop/ip34/urbanBio/out/community', ci,'.pdf'),
+   ggsave(paste0('out/community', ci,'.pdf'),
           plot = plot, bg = 'white', width = 2000, height = 2600,
           units = 'px', dpi = 160)
   

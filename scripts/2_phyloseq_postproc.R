@@ -5,11 +5,11 @@ library(pacman)
 p_load(phyloseq, tidyverse, kableExtra, ggridges)
 
 # Import
-urbanbio.path <- '~/Desktop/ip34/urbanBio'
-source(file.path(urbanbio.path, 'scripts/myFunctions.R'))
+
+source('scripts/myFunctions.R')
 source("https://github.com/jorondo1/misc_scripts/raw/refs/heads/main/rarefy_even_depth2.R")
 theme_set(theme_light())
-ps.ls <- read_rds(file.path(urbanbio.path, 'data/ps.ls.rds'))
+ps.ls <- read_rds('data/ps.ls.rds')
 
 # MANUAL CHECKS
 # see current "test.trnL.R" for plant
@@ -27,6 +27,8 @@ ps.stats <- imap(ps.ls, function(ps, barcode) {
   asv_per_sam <- rowSums(asv>0)
   asv_prevalence <- colSums(asv>0)
   num_sam <- nrow(asv)
+  
+  # Table data:
   tibble(
     Dataset = barcode,
     Seq = sum(asv),
@@ -72,20 +74,15 @@ ps.stats.k <- kable(ps.stats, "html", align = "l") %>%
   )) %>%
   row_spec(0, extra_css = "display: none;") ; ps.stats.k # Hide the original column names
 
-html_file <- file.path(urbanbio.path, "out/output_table.html")
+html_file <- "out/asv_processing/asv_summary.html"
 save_kable(ps.stats.k, file = html_file)
-
-# Use webshot to convert the HTML file to PDF
-webshot(html_file, 
-        file.path(urbanbio.path, "out/output_table.pdf"),
-        cliprect = "viewport")
 
 ###################################
 # Taxonomic classification rates ###
 #####################################
 
-seqtab.ls <- read_rds(file.path(urbanbio.path, 'data/seqtab.ls.rds'))
-taxtab.ls <- read_rds(file.path(urbanbio.path, 'data/taxtab.ls.rds'))
+seqtab.ls <- read_rds('data/seqtab.ls.rds')
+taxtab.ls <- read_rds('data/taxtab.ls.rds')
 
 # Long df with sequence counts per ASV per sample, with taxonomy
 merge_seq_tax <- function(seqtab, taxtab) {
@@ -155,7 +152,7 @@ classification.df %>%
   theme(axis.text.x = element_blank(),
         axis.ticks.x = element_blank()) 
 
-ggsave(file.path(urbanbio.path, 'out/classification_rates.pdf'), 
+ggsave('out/asv_processing/classification_rates.pdf', 
        bg = 'white', width = 1400, height = 2000, 
        units = 'px', dpi = 220)
 
@@ -168,9 +165,12 @@ ps_rare.ls <- lapply(ps.ls, function(ps) {
   prune_samples(sample_sums(ps) >= 2000, ps) %>% 
     rarefy_even_depth2(ncores = 7) 
 })
-write_rds(ps_rare.ls, file.path(urbanbio.path, 'data/ps_rare.ls.rds'),
+
+write_rds(ps_rare.ls, 'data/ps_rare.ls.rds',
           compress = 'gz')
 
 ###################################
 # Most abundant taxa by barcode ###
 #####################################
+
+
