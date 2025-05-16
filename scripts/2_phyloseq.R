@@ -217,8 +217,8 @@ ps_ITS_ctrl <- phyloseq(
 #########################
 
 path_trnL <- file.path(urbanbio.path,'data/trnL')
-taxa_trnL <- read_rds(file.path(path_trnL, '4_taxonomy/taxonomy.RDS'))
-seqtab_trnL <- read_rds(file.path(path_trnL, '4_taxonomy/seqtab.RDS'))
+taxa_trnL <- read_rds(file.path(path_trnL, '4_taxonomy_E22_100/taxonomy_20250318.RDS'))
+seqtab_trnL <- read_rds(file.path(path_trnL, '4_taxonomy_E22_100/seqtab.RDS'))
 taxa_trnL[is.na(taxa_trnL)] <- 'Unclassified' 
 taxa_trnL <- taxa_trnL[which(taxa_trnL[,1] != 'Bacteria'),] # Remove cyanobacteria
 
@@ -227,8 +227,8 @@ seqtab_trnL_sam <- subset_samples(seqtab_trnL, sample.names)
 seqtab_trnL_ctrl <- subset_samples(seqtab_trnL, ctrl.names)
 
 # Subset ASVs
-taxa_trnL_sam <- subset_asvs(taxa_trnL, seqtab_trnL_sam, 50)
-taxa_trnL_ctrl <- subset_asvs(taxa_trnL, seqtab_trnL_ctrl, 50)
+taxa_trnL_sam <- subset_asvs(taxa_trnL, seqtab_trnL_sam, min_seq = 50)
+taxa_trnL_ctrl <- subset_asvs(taxa_trnL, seqtab_trnL_ctrl, min_seq = 50)
 
 # Seq count distribution
 viz_seqdepth(seqtab_trnL_sam)
@@ -290,7 +290,7 @@ saveRDS(taxtab.ls, file.path(urbanbio.path,'data/taxtab.ls.rds'))
 # Export asvs as fasta
 asv_to_fasta(seqtab_16S_sam_filt, file.path(path_16S, '4_taxonomy/asv.fa'))
 asv_to_fasta(seqtab_ITS_sam_filt, file.path(path_ITS, '4_taxonomy/asv.fa'))
-asv_to_fasta(seqtab_trnL_sam_filt, file.path(path_trnL, '4_taxonomy/asv.fa'))
+asv_to_fasta(seqtab_trnL_sam_filt, file.path(path_trnL, '4_taxonomy_E22_100/asv.fa'))
 
 
 

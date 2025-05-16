@@ -1,4 +1,4 @@
-# trnL
+# trnL using Forward reads only !
 #  ml StdEnv/2023 r/4.4.0 mugqic/cutadapt/2.10
 library(pacman)
 p_load(dada2, tidyverse, Biostrings, ShortRead, parallel)
@@ -10,7 +10,7 @@ barcode <- 'trnL'
 FWD <- "CGAAATCGGTAGACGCTACG"
 REV <- "GGGGATAGAGGGACTTGAAC"
 
-ncores <- 80
+ncores <- 40
 path_data <- paste0('data/',barcode)
 path_raw <- paste0(path_data, '/0_raw')
 
@@ -27,8 +27,9 @@ write_delim(data.frame(sample.names), paste0('data/sample_names_',barcode,'.tsv'
 ### PRE-FILTER (no qc, just remove Ns)
 fnFs.filtN <- file.path(path_data, "1_filtN", basename(fnFs)) # Put N-filterd files in filtN/ subdirectory
 fnRs.filtN <- file.path(path_data, "1_filtN", basename(fnRs))
+
 out.N <- filterAndTrim(fnFs, fnFs.filtN,
-                       fnRs, fnRs.filtN, 
+                       # fnRs, fnRs.filtN, 
                        #trimLeft = c(nchar(FWD),nchar(REV)),
                        rm.lowcomplex = TRUE, # added because of https://github.com/benjjneb/dada2/issues/2045#issuecomment-2452299127
                        maxN = 0, 
@@ -103,34 +104,35 @@ plotQualityProfile(filtRs[10:14])
 # Filtering with minlen may yield empty samples (e.g. neg. controls);
 # list files that did survive filtering:
 filtFs_survived <- filtFs[file.exists(filtFs)]
-filtRs_survived <- filtRs[file.exists(filtRs)]
+# filtRs_survived <- filtRs[file.exists(filtRs)]
 
 # Learn errors from the data
 errF <- learnErrors(filtFs_survived, multithread = ncores-1)
-errR <- learnErrors(filtRs_survived, multithread = ncores-1)
+# errR <- learnErrors(filtRs_survived, multithread = ncores-1)
 
 plotErrors(errF, nominalQ = TRUE)
-plotErrors(errR, nominalQ = TRUE)
+# plotErrors(errR, nominalQ = TRUE)
 
 # Infer sample composition
 dadaFs <- dada(filtFs_survived, err = errF, pool = 'pseudo', 
                multithread = min(ncores, 36))
-dadaRs <- dada(filtRs_survived, err = errR, pool = 'pseudo', 
-               multithread = min(ncores, 36))
+
+# dadaRs <- dada(filtRs_survived, err = errR, pool = 'pseudo', 
+#                multithread = min(ncores, 36))
 
 #####################
 ### SEQUENCE TABLE ###
 #######################
 # Modified version of mergePairs that rescues non-merged reads by concatenation
 # source('scripts/mergePairsRescue.R')
-mergers_pooled <- mergePairsRescue(
-  dadaFs, filtFs_survived, 
-  dadaRs, filtRs_survived,
-  returnRejects = TRUE,
-  minOverlap = 12,
-  maxMismatch = 0,
-  rescueUnmerged = TRUE
-)
+# mergers_pooled <- mergePairsRescue(
+#   dadaFs, filtFs_survived, 
+#   dadaRs, filtRs_survived,
+#   returnRejects = TRUE,
+#   minOverlap = 12,
+#   maxMismatch = 0,
+#   rescueUnmerged = TRUE
+# )
 
 # Intersect the merge and concat; allows merge to fail when overlap is mismatched,
 # but recovers non-overlapping pairs by concatenating them. 
@@ -138,7 +140,8 @@ mergers_pooled <- mergePairsRescue(
 path.tax <- file.path(path_data, "4_taxonomy_E22_100")
 if(!dir.exists(path.tax)) dir.create(path.tax)
 
-seqtab <- makeSequenceTable(mergers_pooled) # makeSequenceTable(dadaFs) ## to use FWD READS ONLY
+seqtab <- # makeSequenceTable(mergers_pooled) 
+  makeSequenceTable(dadaFs) ## to use FWD READS ONLY
 dim(seqtab)
 
 # Remove chimeras
@@ -188,9 +191,7 @@ filtered_sequences %>% width %>% sort %>% hist
 filt_trnL.path <- paste0(path_data,'/filtered_trnl_ref.fa')
 writeXStringSet(filtered_sequences, filt_trnL.path)
 
-######################
 ### ASSIGN TAXONOMY ###
-########################
 
 # seqtab.nochim <- read_rds('data/trnL/4_taxonomy_E42_100/seqtab.RDS')
 # Filter out sequences smaller than 200bp
@@ -200,7 +201,7 @@ dim(seqtab200)
 
 # Assign taxonomy
 taxa <- assignTaxonomy(seqtab200, filt_trnL.path, 
-                       multithread = min(ncores, 72), tryRC = TRUE, verbose = TRUE)
+                       multithread = min(ncores, 48), tryRC = TRUE, verbose = TRUE)
 taxa[taxa == ""] <- NA # some are NA, others ""
 taxa[is.na(taxa)] <- 'Unclassified' # otherwise Tax_glom flushes out the NAs .
 write_rds(taxa, paste0(path.tax,'/taxonomy.RDS'))
