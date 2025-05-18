@@ -253,7 +253,7 @@ map(cities, function(ci) {
   
   adiv.plot <- 
     alphadiv.df %>%
-    filter(city == ci) %>% 
+    filter(City == ci) %>% 
     ggplot(aes(x = time, y = Shannon, fill = factor(veg_index_bracket.))) + 
     scale_fill_manual(values = nvdi_colours) +
     geom_boxplot(linewidth = 0.2) +
