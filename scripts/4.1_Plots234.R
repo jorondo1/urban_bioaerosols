@@ -26,7 +26,7 @@ source("https://github.com/jorondo1/misc_scripts/raw/refs/heads/main/community_f
 source("https://github.com/jorondo1/misc_scripts/raw/refs/heads/main/myFunctions.R")
 source('scripts/0_config.R') # Variable naming and such
 
-ps_rare.ls <- read_rds(file.path(urbanbio.path, 'data/ps_rare.ls.rds'))
+ps_rare.ls <- read_rds('data/ps_rare.ls.rds')
 
 # Dataframe with taxrank mean relative abundance by (taxrank, city, date)
 which_taxrank <- 'Family'
@@ -120,7 +120,7 @@ community_plots.ls <- map(cities, function(ci) {
         group_by(aggTaxo) %>% 
         aggregate(relAb ~ aggTaxo, data = ., FUN = sum) %>% 
         arrange(relAb) %$% aggTaxo %>% 
-        as.character %>% # Set Others and Unclassified first:
+        as.character() %>% # Set Others and Unclassified first:
         setdiff(., c('Others', 'Unclassified')) %>% c('Others', 'Unclassified', .)
       
       # Plot data
@@ -301,6 +301,5 @@ map(cities, function(ci) {
 
 # X4 Community composition all samples 
 # Same as 2., but order by date within facets, time time_period nested in barcode
-
 
 # X2 Median income vs. vegetation index design (dotplot)
