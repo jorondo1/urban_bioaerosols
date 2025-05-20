@@ -9,7 +9,7 @@ source('https://raw.githubusercontent.com/jorondo1/misc_scripts/refs/heads/main/
 source('scripts/myFunctions.R')
 
 tax_ranks <- c("Kingdom", "Phylum", "Class", "Order", "Family", "Genus")
-ps.ls <- readRDS('~/Desktop/ip34/urbanBio/data/ps.ls.rds')
+ps.ls <- readRDS('data/ps.ls.rds')
 
 ###################################
 # Community composition overview ###

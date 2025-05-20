@@ -188,7 +188,7 @@ viz_seqdepth(seqtab_ITS_sam)
 viz_seqdepth(seqtab_ITS_ctrl)
 
 # Remove near-empty samples
-seqtab_ITS_sam_filt <- remove_ultra_rare(seqtab_ITS_sam, taxa_ITS_sam, 2000)
+seqtab_ITS_sam_filt <- remove_ultra_rare(seqtab_ITS_sam, taxa_ITS_sam, 2500)
 seqtab_ITS_ctrl_filt <- remove_ultra_rare(seqtab_ITS_ctrl, taxa_ITS_ctrl, 0)
 
 dim(seqtab_ITS_sam); dim(seqtab_ITS_sam_filt); dim(taxa_ITS_sam); sum(seqtab_ITS_sam_filt)/sum(seqtab_ITS_sam)
@@ -217,8 +217,8 @@ ps_ITS_ctrl <- phyloseq(
 #########################
 
 path_trnL <- file.path(urbanbio.path,'data/trnL')
-taxa_trnL <- read_rds(file.path(path_trnL, '4_taxonomy_E22_100/taxonomy_20250318.RDS'))
-seqtab_trnL <- read_rds(file.path(path_trnL, '4_taxonomy_E22_100/seqtab.RDS'))
+taxa_trnL <- read_rds(file.path(path_trnL, '4_taxonomy_E22_100_trunc275/taxonomy.RDS'))
+seqtab_trnL <- read_rds(file.path(path_trnL, '4_taxonomy_E22_100_trunc275/seqtab.RDS'))
 taxa_trnL[is.na(taxa_trnL)] <- 'Unclassified' 
 taxa_trnL <- taxa_trnL[which(taxa_trnL[,1] != 'Bacteria'),] # Remove cyanobacteria
 

@@ -161,13 +161,13 @@ asv_len_count %>%
 # Filter samples; define out files
 filtFs_survived_trunc <- file.path(
   path_data,
-  "3.2_filtered_truncated",
+  "3.2_filtered_truncated_275",
   str_replace(basename(filtFs[file.exists(filtFs)]), 'fastq', 'fastq.gz')
 ) %>% 
   setNames(names(filtFs)[file.exists(filtFs)]) 
 
-out <- filterAndTrim(filtFs, filtFs_survived_trunc, #cutRs, filtRs, 
-                     truncLen = 254,
+out_trunc <- filterAndTrim(filtFs, filtFs_survived_trunc, #cutRs, filtRs, 
+                     truncLen = 275,
                      compress = TRUE, 
                      multithread = ncores)  
 
@@ -177,12 +177,12 @@ out <- filterAndTrim(filtFs, filtFs_survived_trunc, #cutRs, filtRs,
 
 # Filtering with minlen may yield empty samples (e.g. neg. controls);
 # list files that did survive filtering:
-filtFs_survived <- filtFs[file.exists(filtFs_survived_trunc)]
+filtFs_survived <- filtFs_survived_trunc[file.exists(filtFs_survived_trunc)]
 # filtRs_survived <- filtRs[file.exists(filtRs)]
 
 # Learn errors from the data
-errF <- learnErrors(filtFs_survived, multithread = ncores-1)
-# errR <- learnErrors(filtRs_survived, multithread = ncores-1)
+errF <- learnErrors(filtFs_survived, multithread = ncores)
+# errR <- learnErrors(filtRs_survived, multithread = ncores)
 
 plotErrors(errF, nominalQ = TRUE)
 # plotErrors(errR, nominalQ = TRUE)
@@ -214,7 +214,7 @@ dadaFs <- dada(filtFs_survived, err = errF, pool = 'pseudo',
 ### taxonomic assignment rate than just using the forwards. 
 ### So we stick to the forwards, as recommended here https://github.com/benjjneb/dada2/issues/2091
 
-path.tax <- file.path(path_data, "4_taxonomy_E22_100")
+path.tax <- file.path(path_data, "4_taxonomy_E22_100_trunc275")
 if(!dir.exists(path.tax)) dir.create(path.tax)
 
 seqtab <- # makeSequenceTable(mergers_pooled) 
