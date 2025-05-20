@@ -64,9 +64,9 @@ melted <- imap(ps_rare.ls, function(ps, barcode) {
     mutate(Barcode = barcode, 
            # To prevent gap in date x axis, we recode date. 
            date_label = paste(month(date, label = TRUE, abbr=TRUE), 
-                            day(date)),
-         # Recode date as character factor 
-         date = as.character(date))
+                              day(date)),
+           # Recode date as character factor 
+           date = as.character(date))
 }) %>% list_rbind
 
 # Count number of sample by unique (taxrank, city, date) for each barcode
@@ -95,22 +95,22 @@ community_plots.ls <- map(cities, function(ci) {
       filter(city == ci & time == time_period) %>% 
       select(date, date_label) %>% distinct %>% 
       deframe()
-      # This is required for vertical x axis consistency !
+    # This is required for vertical x axis consistency !
     
     if (ci == 'Quebec' & time_period == 'Summer') {
       return(NULL)  # Skip this iteration
     }
     
     # Each city plot contains a subplot for each barcode
-    imap(barcodes, function(barcode_name, barcode) {
+    imap(kingdoms, function(barcode_name, barcode) {
       
       # First for all periods in the barcode, define top taxa
       # (redundant for each time iteration!)
       melted_filt <- melted %>% 
         filter(city == ci & Barcode == barcode) %>% 
-        mutate(Barcode = recode_factor(Barcode, !!!barcodes),
+        mutate(Barcode = recode_factor(Barcode, !!!kingdoms),
                date = factor(date, levels = names(date_labels)))
-        
+      
       # How many taxa to display:
       nTaxa <- nTax_by_barcode[barcode] 
       top_taxa <- topTaxa(melted_filt, taxLvl = which_taxrank, topN = nTaxa)
@@ -146,8 +146,8 @@ community_plots.ls <- map(cities, function(ci) {
                   aes(x = date,
                       y = 1,  # Place at top of column
                       label = paste0("N = ", n_samples)),
-          vjust = -1,  size = 2,
-          inherit.aes = FALSE  # Ignore fill aesthetic
+                  vjust = -1,  size = 2,
+                  inherit.aes = FALSE  # Ignore fill aesthetic
         ) +
         coord_cartesian(clip = "off") +  # Disable clipping
         facet_grid(Barcode~.) +
@@ -196,10 +196,10 @@ community_plots.ls <- map(cities, function(ci) {
       labs(y = 'Mean relative abundance of amplicons'),
     
     if (ci != 'Quebec') {
-    time_plots.ls[['Summer']][['FUNG']] +
-      theme(strip.text.y = element_blank(),
-            axis.text.y = element_blank(),
-            axis.title = element_blank()) 
+      time_plots.ls[['Summer']][['FUNG']] +
+        theme(strip.text.y = element_blank(),
+              axis.text.y = element_blank(),
+              axis.title = element_blank()) 
     } else { NULL },
     
     time_plots.ls[['Fall']][['FUNG']] +
@@ -216,14 +216,14 @@ community_plots.ls <- map(cities, function(ci) {
   p_plan <- list(
     time_plots.ls[['Spring']][['PLAN']] + 
       theme(strip.text.y = element_blank()),
-  
+    
     if (ci != 'Quebec') {
-    time_plots.ls[['Summer']][['PLAN']] +
-      theme(strip.text.y = element_blank(),
-          axis.text.y = element_blank()
-          ) 
+      time_plots.ls[['Summer']][['PLAN']] +
+        theme(strip.text.y = element_blank(),
+              axis.text.y = element_blank()
+        ) 
     } else { NULL },
-  
+    
     time_plots.ls[['Fall']][['PLAN']] +
       theme(axis.text.y = element_blank())
   ) %>% compact
@@ -241,9 +241,9 @@ community_plots.ls <- map(cities, function(ci) {
       legend.key.size = unit(12,"pt")) 
 })
 
-#######################
-# 3. Diversity plots ###
-#########################
+#############################
+# 3. Add Diversity plots ###
+###########################
 
 # From scripts/3_metrics.R
 alphadiv.df <- read_rds('data/diversity/alpha_diversity.rds')
@@ -258,9 +258,10 @@ map(cities, function(ci) {
     scale_fill_manual(values = nvdi_colours) +
     geom_boxplot(linewidth = 0.2) +
     facet_grid(.~Barcode) +
-    labs(fill = 'Vegetation index')
+    labs(fill = 'Vegetation index')+
+    ylim(0,NA)
   
-  bdiv.plot.ls <- map(barcodes, function(barcode) {
+  bdiv.plot.ls <- map(kingdoms, function(barcode) {
     
     PCo <- betadiv.ls$eig.df %>% 
       filter(City == ci & Dist == 'bray' & Barcode == barcode) %>% 
@@ -279,13 +280,14 @@ map(cities, function(ci) {
            x = PCo$PCo1, y = PCo$PCo2) +
       theme(axis.title.y = element_text(margin = margin(r = -2, l=0)),
             axis.text = element_blank()) %>% 
-      return()
+      return() 
   })
   
   bdiv.plot <- 
     bdiv.plot.ls$BACT + bdiv.plot.ls$FUNG + bdiv.plot.ls$PLAN +
     plot_layout(guides = 'collect')
   
+  ### BUILD MEGAPLOT
   plot <- 
     community_plots.ls[[ci]] / adiv.plot / bdiv.plot &
     theme(legend.position = "right",
@@ -293,13 +295,9 @@ map(cities, function(ci) {
           legend.box.spacing = unit(0, "cm"),
     )
   
-   ggsave(paste0('out/community', ci,'.pdf'),
-          plot = plot, bg = 'white', width = 2000, height = 2600,
-          units = 'px', dpi = 160)
+  # EXPORT
+  ggsave(paste0('out/_MAIN/community', ci,'.pdf'),
+         plot = plot, bg = 'white', width = 2000, height = 2600,
+         units = 'px', dpi = 160)
   
 })
-
-# X4 Community composition all samples 
-# Same as 2., but order by date within facets, time time_period nested in barcode
-
-# X2 Median income vs. vegetation index design (dotplot)

@@ -1,6 +1,6 @@
 # Variable configuration
 
-barcodes <- c('BACT' = "Bacteria",
+kingdoms <- c('BACT' = "Bacteria",
               'FUNG' = "Fungi",
               'PLAN' = "Pollen")
 
@@ -10,6 +10,12 @@ cities <- c('Montreal' = 'Montreal',
 
 periods <- c('Spring' , 'Summer', 'Fall')
 
+barcodes <- c(
+  BACT = '16S',
+  FUNG = 'ITS',
+  PLAN = 'trnL'
+  
+)
 
 # Colour variables
 

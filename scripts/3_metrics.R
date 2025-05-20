@@ -29,7 +29,7 @@ diversity.df <- imap(ps_rare.ls, function(ps, barcode) {
     left_join(samdat_as_tibble(ps), # add samdat
               by = 'Sample') %>% 
     mutate(Barcode = barcode,
-           Barcode = recode(Barcode, !!!barcodes),
+           Barcode = recode(Barcode, !!!kingdoms),
            time = factor(time, periods)) %>% 
     tibble() %>% 
     dplyr::rename(City = city) #plyr doesnt work
@@ -82,7 +82,7 @@ eig.df <- imap(pcoa.ls, function(pcoa_barcode.ls, city) {
   }) %>% list_rbind
 }) %>% list_rbind %>% 
   group_by(Barcode, City, Dist, MDS) %>%
-  mutate(Barcode = recode(Barcode, !!!barcodes),
+  mutate(Barcode = recode(Barcode, !!!kingdoms),
          MDS = case_when(MDS == 'MDS1' ~ 'PCo1',
                          MDS == 'MDS2' ~ 'PCo2')) %>% 
   summarize(Eig = paste0(MDS, ": ", round(Eig, 1), "%"), .groups = "drop") %>%
@@ -101,7 +101,7 @@ plot.df <- imap(pcoa.ls, function(pcoa_barcode.ls, city) {
     }) %>% list_rbind
   }) %>% list_rbind
 }) %>% list_rbind %>% tibble %>% 
-  mutate(Barcode = recode(Barcode, !!!barcodes),
+  mutate(Barcode = recode(Barcode, !!!kingdoms),
          time = factor(time, levels = periods),
          # time = recode_factor(time, !!!c(
          #   'Spring' = '1',
@@ -113,7 +113,7 @@ plot.df <- imap(pcoa.ls, function(pcoa_barcode.ls, city) {
 pcoa.ls$plot.df <- plot.df
 pcoa.ls$eig.df <- eig.df
 
-write_rds(pcoa.ls,  file.path(urbanbio.path,'data/diversity/beta_diversity.ls.rds'))
+write_rds(pcoa.ls,  'data/diversity/beta_diversity.ls.rds')
 
 # Sanity check plot : 
 pcoa.ls$plot.df %>% 
