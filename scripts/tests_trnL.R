@@ -5,10 +5,10 @@ p_load(dada2, tidyverse, magrittr, RColorBrewer, ggdist, tidyquant,
 source('https://raw.githubusercontent.com/jorondo1/misc_scripts/refs/heads/main/tax_glom2.R')
 source('https://raw.githubusercontent.com/jorondo1/misc_scripts/refs/heads/main/community_functions.R')
 source('https://raw.githubusercontent.com/jorondo1/misc_scripts/refs/heads/main/rarefy_even_depth2.R')
-source('~/Desktop/ip34/urbanBio/scripts/myFunctions.R')
+source('~scripts/myFunctions.R')
 
 tax_ranks <- c("Kingdom", "Phylum", "Class", "Order", "Family", "Genus")
-ps.ls <- readRDS('~/Desktop/ip34/urbanBio/data/ps.ls.rds')
+ps.ls <- readRDS('data/ps.ls.rds')
 
 ########################################
 # Mean abundance of genera per family ###
@@ -16,8 +16,8 @@ ps.ls <- readRDS('~/Desktop/ip34/urbanBio/data/ps.ls.rds')
 
 which_taxrank <- 'Family'
 melted <- ps.ls$PLAN %>% 
-  tax_glom(taxrank = which_taxrank) %>% 
-  psmelt %>%
+  tax_glom2(taxrank = which_taxrank) %>% 
+  psflashmelt() %>%
   filter(Abundance != 0) %>% 
   group_by(Sample) %>% 
   mutate(relAb = Abundance/sum(Abundance),
@@ -26,9 +26,10 @@ melted <- ps.ls$PLAN %>%
 
 (top_taxa <- topTaxa(melted, which_taxrank, 10))
 
-(top_families <- top_taxa[1:14,]$Family)
+(top_families <- top_taxa[1:7,]$Family)
 
-melt_family <- psmelt(ps.ls$PLAN) %>% 
+melt_PLAN <- psflashmelt(ps.ls$PLAN)
+melt_family <- melt_PLAN %>% 
   filter(Abundance != 0 &
            Family %in% top_families)
 
@@ -78,7 +79,7 @@ plots <- family_genera %>%
 wrap_plots(plots, ncol = 1) +
   plot_annotation(title = "Genus Proportions by Family")
 
-ggsave('~/Desktop/ip34/urbanBio/out/family_genus_prop.pdf', bg = 'white', 
+ggsave('out/composition/family_genus_prop.pdf', bg = 'white', 
        width = 1200, height = 1600, 
        units = 'px', dpi = 180)
 
@@ -87,11 +88,12 @@ ggsave('~/Desktop/ip34/urbanBio/out/family_genus_prop.pdf', bg = 'white',
 ### ASV length vs. classifiability ####
 ########################################
 
-tax_tibble <- ps_trnL@tax_table %>%
+tax_tibble <- ps.ls$PLAN@tax_table %>%
   data.frame() %>% 
   rownames_to_column('OTU') %>% tibble
 
-length_classification <- tax_tibble %>% rowwise %>% 
+length_classification <- tax_tibble %>% 
+  rowwise() %>% 
   mutate(classification_resolution = {
     # Get the vector of column names for non-"unclassified" values
     valid_cols <- tax_ranks[unlist(across(all_of(tax_ranks), ~ .x != "Unclassified"))]
@@ -129,21 +131,22 @@ length_classification %>%
   labs(x = 'ASV length', y = 'Highest classification resolution')+
   theme_classic() 
 
-ggsave(paste0('~/Desktop/ip34/urbanBio/out/classif_res.pdf'),
+ggsave(paste0('out/asv_processing/highest_classif_res.pdf'),
        bg = 'white', width = 3600, height = 2000, 
        units = 'px', dpi = 220)
 
-  
-### What proportion of sequences are unclassified at each taxlev ?
+#####################################################
+### proportion of unclassified sequences by taxlev ###
+#######################################################
 
-melted_all <- psmelt(ps_trnL) %>% 
+melted_all <- melt_PLAN %>% 
   select(all_of(tax_ranks), Abundance, Sample, time, city) %>% 
       mutate(across(all_of(tax_ranks),~ replace_na(., "Unclassified")))
   
 # # Extract proportion of unclassified ASV for each rank per sample/approach
 test <- map_dfr(tax_ranks, function(taxRank) {
   melted_all %>%
-    group_by(Sample, !!sym(taxRank), time) %>%
+    group_by(Sample, !!sym(taxRank), time, city) %>%
     summarise(Abundance = sum(Abundance), .groups = 'drop') %>%
     group_by(Sample) %>%
     mutate(relAb = Abundance/sum(Abundance)) %>%
@@ -156,9 +159,9 @@ test %>%
   filter(#marker %in% tests_list &
            time != 'NA') %>% 
   ggplot(aes(x = time, y = relAb, fill = time)) +
-  geom_boxplot(linewidth = 0.2, outliers = FALSE) +
+  geom_violin(linewidth = 0.2, outliers = FALSE) +
   labs(y = 'Proportion of unclassified ASVs') +
-  facet_grid(.~Rank) +
+  facet_grid(Rank~city, scales = 'free_x') +
   theme_light() +
   labs(x = '') + 
   theme(
@@ -166,7 +169,7 @@ test %>%
   ) +
   scale_fill_brewer(palette = "Set2", na.value = "beige")
 
-ggsave('~/Desktop/ip34/urbanBio/out/unclassified_season.pdf', bg = 'white', 
+ggsave('out/asv_processing/unclassified_rate.pdf', bg = 'white', 
        width = 1600, height = 1600, 
        units = 'px', dpi = 180)
 
@@ -181,7 +184,7 @@ test %>%
     scale = 0.9, 
     alpha = 0.7
   ) +
-#  facet_grid(marker~ ., scales = 'free_x') +
+  facet_grid(~ city, scales = 'free_x') +
  theme_light() +
   labs(
     x = 'Proportion of unclassified ASVs',
@@ -193,13 +196,12 @@ test %>%
     ) +
   scale_fill_brewer(palette = "Set2", na.value = "beige")
 
-ggsave('~/Desktop/ip34/urbanBio/out/unclassified_ridge.pdf', bg = 'white', width = 1600, height = 1200, 
+ggsave('out/asv_processing/unclassified_ridge.pdf', bg = 'white', width = 1600, height = 1200, 
        units = 'px', dpi = 180)
 
 
 # Look at sequence length in unclassified data :
-melted_length <- ps_trnL %>% 
-  psmelt %>% 
+melted_length <- melt_PLAN %>% 
   filter(Abundance != 0) %>% 
   mutate(seqlen = str_length(OTU))
 
@@ -224,7 +226,7 @@ classified_bool %>%
   scale_fill_manual(values = c('skyblue', 'indianred')) +
   labs(y = 'square root of read count')
 
-ggsave('~/Desktop/ip34/urbanBio/out/classification_seqlen.pdf', 
+ggsave('out/asv_processing/classification_seqlen.pdf', 
          bg = 'white', width = 1200, height = 1200, 
          units = 'px', dpi = 180)
   

@@ -1,4 +1,13 @@
-# trnL using Forward reads only !
+# This pipeline is optimised for using only the forward read, as trnL genes
+# have extremely variable length and often cannot be merged using 300x300 reads.
+# The most important step is deciding at what length to trim, where there is a 
+# tradeoff between choosing a lower truncLen to keep more reads but ending up
+# with shorter reads and thus lower resolution for taxonomic assignemnt.
+# Visualisation is recommended (included in step 3).
+
+# Several steps were retained both Fwd and Rev (#commented) in this pipeline, as 
+# the decision not to use merged read was based on comparing different approaches.
+
 #  ml StdEnv/2023 r/4.4.0 mugqic/cutadapt/2.10
 library(pacman)
 p_load(dada2, tidyverse, Biostrings, ShortRead, parallel)
@@ -10,7 +19,7 @@ barcode <- 'trnL'
 FWD <- "CGAAATCGGTAGACGCTACG"
 REV <- "GGGGATAGAGGGACTTGAAC"
 
-ncores <- 40
+ncores <- 60
 path_data <- paste0('data/',barcode)
 path_raw <- paste0(path_data, '/0_raw')
 
@@ -59,6 +68,7 @@ REV.RC <- dada2:::rc(REV)
 
 # Trim FWD and the reverse-complement of REV off of R1 (forward reads)
 R1.flags <- paste("-g", FWD, "-a", REV.RC) 
+
 # Trim REV and the reverse-complement of FWD off of R2 (reverse reads)
 R2.flags <- paste("-G", REV, "-A", FWD.RC) 
 
@@ -68,34 +78,95 @@ mclapply(seq_along(fnFs), run_cutadapt, mc.cores = ncores)
 # Check if it worked?
 primer_occurence(fnFs.cut, fnRs.cut, FWD, REV)
 
-##############################
-# 3. QUALITY FILTERING ########
+##################################
+# 3.1. QUALITY FILTERING ########
 ################################
 
 ### Filter and trim for real
 # Forward and reverse fastq filenames have the format:
 cutFs <- sort(list.files(path.cut, pattern = "_R1_001.fastq.gz", full.names = TRUE))
-cutRs <- sort(list.files(path.cut, pattern = "_R2_001.fastq.gz", full.names = TRUE))
+#cutRs <- sort(list.files(path.cut, pattern = "_R2_001.fastq.gz", full.names = TRUE))
 
 # Check quality
 plotQualityProfile(cutFs[10:20])
-plotQualityProfile(cutRs[10:20])
 
 # Filter samples; define out files
-filtFs <- file.path(path_data, "3_filtered_E22_100", basename(cutFs))
-filtRs <- file.path(path_data, "3_filtered_E22_100", basename(cutRs))
-names(filtFs) <- sample.names
-names(filtRs) <- sample.names
+filtFs <- file.path(path_data, 
+                    "3_filtered_E22_100", 
+                    str_remove(basename(cutFs), '.gz'))
+#filtRs <- file.path(path_data, "3_filtered_E22_100", basename(cutRs))
 
-out <- filterAndTrim(cutFs, filtFs, cutRs, filtRs, 
-                     maxEE=c(2,2),
+names(filtFs) <- sample.names
+#names(filtRs) <- sample.names
+
+out <- filterAndTrim(cutFs, filtFs, #cutRs, filtRs, 
+                     maxEE=c(2#,2
+                             ),
                      truncQ = 2,
                      minLen = 100, 
                      rm.phix = TRUE, 
-                     compress = TRUE, multithread = ncores)  
+                     compress = FALSE, 
+                     multithread = ncores)  
 
 plotQualityProfile(filtFs[10:14])
-plotQualityProfile(filtRs[10:14])
+
+##################################
+# 3.2. LENGTH TRUNCATION ########
+################################
+
+# Number of sequences per ASV 
+all_lengths <- integer(0)
+for (file in filtFs) {
+  # Read the FASTA file
+  sequences <- readDNAStringSet(file, format = 'fastq')  # Use AAStringSet for protein sequences
+  
+  # Get sequence lengths
+  seq_lengths <- width(sequences)
+  
+  # Append to the main vector
+  all_lengths <- c(all_lengths, seq_lengths)
+}
+
+# Number of sequences per ASV length (summarise)
+asv_len_count <- tibble(all_lengths) %>% 
+  group_by(all_lengths) %>% 
+  summarise(n = n()) 
+
+write_rds(asv_len_count, 'data/trnL/asv_length_summary.rds')
+
+# Visualize the cumulative number of sequences at various lengths.
+# Remember that truncLen will not only truncate the reads at the
+# specified length; it will also discards any shorter reads.
+asv_len_count %>% 
+  arrange(all_lengths, n) %>% 
+  mutate(cum_count = cumsum(n)) %>% 
+  ggplot(aes(x = all_lengths, y = cum_count)) +
+  geom_line() +
+  labs(x = 'ASV length', y = 'Cumulative sum of sequences at that length')
+
+asv_len_count %>% 
+  mutate(group = case_when(all_lengths >= 254 ~ 'Keep',
+                           TRUE ~ 'Drop')) %>% 
+  group_by(group) %>% 
+  summarise(seq_sum = sum(n)) %>% 
+  mutate(prop = seq_sum/sum(seq_sum))
+
+# This is specific to variable-length amplicons where gene length is expected
+# to exceed the sequencing range, e.g. 300x300 can theoretically merge amplicons
+# of length (300+300) - 2*primer_len - minOverlap = 548 bp, but the real number
+# is lower because reads will have been quality trimmed. trnL can go up to 800
+# so it is advised to use only the forward reads to prevent introducing a 
+# detection bias against species with long trnL.
+
+# Filter samples; define out files
+filtFs_survived_trunc <- file.path(path_data, 
+                    "3.2_filtered_truncated", 
+                    str_replace(basename(filtFs[file.exists(filtFs)]),'fastq', 'fastq.gz'))
+
+out <- filterAndTrim(filtFs, filtFs_survived_trunc, #cutRs, filtRs, 
+                     truncLen = 254,
+                     compress = TRUE, 
+                     multithread = ncores)  
 
 ####################################
 # 4. ERROR MODEL AND CLEANUP ########
@@ -103,7 +174,7 @@ plotQualityProfile(filtRs[10:14])
 
 # Filtering with minlen may yield empty samples (e.g. neg. controls);
 # list files that did survive filtering:
-filtFs_survived <- filtFs[file.exists(filtFs)]
+filtFs_survived <- filtFs[file.exists(filtFs_survived_trunc)]
 # filtRs_survived <- filtRs[file.exists(filtRs)]
 
 # Learn errors from the data
@@ -124,7 +195,10 @@ dadaFs <- dada(filtFs_survived, err = errF, pool = 'pseudo',
 ### SEQUENCE TABLE ###
 #######################
 # Modified version of mergePairs that rescues non-merged reads by concatenation
-# source('scripts/mergePairsRescue.R')
+# source('scripts/mergePairsRescue.R'). 
+# Intersect the merge and concat; allows merge to fail when overlap is mismatched,
+# but recovers non-overlapping pairs by concatenating them. 
+# Motivated by https://github.com/benjjneb/dada2/issues/537#issuecomment-412530338
 # mergers_pooled <- mergePairsRescue(
 #   dadaFs, filtFs_survived, 
 #   dadaRs, filtRs_survived,
@@ -133,10 +207,10 @@ dadaFs <- dada(filtFs_survived, err = errF, pool = 'pseudo',
 #   maxMismatch = 0,
 #   rescueUnmerged = TRUE
 # )
+### THIS EXPERIMENTAL METHOD seems less effective in increasing the 
+### taxonomic assignment rate than just using the forwards. 
+### So we stick to the forwards, as recommended here https://github.com/benjjneb/dada2/issues/2091
 
-# Intersect the merge and concat; allows merge to fail when overlap is mismatched,
-# but recovers non-overlapping pairs by concatenating them. 
-# Motivated by https://github.com/benjjneb/dada2/issues/537#issuecomment-412530338
 path.tax <- file.path(path_data, "4_taxonomy_E22_100")
 if(!dir.exists(path.tax)) dir.create(path.tax)
 
