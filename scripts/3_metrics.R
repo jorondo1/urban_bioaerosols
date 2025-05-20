@@ -113,7 +113,7 @@ plot.df <- imap(pcoa.ls, function(pcoa_barcode.ls, city) {
 pcoa.ls$plot.df <- plot.df
 pcoa.ls$eig.df <- eig.df
 
-write_rds(pcoa.ls,  file.path(urbanbio.path,'data/diversity/beta_diversity.ls.rds'))
+write_rds(pcoa.ls,  'data/diversity/beta_diversity.ls.rds')
 
 # Sanity check plot : 
 pcoa.ls$plot.df %>% 

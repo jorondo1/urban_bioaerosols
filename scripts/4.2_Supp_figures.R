@@ -139,4 +139,5 @@ ggsave(paste0('out/_SUPP/composition_QPCR_',which_taxrank,'_BACT.pdf'),
 
 ###########################################################
 # X2 Median income vs. vegetation index design (dotplot)
+###########################################################
 
