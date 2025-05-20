@@ -159,9 +159,12 @@ asv_len_count %>%
 # detection bias against species with long trnL.
 
 # Filter samples; define out files
-filtFs_survived_trunc <- file.path(path_data, 
-                    "3.2_filtered_truncated", 
-                    str_replace(basename(filtFs[file.exists(filtFs)]),'fastq', 'fastq.gz'))
+filtFs_survived_trunc <- file.path(
+  path_data,
+  "3.2_filtered_truncated",
+  str_replace(basename(filtFs[file.exists(filtFs)]), 'fastq', 'fastq.gz')
+) %>% 
+  setNames(names(filtFs)[file.exists(filtFs)]) 
 
 out <- filterAndTrim(filtFs, filtFs_survived_trunc, #cutRs, filtRs, 
                      truncLen = 254,
