@@ -4,7 +4,8 @@ p_load(dada2, tidyverse, magrittr, RColorBrewer, ggdist, tidyquant,
 
 source('https://raw.githubusercontent.com/jorondo1/misc_scripts/refs/heads/main/tax_glom2.R')
 source('https://raw.githubusercontent.com/jorondo1/misc_scripts/refs/heads/main/rarefy_even_depth2.R')
-source('~/Desktop/ip34/urbanBio/scripts/myFunctions.R')
+source('https://raw.githubusercontent.com/jorondo1/misc_scripts/refs/heads/main/psflashmelt.R')
+source('scripts/myFunctions.R')
 
 tax_ranks <- c("Kingdom", "Phylum", "Class", "Order", "Family", "Genus")
 ps.ls <- readRDS('~/Desktop/ip34/urbanBio/data/ps.ls.rds')
