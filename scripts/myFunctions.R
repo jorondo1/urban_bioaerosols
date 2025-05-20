@@ -1,9 +1,4 @@
-barcodes <- c(
-  BACT = '16S',
-  FUNG = 'ITS',
-  PLAN = 'trnL'
-  
-)
+
 taxRanks <- c("Kingdom", "Phylum", "Class", "Order", "Family", "Genus", "Species_16S")
 
 ##########################

@@ -7,6 +7,7 @@ source('https://raw.githubusercontent.com/jorondo1/misc_scripts/refs/heads/main/
 source('https://raw.githubusercontent.com/jorondo1/misc_scripts/refs/heads/main/rarefy_even_depth2.R')
 source('https://raw.githubusercontent.com/jorondo1/misc_scripts/refs/heads/main/psflashmelt.R')
 source('scripts/myFunctions.R')
+source('scripts/0_config.R') # Variable naming and such
 
 tax_ranks <- c("Kingdom", "Phylum", "Class", "Order", "Family", "Genus")
 ps.ls <- readRDS('data/ps.ls.rds')
@@ -60,7 +61,7 @@ comm_plot_data.ls <- imap(melted_glom.ls, function(melted.df, barcode){
 # Plot !
 imap(comm_plot_data.ls, function(comm_plot_data.df, barcode){
   
-  # PLOT +
+  # PLOT + 
   comm_plot_data.df %>% 
     ggplot(aes(x = site_date, y = relAb, fill = aggTaxo)) +
     geom_col() +
@@ -69,14 +70,14 @@ imap(comm_plot_data.ls, function(comm_plot_data.df, barcode){
     scale_fill_manual(values = expanded_palette) +
     labs(fill = which_taxrank, 
          x = 'Samples ordered by sampling date',
-         y = paste('Relative abundance of', barcodes[[barcode]], 'sequences')) +
+         y = paste('Relative abundance of', kingdoms[[barcode]], 'sequences')) +
     theme(panel.grid = element_blank(),
           axis.text.x = element_blank(),
           axis.ticks.x = element_blank(),
           panel.border = element_blank()) +
     guides(fill = guide_legend(ncol = 1))
   
-  ggsave(paste0('out/composition_',which_taxrank,'_',barcode,'.pdf'),
+  ggsave(paste0('out/_SUPP/composition_',which_taxrank,'_',barcode,'.pdf'),
          bg = 'white', width = 3600, height = 2000, 
          units = 'px', dpi = 220)
 })
@@ -126,12 +127,16 @@ bact_qpcr.df %>%
   scale_fill_manual(values = expanded_palette) +
   labs(fill = which_taxrank, 
        x = 'Samples ordered by sampling date',
-       y = paste('Relative abundance of', barcodes[['BACT']], 'sequences')) +
+       y = paste('Relative abundance of', kingdoms[['BACT']], 'sequences')) +
   theme(panel.grid = element_blank(),
         axis.text.x = element_blank(),
         axis.ticks.x = element_blank()) +
   guides(fill = guide_legend(ncol = 1))
 
-ggsave(paste0('out/composition_QPCR_',which_taxrank,'_BACT.pdf'),
+ggsave(paste0('out/_SUPP/composition_QPCR_',which_taxrank,'_BACT.pdf'),
        bg = 'white', width = 3600, height = 2000, 
        units = 'px', dpi = 220)
+
+###########################################################
+# X2 Median income vs. vegetation index design (dotplot)
+
