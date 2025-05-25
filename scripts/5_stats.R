@@ -17,48 +17,81 @@ source('scripts/myFunctions.R')
 
 alphadiv.df <- read_rds('data/diversity/alpha_diversity.rds')
 
-wilcox_p <- alphadiv.df %>% 
-  group_by(City, Barcode) %>% 
-  wilcox_test(formula = Shannon ~ time)
+wilcox_e_p_combo <- function(df, grouping_vars, # a vector
+                             model) {
+  model <- as.formula(model)
+  wilcox_p <- df %>% 
+    group_by(across(all_of(grouping_vars))) %>% 
+    wilcox_test(formula = model) %>% 
+    select(-n1, -n2, -.y.) 
   
-wilcox_e <- alphadiv.df %>% 
-  group_by(City, Barcode) %>% 
-  wilcox_effsize(Shannon ~ time, ci = TRUE, ci.type = 'norm')
+  wilcox_e <- df %>% 
+    group_by(across(all_of(grouping_vars))) %>% 
+    wilcox_effsize(formula = model, 
+                   ci = TRUE, 
+                   ci.type = 'norm')
   
-wilcox.df<- full_join(wilcox_p, wilcox_e, 
-          by = c('City', 'Barcode', 'group1', 'group2'))
+  full_join(wilcox_p, wilcox_e, 
+            by = c(grouping_vars, 'group1', 'group2'))
+  
+}
 
-wilcox.df %>%
-  mutate(group_pair = paste0(group1,'_',group2)) %>% 
-  ggplot(aes(x = log10(p.adj), y = effsize, 
-             colour = Barcode, shape = City)) +
-  geom_vline(aes(xintercept = log10(0.05), linetype = "p = 0.05"), 
-             color = "red", linewidth = 0.3, alpha = 0.5) +
-  geom_vline(aes(xintercept = log10(0.01), linetype = "p = 0.01"), 
-             color = "blue", linewidth = 0.3, alpha = 0.5) +
-  geom_errorbar(aes(y = effsize,
-                    x = log10(p.adj),
-                    ymin = conf.low, 
-                    ymax = conf.high), 
-                width=.4, linewidth = 0.2,
-                inherit.aes = FALSE) +
-  geom_point(size = 3) +
-  facet_grid(group_pair~.) +
-  scale_linetype_manual(
-    values = c('dashed', 'dashed'),
-    name = 'Thresholds'
-  ) +
-  labs(x = 'Log(adjusted p-value)',
-       y = 'Effect size (r)', 
-       colour = 'Barcode',
-       caption = 'The r value varies from 0 to close to 1. The interpretation values for r commonly in published litterature are:
+# Run on all indices
+indices <- c('Richness', 'Shannon', 'Simpson', 'Tail')
+
+wilcox.ls <- mclapply(indices, function(var) {
+  wilcox_e_p_combo(
+    df = alphadiv.df,
+    grouping_vars = c('City', 'Barcode'),
+    model = as.formula(paste(var, "~ time")))  # Dynamic formula
+}, mc.cores = parallel::detectCores()) 
+
+names(wilcox.ls) <- indices
+
+map(indices, function(idx) {
+  
+  # Effsize/pval Plot 
+  wilcox.ls[[idx]] %>% 
+    mutate(group_pair = paste0(group1,'_',group2)) %>% 
+    ggplot(aes(x = log10(p.adj), y = effsize, 
+               colour = Barcode, shape = City)) +
+    geom_vline(aes(xintercept = log10(0.05), linetype = "p = 0.05"), 
+               color = "red", linewidth = 0.3, alpha = 0.5) +
+    geom_vline(aes(xintercept = log10(0.01), linetype = "p = 0.01"), 
+               color = "blue", linewidth = 0.3, alpha = 0.5) +
+    geom_errorbar(aes(y = effsize,
+                      x = log10(p.adj),
+                      ymin = conf.low, 
+                      ymax = conf.high), 
+                  width=.4, linewidth = 0.2,
+                  inherit.aes = FALSE) +
+    geom_point(size = 3) +
+    facet_grid(group_pair~.) +
+    xlim(NA, 0) +
+    scale_linetype_manual(
+      values = c('dashed', 'dashed'),
+      name = 'Thresholds'
+    ) +
+    labs(x = 'Log(adjusted p-value)',
+         y = 'Effect size (r)', 
+         colour = 'Barcode',
+         caption = 'The r value varies from 0 to close to 1. The interpretation values for r commonly in published litterature are:
        0.10 - < 0.3 (small effect), 0.30 - < 0.5 (moderate effect) and >= 0.5 (large effect).')
-
-ggsave('out/stats/wilcox.pdf',
-       bg = 'white', width = 2400, height = 2000, 
-       units = 'px', dpi = 300)
-
-
+  
+  ggsave(paste0('out/stats/wilcox_',idx,'.pdf'),
+         bg = 'white', width = 2400, height = 2000, 
+         units = 'px', dpi = 300)
+  
+  # Output table
+  wilcox.ls[[idx]] %>% 
+    select(-p, -statistic, -.y.) %>%
+    mutate(across(where(is.numeric), ~round(.,3))) %>% 
+    kable("html",
+          caption = '') %>%
+    kable_styling(full_width = FALSE) %>% 
+    save_kable(file = paste0('out/stats/wilcox_',idx,'.html'))
+  
+})
 ######################
 # 2. Beta diversity ###
 ########################
@@ -113,6 +146,8 @@ iterate_permanova <- function(pcoa.ls,
             i == length(vars_res), shared_var,
             res$R2[i]
           ),
+          #pseudoF = ?
+          #df = ?
           p = res$`Pr(>F)`[i]) 
         
       }) %>% list_rbind # bind all rows into one tibble
@@ -126,14 +161,14 @@ iterate_permanova <- function(pcoa.ls,
 model_vars <- c('concDNA' ,'median_income', 'population_density',
                 'mean_temperature', 'vegetation_index_NDVI_landsat', 
                 'mean_wind_speed', 
-                'precip','mean_relative_humidity' , 'date'
-                )
+                'precip','mean_relative_humidity' , 'time'
+)
 
 perm_out <- list(
   margin = iterate_permanova(betadiv.ls,
-                              metric = 'bray',
-                              model_vars, 
-                              partType = 'margin'),
+                             metric = 'bray',
+                             model_vars, 
+                             partType = 'margin'),
   terms = iterate_permanova(betadiv.ls,
                             metric = 'bray',
                             model_vars, 
@@ -152,7 +187,7 @@ map(c('terms', 'margin'), function(effect_type){
                   id_cols = c('variable'),
                   names_glue = "{.value}_{Barcode}",
                   names_vary = "slowest" # control column order, so ordered by names_from and not by values_from
-                  ) %>% 
+      ) %>% 
       mutate(across(where(is.numeric), ~ round(., 3))) %>% 
       
       # Build table
@@ -161,9 +196,9 @@ map(c('terms', 'margin'), function(effect_type){
       kable_styling(full_width = FALSE) %>% 
       add_header_above( # Secondary header
         header = c(
-        "Variables" = 1,
-        rep(c("R<sup>2</sup>" = 1,
-              "<i>p</i>" = 1), 3)
+          "Variables" = 1,
+          rep(c("R<sup>2</sup>" = 1,
+                "<i>p</i>" = 1), 3)
         ), 
         bold = FALSE,
         align = c('l', rep('c', 6)), # align headers left
@@ -171,13 +206,13 @@ map(c('terms', 'margin'), function(effect_type){
       ) %>%
       add_header_above( # Top header
         header = c(
-        setNames(1, city),
-        "Bacteria" = 2,
-        "Fungi" = 2,
-        "Pollen" = 2
-      ), align = c('l', rep('c',3))) %>% 
+          setNames(1, city),
+          "Bacteria" = 2,
+          "Fungi" = 2,
+          "Pollen" = 2
+        ), align = c('l', rep('c',3))) %>% 
       row_spec(0, extra_css = "display: none;") %>% # Remove original header 
-  
+      
       # Save !
       save_kable(file = paste0('out/stats/perm_',city,'_',effect_type,'.html'))
   })
@@ -185,7 +220,7 @@ map(c('terms', 'margin'), function(effect_type){
 
 
 # Let's make a cool plot
-perm_out$margin %>% 
+perm_out$terms %>% 
   ggplot(aes(x = City, y = R2, #alpha = p_sig,
              fill = variable)) +
   geom_col() +

@@ -5,28 +5,36 @@
 # with shorter reads and thus lower resolution for taxonomic assignemnt.
 # Visualisation is recommended (included in step 3).
 
-# Several steps were retained both Fwd and Rev (#commented) in this pipeline, as 
-# the decision not to use merged read was based on comparing different approaches.
-
 #  ml StdEnv/2023 r/4.4.0 mugqic/cutadapt/2.10
+library(dada2)
 library(pacman)
-p_load(dada2, tidyverse, Biostrings, ShortRead, parallel)
+p_load(dada2, tidyverse, Biostrings, ShortRead, parallel,
+       update = FALSE)
 source('scripts/myFunctions.R')
-source('scripts/mergePairsRescue.R')
 
 # CONFIG
-barcode <- 'trnL'
+barcode <- 'trnL_passive'
 FWD <- "CGAAATCGGTAGACGCTACG"
 REV <- "GGGGATAGAGGGACTTGAAC"
 
 ncores <- 60
 path_data <- paste0('data/',barcode)
+
+# Raw data:
 path_raw <- paste0(path_data, '/0_raw')
 if(!dir.exists(path_raw)) dir.create(path_raw)
+
+# directory for output figures:
+path_out <- paste0(path_data, '/_out')
+if(!dir.exists(path_out)) dir.create(path_out)
 
 fnFs <- sort(list.files(path_raw, pattern="_R1_001.fastq", full.names = TRUE))
 fnRs <- sort(list.files(path_raw, pattern="_R2_001.fastq", full.names = TRUE))
 
+get.sample.name <- function(fname, pattern) {
+  base <- tools::file_path_sans_ext(basename(fname))
+  sub("_.*", "", base) 
+}
 (sample.names <- sapply(fnFs, get.sample.name, USE.NAMES = FALSE))
 write_delim(data.frame(sample.names), file.path(path_data, paste0('sample_names_',barcode,'.tsv')))
 
@@ -39,8 +47,7 @@ fnFs.filtN <- file.path(path_data, "1_filtN", basename(fnFs)) # Put N-filterd fi
 fnRs.filtN <- file.path(path_data, "1_filtN", basename(fnRs))
 
 out.N <- filterAndTrim(fnFs, fnFs.filtN,
-                       # fnRs, fnRs.filtN, 
-                       #trimLeft = c(nchar(FWD),nchar(REV)),
+                       fnRs, fnRs.filtN, 
                        rm.lowcomplex = TRUE, # added because of https://github.com/benjjneb/dada2/issues/2045#issuecomment-2452299127
                        maxN = 0, 
                        multithread = ncores)
@@ -83,41 +90,38 @@ primer_occurence(fnFs.cut, fnRs.cut, FWD, REV)
 # 3.1. QUALITY FILTERING ########
 ################################
 
-### Filter and trim for real
-# Forward and reverse fastq filenames have the format:
+### Filter and trim , forwards only from hereon out
 cutFs <- sort(list.files(path.cut, pattern = "_R1_001.fastq.gz", full.names = TRUE))
-#cutRs <- sort(list.files(path.cut, pattern = "_R2_001.fastq.gz", full.names = TRUE))
 
 # Check quality
-quality_plot_before <- plotQualityProfile(cutFs[10:20])
-ggsave(plot = quality_plot_before,
-       filename = file.path(path_data, 'qualPlot_raw.pdf'),
-       bg = 'white', width = 2400, height = 2400, 
-       units = 'px', dpi = 220)
+plotQualityProfile(cutFs[10:20]) %>% 
+  ggsave(filename = file.path(path_out, 'qualPlot_raw.pdf'),
+         bg = 'white', width = 2400, height = 2400, 
+         units = 'px', dpi = 220, plot = .)
 
 # Filter samples; define out files
 filtFs <- file.path(path_data, 
-                    "3_filtered_E22_100", 
+                    "3_filtered", 
                     str_remove(basename(cutFs), '.gz'))
-#filtRs <- file.path(path_data, "3_filtered_E22_100", basename(cutRs))
 
 names(filtFs) <- sample.names
-#names(filtRs) <- sample.names
 
-out <- filterAndTrim(cutFs, filtFs, #cutRs, filtRs, 
-                     maxEE=c(2#,2
-                             ),
+out <- filterAndTrim(cutFs, filtFs,
+                     maxEE=4,
                      truncQ = 2,
                      minLen = 100, 
+                     trimRight = 20,
                      rm.phix = TRUE, 
                      compress = FALSE, 
-                     multithread = ncores)  
+                     multithread = ncores)
 
-quality_plot_after <- plotQualityProfile(filtFs[10:20])
-ggsave(plot = quality_plot_after,
-       filename = file.path(path_data, 'qualPlot_filtered.pdf'),
+plotQualityProfile(filtFs[10:20]) %>% 
+  ggsave(filename = file.path(path_out, 'qualPlot_filtered.pdf'),
        bg = 'white', width = 2400, height = 2400, 
-       units = 'px', dpi = 220)
+       units = 'px', dpi = 220, plot = .)
+
+# Interestingly the quality profiles are a lot worse compared to the
+# active traps run
 
 ##################################
 # 3.2. LENGTH TRUNCATION ########
@@ -141,20 +145,25 @@ asv_len_count <- tibble(all_lengths) %>%
   group_by(all_lengths) %>% 
   summarise(n = n()) 
 
-write_rds(asv_len_count, 'data/trnL/asv_length_summary.rds')
-
 # Visualize the cumulative number of sequences at various lengths.
 # Remember that truncLen will not only truncate the reads at the
 # specified length; it will also discards any shorter reads.
-asv_len_count %>% 
+
+asv_len_plot<- asv_len_count %>% 
   arrange(all_lengths, n) %>% 
   mutate(cum_count = cumsum(n)) %>% 
   ggplot(aes(x = all_lengths, y = cum_count)) +
   geom_line() +
   labs(x = 'ASV length', y = 'Cumulative sum of sequences at that length')
 
+ggsave(filename = file.path(path_out, 'asv_length_summary.pdf'),
+       bg = 'white', width = 2400, height = 2400, 
+       units = 'px', dpi = 220, plot = asv_len_plot)
+
+# Play around with the proportions of reads kept depending on length
+try_truncLen <- 258
 asv_len_count %>% 
-  mutate(group = case_when(all_lengths >= 254 ~ 'Keep',
+  mutate(group = case_when(all_lengths >= try_truncLen ~ 'Keep',
                            TRUE ~ 'Drop')) %>% 
   group_by(group) %>% 
   summarise(seq_sum = sum(n)) %>% 
@@ -170,13 +179,13 @@ asv_len_count %>%
 # Filter samples; define out files
 filtFs_survived_trunc <- file.path(
   path_data,
-  "3.2_filtered_truncated_275",
+  paste0("3.2_filt_trunc_",try_truncLen),
   str_replace(basename(filtFs[file.exists(filtFs)]), 'fastq', 'fastq.gz')
 ) %>% 
   setNames(names(filtFs)[file.exists(filtFs)]) 
 
 out_trunc <- filterAndTrim(filtFs, filtFs_survived_trunc, #cutRs, filtRs, 
-                     truncLen = 275,
+                     truncLen = try_truncLen,
                      compress = TRUE, 
                      multithread = ncores)  
 
@@ -185,76 +194,62 @@ out_trunc <- filterAndTrim(filtFs, filtFs_survived_trunc, #cutRs, filtRs,
 ######################################
 
 # Filtering with minlen may yield empty samples (e.g. neg. controls);
-# list files that did survive filtering:
-filtFs_survived <- filtFs_survived_trunc[file.exists(filtFs_survived_trunc)]
-# filtRs_survived <- filtRs[file.exists(filtRs)]
+# list files that did survive filtering. We also want to let go of 
+# samples with too few reads, which happened in this case (some had <100)
+
+min_reads <- 1000  # arbitrary
+
+filtFs_survived <- tibble(path = filtFs_survived_trunc) %>%
+  filter(file.exists(path)) %>%                          # Keep existing files
+  mutate(sample = sub("\\.gz$", "", basename(path))) %>%  # Remove .gz suffix
+  #filter(sample %in% rownames(out_trunc)[out_trunc[, 2] >= min_reads]) %>%  # Filter reads
+  filter(sample %in% rownames(out_trunc)) %>% 
+  pull(path)                                             # Extract paths
 
 # Learn errors from the data
 errF <- learnErrors(filtFs_survived, multithread = ncores)
-# errR <- learnErrors(filtRs_survived, multithread = ncores)
 
-plotErrors(errF, nominalQ = TRUE)
-# plotErrors(errR, nominalQ = TRUE)
+error_plots <- plotErrors(errF, nominalQ = TRUE)
+ggsave(plot = error_plots,
+       filename = file.path(path_out, 'errors.pdf'),
+       bg = 'white', width = 2400, height = 2400, 
+       units = 'px', dpi = 220)
 
 # Infer sample composition
 dadaFs <- dada(filtFs_survived, err = errF, pool = 'pseudo', 
                multithread = min(ncores, 36))
 
-# dadaRs <- dada(filtRs_survived, err = errR, pool = 'pseudo', 
-#                multithread = min(ncores, 36))
-
 #####################
 ### SEQUENCE TABLE ###
 #######################
-# Modified version of mergePairs that rescues non-merged reads by concatenation
-# source('scripts/mergePairsRescue.R'). 
-# Intersect the merge and concat; allows merge to fail when overlap is mismatched,
-# but recovers non-overlapping pairs by concatenating them. 
-# Motivated by https://github.com/benjjneb/dada2/issues/537#issuecomment-412530338
-# mergers_pooled <- mergePairsRescue(
-#   dadaFs, filtFs_survived, 
-#   dadaRs, filtRs_survived,
-#   returnRejects = TRUE,
-#   minOverlap = 12,
-#   maxMismatch = 0,
-#   rescueUnmerged = TRUE
-# )
-### THIS EXPERIMENTAL METHOD seems less effective in increasing the 
-### taxonomic assignment rate than just using the forwards. 
-### So we stick to the forwards, as recommended here https://github.com/benjjneb/dada2/issues/2091
-
-path.tax <- file.path(path_data, "4_taxonomy_E22_100_trunc275")
+path.tax <- file.path(path_data, "4_taxonomy")
 if(!dir.exists(path.tax)) dir.create(path.tax)
 
-seqtab <- # makeSequenceTable(mergers_pooled) 
-  makeSequenceTable(dadaFs) ## to use FWD READS ONLY
-dim(seqtab)
+seqtab <- makeSequenceTable(dadaFs)
 
 # Remove chimeras
 seqtab.nochim <- removeBimeraDenovo(
   seqtab, method="consensus", multithread = ncores, verbose = TRUE
 )
 
-dim(seqtab); dim(seqtab.nochim) # from 17410 to 9024
-# distrib of seq len:
-# table(nchar(getSequences(seqtab.nochim))) %>% sort %>% plot 
-# table(nchar(getSequences(seqtab))) %>% sort %>% plot 
+dim(seqtab); dim(seqtab.nochim) 
+sum(seqtab); sum(seqtab.nochim)
 
 # WRITE OUT
 write_rds(seqtab.nochim, paste0(path.tax,'/seqtab.RDS'))
 
 ### TRACK PIPELINE READS
 track_change <- track_dada(out.N = out.N, out = out,
-                           dadaFs = dadaFs, dadaRs = dadaRs,
-                           mergers = mergers_pooled,
+                           dadaFs = dadaFs,
+                           seqtab = seqtab,
                            seqtab.nochim = seqtab.nochim)
-track_change %>% 
-  filter(values>=0) %>% 
-  plot_track_change() %>% 
-  ggsave(paste0('out/change_',barcode,'.pdf'), plot = ., 
-         bg = 'white', width = 1600, height = 1200, 
-         units = 'px', dpi = 180)
 
+track_plot <- track_change %>% 
+  plot_track_change() 
+
+ggsave(plot = track_plot, filename = file.path(path_out, 'track.pdf'),
+       bg = 'white', width = 2400, height = 2400, 
+       units = 'px', dpi = 220)
 
 ###################################
 # TRNL: CUSTOM TAXONOMY DATABASE ###
@@ -265,10 +260,14 @@ trnl.ref <- paste0(path_data,'/trnL_hits.lineage.filtered.Genus.fa')
 # check sequence length distribution
 trnl.seq <- readDNAStringSet(trnl.ref, format = 'fasta')
 seqlen <- width(trnl.seq) ; seqlen %>% length
-ggplot(data.frame(length = seqlen), aes(x = length)) +
+trnL_seqlen_plot<- ggplot(data.frame(length = seqlen), aes(x = length)) +
   geom_histogram(binwidth = 10, fill = "blue", color = "black") +
   labs(title = "Distribution of Sequence Lengths", x = "Sequence Length", y = "Frequency") +
   theme_minimal()
+
+ggsave(plot = trnL_seqlen_plot, filename = file.path(path_out, 'trnL_seqlen.pdf'),
+       bg = 'white', width = 2400, height = 2400, 
+       units = 'px', dpi = 220)
 
 # filter within expected limits for trnL (???)
 filtered_sequences <- trnl.seq[seqlen >= 200 & 
@@ -287,9 +286,11 @@ dim(seqtab200)
 
 # Assign taxonomy
 taxa <- assignTaxonomy(seqtab200, filt_trnL.path, 
-                       multithread = min(ncores, 48), tryRC = TRUE, verbose = TRUE)
+                       multithread = min(ncores, 48), 
+                       taxLevels = c("Kingdom", "Phylum", "Class", "Order", "Family", "Genus"),
+                       tryRC = TRUE, verbose = TRUE)
 taxa[taxa == ""] <- NA # some are NA, others ""
 taxa[is.na(taxa)] <- 'Unclassified' # otherwise Tax_glom flushes out the NAs .
 write_rds(taxa, paste0(path.tax,'/taxonomy.RDS'))
-taxa <- read_rds(paste0(path.tax,'/taxonomy.RDS'))
-taxa %>% View
+# taxa <- read_rds(paste0(path.tax,'/taxonomy.RDS'))
+# taxa %>% View

@@ -5,7 +5,8 @@ p_load(dada2, tidyverse, magrittr, RColorBrewer, ggdist, tidyquant,
 source('https://raw.githubusercontent.com/jorondo1/misc_scripts/refs/heads/main/tax_glom2.R')
 source('https://raw.githubusercontent.com/jorondo1/misc_scripts/refs/heads/main/community_functions.R')
 source('https://raw.githubusercontent.com/jorondo1/misc_scripts/refs/heads/main/rarefy_even_depth2.R')
-source('~scripts/myFunctions.R')
+source('https://raw.githubusercontent.com/jorondo1/misc_scripts/refs/heads/main/psflashmelt.R')
+source('scripts/myFunctions.R')
 
 tax_ranks <- c("Kingdom", "Phylum", "Class", "Order", "Family", "Genus")
 ps.ls <- readRDS('data/ps.ls.rds')
@@ -87,53 +88,56 @@ ggsave('out/composition/family_genus_prop.pdf', bg = 'white',
 ######################################
 ### ASV length vs. classifiability ####
 ########################################
+# # #### Not pertinent anymore since length is fixed for pollen
 
-tax_tibble <- ps.ls$PLAN@tax_table %>%
-  data.frame() %>% 
-  rownames_to_column('OTU') %>% tibble
 
-length_classification <- tax_tibble %>% 
-  rowwise() %>% 
-  mutate(classification_resolution = {
-    # Get the vector of column names for non-"unclassified" values
-    valid_cols <- tax_ranks[unlist(across(all_of(tax_ranks), ~ .x != "Unclassified"))]
-    # Pick the last column name or NA if none exists
-    if (length(valid_cols) > 0) tail(valid_cols, 1) else 'No_classification'
-  }) %>%
-  ungroup() %>% 
-  mutate(asv_len = nchar(OTU),
-         classification_resolution = factor(classification_resolution,
-                                  levels = c('No_classification',tax_ranks))) %>% 
-  select(classification_resolution, asv_len)
 
-# classification resolution of our ASVs along their length.
-# This shows the length distribution at the highest classification 
-# (so each colour represents a distinct set of ASVs)
-
-# First, count ASVs per highest classification
-count_labels <- length_classification %>% 
-  dplyr::count(classification_resolution) %>% 
-  mutate(label = paste0(classification_resolution, " (n = ", n, ")")) %>%
-  select(-n) %>% 
-  deframe()
-
-length_classification %>% 
-  ggplot(aes(x = asv_len, y = classification_resolution)) +
-  geom_boxplot(position = position_nudge(y = 0.2), width = 0.4) +
-  geom_density_ridges2(
-    aes(fill = classification_resolution ),
-    alpha = 0.6, show.legend = FALSE,
-    scale = 3
-    ) +
-  scale_y_discrete(expand = c(0.01, 0),
-                   labels = count_labels) +
-  scale_x_continuous(expand = c(0.01, 0)) +
-  labs(x = 'ASV length', y = 'Highest classification resolution')+
-  theme_classic() 
-
-ggsave(paste0('out/asv_processing/highest_classif_res.pdf'),
-       bg = 'white', width = 3600, height = 2000, 
-       units = 'px', dpi = 220)
+# tax_tibble <- ps.ls$PLAN@tax_table %>%
+#   data.frame() %>% 
+#   rownames_to_column('OTU') %>% tibble
+# 
+# length_classification <- tax_tibble %>% 
+#   rowwise() %>% 
+#   mutate(classification_resolution = {
+#     # Get the vector of column names for non-"unclassified" values
+#     valid_cols <- tax_ranks[unlist(across(all_of(tax_ranks), ~ .x != "Unclassified"))]
+#     # Pick the last column name or NA if none exists
+#     if (length(valid_cols) > 0) tail(valid_cols, 1) else 'No_classification'
+#   }) %>%
+#   ungroup() %>% 
+#   mutate(asv_len = nchar(OTU),
+#          classification_resolution = factor(classification_resolution,
+#                                   levels = c('No_classification',tax_ranks))) %>% 
+#   select(classification_resolution, asv_len)
+# 
+# # classification resolution of our ASVs along their length.
+# # This shows the length distribution at the highest classification 
+# # (so each colour represents a distinct set of ASVs)
+# 
+# # First, count ASVs per highest classification
+# count_labels <- length_classification %>% 
+#   dplyr::count(classification_resolution) %>% 
+#   mutate(label = paste0(classification_resolution, " (n = ", n, ")")) %>%
+#   select(-n) %>% 
+#   deframe()
+# 
+# length_classification %>% 
+#   ggplot(aes(x = asv_len, y = classification_resolution)) +
+#   geom_boxplot(position = position_nudge(y = 0.2), width = 0.4) +
+#   geom_density_ridges2(
+#     aes(fill = classification_resolution ),
+#     alpha = 0.6, show.legend = FALSE,
+#     scale = 3
+#     ) +
+#   scale_y_discrete(expand = c(0.01, 0),
+#                    labels = count_labels) +
+#   scale_x_continuous(expand = c(0.01, 0)) +
+#   labs(x = 'ASV length', y = 'Highest classification resolution')+
+#   theme_classic() 
+# 
+# ggsave(paste0('out/asv_processing/highest_classif_res.pdf'),
+#        bg = 'white', width = 3600, height = 2000, 
+#        units = 'px', dpi = 220)
 
 #####################################################
 ### proportion of unclassified sequences by taxlev ###
@@ -181,7 +185,8 @@ test %>%
   ggplot(aes(x = relAb, y = Rank, fill = time)) +
   geom_density_ridges(
     linewidth = 0.2,
-    scale = 0.9, 
+    scale = 0.9,
+    stat = 'binline',
     alpha = 0.7
   ) +
   facet_grid(~ city, scales = 'free_x') +
@@ -201,54 +206,56 @@ ggsave('out/asv_processing/unclassified_ridge.pdf', bg = 'white', width = 1600, 
 
 
 # Look at sequence length in unclassified data :
-melted_length <- melt_PLAN %>% 
-  filter(Abundance != 0) %>% 
-  mutate(seqlen = str_length(OTU))
-
-classified_bool <- map_dfr(tax_ranks, function(taxRank) {
-  melted_length %>%
-    mutate(classified = case_when(!!sym(taxRank) == 'Unclassified' ~ FALSE,
-                                  TRUE~ TRUE),
-           Rank = factor(taxRank, levels = tax_ranks))
-  })
-  
-  
-classified_bool %>% 
-  mutate(classified = factor(classified, levels = c(TRUE, FALSE))) %>% 
-  ggplot(aes(x = seqlen, y = Rank, fill = classified)) +
-    geom_density_ridges(
-      aes(height = sqrt(after_stat(count))),
-      linewidth = 0.1,
-      stat = 'binline',
-      binwidth = 2,
-      scale=1, alpha = 0.8
-      ) + theme_minimal() +
-  scale_fill_manual(values = c('skyblue', 'indianred')) +
-  labs(y = 'square root of read count')
-
-ggsave('out/asv_processing/classification_seqlen.pdf', 
-         bg = 'white', width = 1200, height = 1200, 
-         units = 'px', dpi = 180)
-  
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+# #### Not pertinent anymore since length is fixed for pollen
+# 
+# melted_length <- melt_PLAN %>% 
+#   filter(Abundance != 0) %>% 
+#   mutate(seqlen = str_length(OTU))
+# 
+# classified_bool <- map_dfr(tax_ranks, function(taxRank) {
+#   melted_length %>%
+#     mutate(classified = case_when(!!sym(taxRank) == 'Unclassified' ~ FALSE,
+#                                   TRUE~ TRUE),
+#            Rank = factor(taxRank, levels = tax_ranks))
+#   })
+#   
+#   
+# classified_bool %>% 
+#   mutate(classified = factor(classified, levels = c(TRUE, FALSE))) %>% 
+#   ggplot(aes(x = seqlen, y = Rank, fill = classified)) +
+#     geom_density_ridges(
+#       aes(height = sqrt(after_stat(count))),
+#       linewidth = 0.1,
+#       stat = 'binline',
+#       binwidth = 2,
+#       scale=1, alpha = 0.8
+#       ) + theme_minimal() +
+#   scale_fill_manual(values = c('skyblue', 'indianred')) +
+#   labs(y = 'square root of read count')
+# 
+# ggsave('out/asv_processing/classification_seqlen.pdf', 
+#          bg = 'white', width = 1200, height = 1200, 
+#          units = 'px', dpi = 180)
+#   
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 

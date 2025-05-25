@@ -58,28 +58,38 @@ run_cutadapt <- function(i) {
 getN <- function(x) sum(getUniques(x))
 
 track_dada <- function(out.N, out,
-                       dadaFs, dadaRs,
-                       mergers,
+                       dadaFs, dadaRs = NULL,
+                       seqtab = seqtab,
                        seqtab.nochim) {
   require(dplyr, tibble, tidyr)
   
   track <- cbind(out.N, out[,2], 
-                 sapply(dadaFs, getN), 
-                 sapply(dadaRs, getN), 
-                 sapply(mergers, getN),
+                 sapply(dadaFs, getN))
+  
+  # Conditionally add dadaRs column if it exists
+  if(!is.null(dadaRs)) {
+    track <- cbind(track, sapply(dadaRs, getN))
+    column_names <- c("input", "removeNs", "filtered", "denoisedF", "denoisedF", "raw_seqtab", "nonchim")
+  } else {
+    column_names <- c("input", "removeNs", "filtered", "denoisedF", "raw_seqtab", "nonchim")
+  }
+  
+  # Add the remaining columns
+  track <- cbind(track,
+                 rowSums(seqtab),
                  rowSums(seqtab.nochim))
   
-  colnames(track) <- c("input", "removeNs", "filtered", "denoisedF", "denoisedR", "merged", "nonchim")
+  colnames(track) <- column_names
   rownames(track) <- sample.names
   
-  track %>% data.frame %>% 
+  track %>% data.frame() %>% 
     rownames_to_column('Sample') %>% 
-    tibble %>% 
+    tibble() %>% 
     mutate(N_filtering = (input-removeNs)/input,
            Quality_filtering = (removeNs-filtered)/removeNs,
-           Denoising = (filtered-denoisedR)/filtered,
-           Reads_merging = (denoisedR-merged)/denoisedR, # Proportion of reads lost to merging
-           Bimera_removal = (merged-nonchim)/merged) %>% 
+           Denoising = (filtered-denoisedF)/filtered,
+           Reads_merging = (denoisedF-raw_seqtab)/denoisedF, # Proportion of reads lost to merging
+           Bimera_removal = (raw_seqtab-nonchim)/raw_seqtab) %>% 
     pivot_longer(where(is.numeric), names_to = 'variable', values_to = 'values')
 }
 
@@ -89,7 +99,6 @@ barcode_mapping <- c(
   'trnL' = 'PLAN',
   'ITS' = 'FUNG'
 )
-
 
 ###############
 ### PLOTS ######

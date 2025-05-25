@@ -13,12 +13,13 @@ REV <- "GCTGCGTTCTTCATCGATGC"
 ncores <- 80
 path_data <- paste0('data/',barcode)
 path_raw <- paste0(path_data, '/0_raw')
+if(!dir.exists(path_raw)) dir.create(path_raw)
 
 fnFs <- sort(list.files(path_raw, pattern="_R1_001.fastq", full.names = TRUE))
 fnRs <- sort(list.files(path_raw, pattern="_R2_001.fastq", full.names = TRUE))
 
 (sample.names <- sapply(fnFs, get.sample.name, USE.NAMES = FALSE))
-# write_delim(data.frame(sample.names), paste0('data/sample_names_',barcode,'.tsv'))
+write_delim(data.frame(sample.names), file.path(path_data, paste0('sample_names_',barcode,'.tsv')))
 
 ########################
 # 1. N-FILTERING ########

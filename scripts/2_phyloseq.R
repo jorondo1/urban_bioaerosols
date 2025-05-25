@@ -258,9 +258,56 @@ ps_trnL_ctrl <- phyloseq(
   sample_data(meta_ctrl_trnL)
 ) # %>% prune_contam(contam_freq_trnL$decontam) # birch?!
 
+
+#######################"#######
+# 1.4. trnL passive samples ####
+#################################
+
+# Passive 
+meta_passive <- read_xlsx(file.path(urbanbio.path,"data/metadata/metadata_vaseline_sequencing.xlsx")) %>% 
+  mutate(Sample_ID = str_replace_all(Sample_ID, "_", "-"),
+         Start_date = parse_date(Start_date, c("%d-%m-%Y")),
+         End_date = parse_date(End_date, c("%d-%m-%Y"))) %>% 
+  separate_wider_delim(Sample_ID, delim = '-', 
+                       names = c('Year', 'City', 'Trap' , 'T'),
+                       cols_remove= FALSE)
+  
+
+path_trnl_p <- file.path(urbanbio.path,'data/trnL_passive')
+taxa_trnl_p <- read_rds(file.path(path_trnl_p, '4_taxonomy/taxonomy.RDS'))
+seqtab_trnL_p <- read_rds(file.path(path_trnl_p, '4_taxonomy/seqtab.RDS'))
+taxa_trnl_p[is.na(taxa_trnl_p)] <- 'Unclassified' 
+taxa_trnl_p <- taxa_trnl_p[which(taxa_trnl_p[,1] != 'Bacteria'),] # Remove cyanobacteria
+
+# Keep samples with metadata info
+seqtab_trnL_sam_p <- subset_samples(seqtab_trnL_p, meta_passive$SampleID)
+
+# Subset ASVs
+taxa_trnL_sam_p <- subset_asvs(taxa_trnl_p, seqtab_trnL_sam_p, min_seq = 50)
+
+# Seq count distribution
+viz_seqdepth(seqtab_trnL_sam_p)
+
+# Remove near-empty samples
+seqtab_trnL_sam_filt_p <- remove_ultra_rare(seqtab_trnL_sam_p, taxa_trnL_sam_p, 500)
+
+dim(seqtab_trnL_sam_p); dim(seqtab_trnL_sam_filt_p); dim(taxa_trnL_sam_p); sum(seqtab_trnL_sam_filt_p)/sum(seqtab_trnL_sam_p)
+
+meta_passive_subset <- meta_passive %>% 
+  filter(Sample_ID %in% rownames(seqtab_trnL_sam_filt_p)) %>% 
+  column_to_rownames('Sample_ID')
+  
+# Phyloseq objects
+ps_trnL_p <- phyloseq(
+  tax_table(taxa_trnL_sam_p),
+  otu_table(seqtab_trnL_sam_filt_p, taxa_are_rows = FALSE),
+  sample_data(meta_passive_subset)
+)
+
 #####################
 # 2.1. Export data ###
 #######################
+saveRDS(ps_trnL_p, file.path(urbanbio.path,'data/ps_passive.rds'))
 
 ps.ls <- list()
 ps.ls[["BACT"]] <- ps_16S
