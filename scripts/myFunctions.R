@@ -1,6 +1,3 @@
-
-taxRanks <- c("Kingdom", "Phylum", "Class", "Order", "Family", "Genus", "Species_16S")
-
 ##########################
 ### PROCESSING DADA2 ####
 ########################

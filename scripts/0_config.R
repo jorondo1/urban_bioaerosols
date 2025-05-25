@@ -1,3 +1,5 @@
+taxRanks <- c("Kingdom", "Phylum", "Class", "Order", "Family", "Genus", "Species_16S")
+
 # Variable configuration
 
 kingdoms <- c('BACT' = "Bacteria",

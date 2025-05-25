@@ -269,7 +269,7 @@ meta_passive <- read_xlsx(file.path(urbanbio.path,"data/metadata/metadata_vaseli
          Start_date = parse_date(Start_date, c("%d-%m-%Y")),
          End_date = parse_date(End_date, c("%d-%m-%Y"))) %>% 
   separate_wider_delim(Sample_ID, delim = '-', 
-                       names = c('Year', 'City', 'Trap' , 'T'),
+                       names = c('Year', 'City', 'site_id' , 'TX'),
                        cols_remove= FALSE)
   
 

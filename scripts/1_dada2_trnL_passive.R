@@ -130,13 +130,8 @@ plotQualityProfile(filtFs[10:20]) %>%
 # Number of sequences per ASV 
 all_lengths <- integer(0)
 for (file in filtFs) {
-  # Read the FASTA file
   sequences <- readDNAStringSet(file, format = 'fastq')  # Use AAStringSet for protein sequences
-  
-  # Get sequence lengths
   seq_lengths <- width(sequences)
-  
-  # Append to the main vector
   all_lengths <- c(all_lengths, seq_lengths)
 }
 
@@ -184,7 +179,7 @@ filtFs_survived_trunc <- file.path(
 ) %>% 
   setNames(names(filtFs)[file.exists(filtFs)]) 
 
-out_trunc <- filterAndTrim(filtFs, filtFs_survived_trunc, #cutRs, filtRs, 
+out_trunc <- filterAndTrim(filtFs, filtFs_survived_trunc, 
                      truncLen = try_truncLen,
                      compress = TRUE, 
                      multithread = ncores)  
