@@ -65,8 +65,13 @@ imap(comm_plot_data.ls, function(comm_plot_data.df, barcode){
   comm_plot_data.df %>% 
     ggplot(aes(x = site_date, y = relAb, fill = aggTaxo)) +
     geom_col() +
-    theme_light() +
-    facet_nested(cols=vars(city,time), scales = 'free', space = 'free') +
+    #theme_light() +
+    facet_nested(cols=vars(city,time), scales = 'free', space = 'free',
+                 strip = strip_nested(
+                   clip = "off",  # Prevents text clipping
+                   size = "variable",  # Adjusts text size
+                   bleed = TRUE  # Merges strip spaces
+                 )) +
     scale_fill_manual(values = expanded_palette) +
     labs(fill = which_taxrank, 
          x = 'Samples ordered by sampling date',
@@ -74,15 +79,20 @@ imap(comm_plot_data.ls, function(comm_plot_data.df, barcode){
     theme(panel.grid = element_blank(),
           axis.text.x = element_blank(),
           axis.ticks.x = element_blank(),
-          panel.border = element_blank()) +
-    guides(fill = guide_legend(ncol = 1))
+          panel.background = element_blank(),
+          text = element_text(size = 14)
+          ) +
+    guides(fill = guide_legend(ncol = 1)) +
+    # Entirely remove padding around cols : 
+    scale_y_continuous(expand = c(0, 0)) +
+    scale_x_discrete(expand = c(0, 0))
   
   ggsave(paste0('out/_SUPP/composition_',which_taxrank,'_',barcode,'.pdf'),
          bg = 'white', width = 3600, height = 2000, 
-         units = 'px', dpi = 220)
+         units = 'px', dpi = 260)
 })
 
-##########
+####################
 # qPCR quantification
 ##########################
 
@@ -103,13 +113,18 @@ bact_load <- read_xlsx('data/metadata/load_bacteria_16S.xlsx') %>%
             sd_copy_number = sd(copy_number),
             n = n())
 
+
 bact_load %>%  filter(n == 1) # at least 2 each, ok
 bact_load %<>% # remove insanely high sds
-  filter(! sd_copy_number > 0.25*mean_copy_number )
+  filter(!sd_copy_number > 0.25*mean_copy_number )
 
 fung_load <- read_xlsx('data/metadata/load_fungi_ITS.xlsx') %>% 
   set_names(c('Sample', 'replicate', 'copy_number_16S','copy_number', 'note')) %>%
-  parse_bacterial_load()
+  parse_bacterial_load() %>% 
+  group_by(Sample) %>% 
+  summarise(mean_copy_number = mean(copy_number),
+            sd_copy_number = sd(copy_number),
+            n = n())
 
 fung_load%>%  filter(n == 1) # many, not ideal
 
