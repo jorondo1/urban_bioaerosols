@@ -34,7 +34,7 @@ which_taxrank <- 'Family'
 # Number of taxa to display by barcode
 nTax_by_barcode <- c(
   'BACT' = 14,
-  'FUNG' = 10,
+  'FUNG' = 14,
   'PLAN' = 8
 )
 
@@ -159,7 +159,7 @@ community_plots.ls <- map(cities, function(ci) {
               panel.border = element_blank(),
               axis.ticks.x = element_blank(),
               panel.grid = element_blank(),
-              strip.text = element_text(size = 13))
+              strip.text = element_text(size = 14))
     })
   }); names(time_plots.ls) <- names(period_colours)
   
@@ -301,3 +301,4 @@ map(cities, function(ci) {
          units = 'px', dpi = 160)
   
 })
+

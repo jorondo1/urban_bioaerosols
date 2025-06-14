@@ -23,7 +23,7 @@ melted_pas <- ps_pas %>%
     TX %in% c('T11', 'T12') ~ 'Fall')) %>% 
   select(Sample, Abundance, Start_date, site_id, time, all_of(keep_taxranks)) %>% 
   mutate(Type = 'P',
-         date = Start_date, .
+         date = Start_date,
          keep = 'unused')
 
 # Active traps 

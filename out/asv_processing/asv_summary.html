@@ -281,317 +281,98 @@ border: 0;
 </head>
 <body>
 <table class="table" style="color: black; width: auto !important; margin-left: auto; margin-right: auto;">
-<caption></caption>
  <thead>
+<tr>
+<th style="empty-cells: hide;border-bottom:hidden;" colspan="4"></th>
+<th style="border-bottom:hidden;padding-bottom:0; padding-left:3px;padding-right:3px;text-align: center; " colspan="4"><div style="border-bottom: 1px solid #ddd; padding-bottom: 5px; ">Sequences per sample</div></th>
+<th style="border-bottom:hidden;padding-bottom:0; padding-left:3px;padding-right:3px;text-align: center; " colspan="4"><div style="border-bottom: 1px solid #ddd; padding-bottom: 5px; ">ASVs per sample</div></th>
+<th style="border-bottom:hidden;padding-bottom:0; padding-left:3px;padding-right:3px;text-align: center; " colspan="4"><div style="border-bottom: 1px solid #ddd; padding-bottom: 5px; ">ASV prevalence</div></th>
+</tr>
+<tr>
+<th style="border-bottom:hidden;padding-bottom:0; padding-left:3px;padding-right:3px;text-align: center; " colspan="1"><div style="border-bottom: 1px solid #ddd; padding-bottom: 5px; ">Dataset</div></th>
+<th style="border-bottom:hidden;padding-bottom:0; padding-left:3px;padding-right:3px;text-align: center; " colspan="1"><div style="border-bottom: 1px solid #ddd; padding-bottom: 5px; ">Sequences</div></th>
+<th style="border-bottom:hidden;padding-bottom:0; padding-left:3px;padding-right:3px;text-align: center; " colspan="1"><div style="border-bottom: 1px solid #ddd; padding-bottom: 5px; ">ASVs</div></th>
+<th style="border-bottom:hidden;padding-bottom:0; padding-left:3px;padding-right:3px;text-align: center; " colspan="1"><div style="border-bottom: 1px solid #ddd; padding-bottom: 5px; ">Samples</div></th>
+<th style="border-bottom:hidden;padding-bottom:0; padding-left:3px;padding-right:3px;text-align: center; " colspan="2"><div style="border-bottom: 1px solid #ddd; padding-bottom: 5px; ">Mean ± SD</div></th>
+<th style="border-bottom:hidden;padding-bottom:0; padding-left:3px;padding-right:3px;text-align: center; " colspan="2"><div style="border-bottom: 1px solid #ddd; padding-bottom: 5px; ">[Min, Max]</div></th>
+<th style="border-bottom:hidden;padding-bottom:0; padding-left:3px;padding-right:3px;text-align: center; " colspan="2"><div style="border-bottom: 1px solid #ddd; padding-bottom: 5px; ">Mean ± SD</div></th>
+<th style="border-bottom:hidden;padding-bottom:0; padding-left:3px;padding-right:3px;text-align: center; " colspan="2"><div style="border-bottom: 1px solid #ddd; padding-bottom: 5px; ">[Min, Max]</div></th>
+<th style="border-bottom:hidden;padding-bottom:0; padding-left:3px;padding-right:3px;text-align: center; " colspan="2"><div style="border-bottom: 1px solid #ddd; padding-bottom: 5px; ">Mean ± SD</div></th>
+<th style="border-bottom:hidden;padding-bottom:0; padding-left:3px;padding-right:3px;text-align: center; " colspan="2"><div style="border-bottom: 1px solid #ddd; padding-bottom: 5px; ">[Min, Max]</div></th>
+</tr>
   <tr>
-   <th style="text-align:left;"> City </th>
-   <th style="text-align:left;"> Barcode </th>
-   <th style="text-align:left;"> group1 </th>
-   <th style="text-align:left;"> group2 </th>
-   <th style="text-align:right;"> p.adj </th>
-   <th style="text-align:left;"> p.adj.signif </th>
-   <th style="text-align:right;"> effsize </th>
-   <th style="text-align:right;"> n1 </th>
-   <th style="text-align:right;"> n2 </th>
-   <th style="text-align:right;"> conf.low </th>
-   <th style="text-align:right;"> conf.high </th>
-   <th style="text-align:left;"> magnitude </th>
+   <th style="text-align:left;display: none;"> Dataset </th>
+   <th style="text-align:left;display: none;"> Seq </th>
+   <th style="text-align:left;display: none;"> ASVs </th>
+   <th style="text-align:left;display: none;"> N </th>
+   <th style="text-align:left;display: none;"> Mean_seq </th>
+   <th style="text-align:left;display: none;"> SD_seq </th>
+   <th style="text-align:left;display: none;"> Min_seq </th>
+   <th style="text-align:left;display: none;"> Max_seq </th>
+   <th style="text-align:left;display: none;"> Mean_asv </th>
+   <th style="text-align:left;display: none;"> SD_asv </th>
+   <th style="text-align:left;display: none;"> Min_asv </th>
+   <th style="text-align:left;display: none;"> Max_asv </th>
+   <th style="text-align:left;display: none;"> Mean_prev </th>
+   <th style="text-align:left;display: none;"> SD_prev </th>
+   <th style="text-align:left;display: none;"> Min_prev </th>
+   <th style="text-align:left;display: none;"> Max_prev </th>
   </tr>
  </thead>
 <tbody>
   <tr>
-   <td style="text-align:left;"> Montreal </td>
-   <td style="text-align:left;"> Bacteria </td>
-   <td style="text-align:left;"> Spring </td>
-   <td style="text-align:left;"> Summer </td>
-   <td style="text-align:right;"> 0.942 </td>
-   <td style="text-align:left;"> ns </td>
-   <td style="text-align:right;"> 0.123 </td>
-   <td style="text-align:right;"> 25 </td>
-   <td style="text-align:right;"> 12 </td>
-   <td style="text-align:right;"> -0.120 </td>
-   <td style="text-align:right;"> 0.30 </td>
-   <td style="text-align:left;"> small </td>
+   <td style="text-align:left;"> BACT </td>
+   <td style="text-align:left;"> 3527682 </td>
+   <td style="text-align:left;"> 5896 </td>
+   <td style="text-align:left;"> 152 </td>
+   <td style="text-align:left;"> 23208.434 </td>
+   <td style="text-align:left;"> 5744.020 </td>
+   <td style="text-align:left;"> 9358 </td>
+   <td style="text-align:left;"> 41745 </td>
+   <td style="text-align:left;"> 1181.45395 </td>
+   <td style="text-align:left;"> 414.84073 </td>
+   <td style="text-align:left;"> 300 </td>
+   <td style="text-align:left;"> 2170 </td>
+   <td style="text-align:left;"> 30.45811 </td>
+   <td style="text-align:left;"> 30.63740 </td>
+   <td style="text-align:left;"> 1 </td>
+   <td style="text-align:left;"> 152 </td>
   </tr>
   <tr>
-   <td style="text-align:left;"> Montreal </td>
-   <td style="text-align:left;"> Bacteria </td>
-   <td style="text-align:left;"> Spring </td>
-   <td style="text-align:left;"> Fall </td>
-   <td style="text-align:right;"> 0.942 </td>
-   <td style="text-align:left;"> ns </td>
-   <td style="text-align:right;"> 0.062 </td>
-   <td style="text-align:right;"> 25 </td>
-   <td style="text-align:right;"> 25 </td>
-   <td style="text-align:right;"> -0.180 </td>
-   <td style="text-align:right;"> 0.18 </td>
-   <td style="text-align:left;"> small </td>
+   <td style="text-align:left;"> FUNG </td>
+   <td style="text-align:left;"> 1377622 </td>
+   <td style="text-align:left;"> 1348 </td>
+   <td style="text-align:left;"> 148 </td>
+   <td style="text-align:left;"> 9308.257 </td>
+   <td style="text-align:left;"> 5193.409 </td>
+   <td style="text-align:left;"> 2625 </td>
+   <td style="text-align:left;"> 48749 </td>
+   <td style="text-align:left;"> 266.70946 </td>
+   <td style="text-align:left;"> 63.42720 </td>
+   <td style="text-align:left;"> 121 </td>
+   <td style="text-align:left;"> 427 </td>
+   <td style="text-align:left;"> 29.28264 </td>
+   <td style="text-align:left;"> 24.64551 </td>
+   <td style="text-align:left;"> 1 </td>
+   <td style="text-align:left;"> 148 </td>
   </tr>
   <tr>
-   <td style="text-align:left;"> Montreal </td>
-   <td style="text-align:left;"> Bacteria </td>
-   <td style="text-align:left;"> Summer </td>
-   <td style="text-align:left;"> Fall </td>
-   <td style="text-align:right;"> 0.327 </td>
-   <td style="text-align:left;"> ns </td>
-   <td style="text-align:right;"> 0.267 </td>
-   <td style="text-align:right;"> 12 </td>
-   <td style="text-align:right;"> 25 </td>
-   <td style="text-align:right;"> -0.009 </td>
-   <td style="text-align:right;"> 0.53 </td>
-   <td style="text-align:left;"> small </td>
-  </tr>
-  <tr>
-   <td style="text-align:left;"> Montreal </td>
-   <td style="text-align:left;"> Fungi </td>
-   <td style="text-align:left;"> Spring </td>
-   <td style="text-align:left;"> Summer </td>
-   <td style="text-align:right;"> 0.033 </td>
-   <td style="text-align:left;"> * </td>
-   <td style="text-align:right;"> 0.419 </td>
-   <td style="text-align:right;"> 24 </td>
-   <td style="text-align:right;"> 12 </td>
-   <td style="text-align:right;"> 0.090 </td>
-   <td style="text-align:right;"> 0.75 </td>
-   <td style="text-align:left;"> moderate </td>
-  </tr>
-  <tr>
-   <td style="text-align:left;"> Montreal </td>
-   <td style="text-align:left;"> Fungi </td>
-   <td style="text-align:left;"> Spring </td>
-   <td style="text-align:left;"> Fall </td>
-   <td style="text-align:right;"> 0.783 </td>
-   <td style="text-align:left;"> ns </td>
-   <td style="text-align:right;"> 0.042 </td>
-   <td style="text-align:right;"> 24 </td>
-   <td style="text-align:right;"> 24 </td>
-   <td style="text-align:right;"> -0.230 </td>
-   <td style="text-align:right;"> 0.14 </td>
-   <td style="text-align:left;"> small </td>
-  </tr>
-  <tr>
-   <td style="text-align:left;"> Montreal </td>
-   <td style="text-align:left;"> Fungi </td>
-   <td style="text-align:left;"> Summer </td>
-   <td style="text-align:left;"> Fall </td>
-   <td style="text-align:right;"> 0.134 </td>
-   <td style="text-align:left;"> ns </td>
-   <td style="text-align:right;"> 0.308 </td>
-   <td style="text-align:right;"> 12 </td>
-   <td style="text-align:right;"> 24 </td>
-   <td style="text-align:right;"> 0.020 </td>
-   <td style="text-align:right;"> 0.59 </td>
-   <td style="text-align:left;"> moderate </td>
-  </tr>
-  <tr>
-   <td style="text-align:left;"> Montreal </td>
-   <td style="text-align:left;"> Pollen </td>
-   <td style="text-align:left;"> Spring </td>
-   <td style="text-align:left;"> Summer </td>
-   <td style="text-align:right;"> 0.000 </td>
-   <td style="text-align:left;"> **** </td>
-   <td style="text-align:right;"> 0.705 </td>
-   <td style="text-align:right;"> 23 </td>
-   <td style="text-align:right;"> 12 </td>
-   <td style="text-align:right;"> 0.560 </td>
-   <td style="text-align:right;"> 0.87 </td>
-   <td style="text-align:left;"> large </td>
-  </tr>
-  <tr>
-   <td style="text-align:left;"> Montreal </td>
-   <td style="text-align:left;"> Pollen </td>
-   <td style="text-align:left;"> Spring </td>
-   <td style="text-align:left;"> Fall </td>
-   <td style="text-align:right;"> 0.011 </td>
-   <td style="text-align:left;"> * </td>
-   <td style="text-align:right;"> 0.369 </td>
-   <td style="text-align:right;"> 23 </td>
-   <td style="text-align:right;"> 24 </td>
-   <td style="text-align:right;"> 0.120 </td>
-   <td style="text-align:right;"> 0.62 </td>
-   <td style="text-align:left;"> moderate </td>
-  </tr>
-  <tr>
-   <td style="text-align:left;"> Montreal </td>
-   <td style="text-align:left;"> Pollen </td>
-   <td style="text-align:left;"> Summer </td>
-   <td style="text-align:left;"> Fall </td>
-   <td style="text-align:right;"> 0.000 </td>
-   <td style="text-align:left;"> **** </td>
-   <td style="text-align:right;"> 0.805 </td>
-   <td style="text-align:right;"> 12 </td>
-   <td style="text-align:right;"> 24 </td>
-   <td style="text-align:right;"> 0.710 </td>
-   <td style="text-align:right;"> 0.92 </td>
-   <td style="text-align:left;"> large </td>
-  </tr>
-  <tr>
-   <td style="text-align:left;"> Quebec </td>
-   <td style="text-align:left;"> Bacteria </td>
-   <td style="text-align:left;"> Spring </td>
-   <td style="text-align:left;"> Fall </td>
-   <td style="text-align:right;"> 0.014 </td>
-   <td style="text-align:left;"> * </td>
-   <td style="text-align:right;"> 0.347 </td>
-   <td style="text-align:right;"> 25 </td>
-   <td style="text-align:right;"> 25 </td>
-   <td style="text-align:right;"> 0.100 </td>
-   <td style="text-align:right;"> 0.61 </td>
-   <td style="text-align:left;"> moderate </td>
-  </tr>
-  <tr>
-   <td style="text-align:left;"> Quebec </td>
-   <td style="text-align:left;"> Fungi </td>
-   <td style="text-align:left;"> Spring </td>
-   <td style="text-align:left;"> Fall </td>
-   <td style="text-align:right;"> 0.001 </td>
-   <td style="text-align:left;"> *** </td>
-   <td style="text-align:right;"> 0.479 </td>
-   <td style="text-align:right;"> 25 </td>
-   <td style="text-align:right;"> 25 </td>
-   <td style="text-align:right;"> 0.250 </td>
-   <td style="text-align:right;"> 0.71 </td>
-   <td style="text-align:left;"> moderate </td>
-  </tr>
-  <tr>
-   <td style="text-align:left;"> Quebec </td>
-   <td style="text-align:left;"> Pollen </td>
-   <td style="text-align:left;"> Spring </td>
-   <td style="text-align:left;"> Fall </td>
-   <td style="text-align:right;"> 0.001 </td>
-   <td style="text-align:left;"> ** </td>
-   <td style="text-align:right;"> 0.468 </td>
-   <td style="text-align:right;"> 24 </td>
-   <td style="text-align:right;"> 21 </td>
-   <td style="text-align:right;"> 0.230 </td>
-   <td style="text-align:right;"> 0.72 </td>
-   <td style="text-align:left;"> moderate </td>
-  </tr>
-  <tr>
-   <td style="text-align:left;"> Sherbrooke </td>
-   <td style="text-align:left;"> Bacteria </td>
-   <td style="text-align:left;"> Spring </td>
-   <td style="text-align:left;"> Summer </td>
-   <td style="text-align:right;"> 0.667 </td>
-   <td style="text-align:left;"> ns </td>
-   <td style="text-align:right;"> 0.087 </td>
-   <td style="text-align:right;"> 14 </td>
-   <td style="text-align:right;"> 14 </td>
-   <td style="text-align:right;"> -0.260 </td>
-   <td style="text-align:right;"> 0.25 </td>
-   <td style="text-align:left;"> small </td>
-  </tr>
-  <tr>
-   <td style="text-align:left;"> Sherbrooke </td>
-   <td style="text-align:left;"> Bacteria </td>
-   <td style="text-align:left;"> Spring </td>
-   <td style="text-align:left;"> Fall </td>
-   <td style="text-align:right;"> 0.038 </td>
-   <td style="text-align:left;"> * </td>
-   <td style="text-align:right;"> 0.484 </td>
-   <td style="text-align:right;"> 14 </td>
-   <td style="text-align:right;"> 12 </td>
-   <td style="text-align:right;"> 0.190 </td>
-   <td style="text-align:right;"> 0.79 </td>
-   <td style="text-align:left;"> moderate </td>
-  </tr>
-  <tr>
-   <td style="text-align:left;"> Sherbrooke </td>
-   <td style="text-align:left;"> Bacteria </td>
-   <td style="text-align:left;"> Summer </td>
-   <td style="text-align:left;"> Fall </td>
-   <td style="text-align:right;"> 0.424 </td>
-   <td style="text-align:left;"> ns </td>
-   <td style="text-align:right;"> 0.252 </td>
-   <td style="text-align:right;"> 14 </td>
-   <td style="text-align:right;"> 12 </td>
-   <td style="text-align:right;"> -0.100 </td>
-   <td style="text-align:right;"> 0.55 </td>
-   <td style="text-align:left;"> small </td>
-  </tr>
-  <tr>
-   <td style="text-align:left;"> Sherbrooke </td>
-   <td style="text-align:left;"> Fungi </td>
-   <td style="text-align:left;"> Spring </td>
-   <td style="text-align:left;"> Summer </td>
-   <td style="text-align:right;"> 0.003 </td>
-   <td style="text-align:left;"> ** </td>
-   <td style="text-align:right;"> 0.609 </td>
-   <td style="text-align:right;"> 12 </td>
-   <td style="text-align:right;"> 13 </td>
-   <td style="text-align:right;"> 0.330 </td>
-   <td style="text-align:right;"> 0.90 </td>
-   <td style="text-align:left;"> large </td>
-  </tr>
-  <tr>
-   <td style="text-align:left;"> Sherbrooke </td>
-   <td style="text-align:left;"> Fungi </td>
-   <td style="text-align:left;"> Spring </td>
-   <td style="text-align:left;"> Fall </td>
-   <td style="text-align:right;"> 0.000 </td>
-   <td style="text-align:left;"> *** </td>
-   <td style="text-align:right;"> 0.740 </td>
-   <td style="text-align:right;"> 12 </td>
-   <td style="text-align:right;"> 13 </td>
-   <td style="text-align:right;"> 0.580 </td>
-   <td style="text-align:right;"> 0.92 </td>
-   <td style="text-align:left;"> large </td>
-  </tr>
-  <tr>
-   <td style="text-align:left;"> Sherbrooke </td>
-   <td style="text-align:left;"> Fungi </td>
-   <td style="text-align:left;"> Summer </td>
-   <td style="text-align:left;"> Fall </td>
-   <td style="text-align:right;"> 0.264 </td>
-   <td style="text-align:left;"> ns </td>
-   <td style="text-align:right;"> 0.226 </td>
-   <td style="text-align:right;"> 13 </td>
-   <td style="text-align:right;"> 13 </td>
-   <td style="text-align:right;"> -0.110 </td>
-   <td style="text-align:right;"> 0.52 </td>
-   <td style="text-align:left;"> small </td>
-  </tr>
-  <tr>
-   <td style="text-align:left;"> Sherbrooke </td>
-   <td style="text-align:left;"> Pollen </td>
-   <td style="text-align:left;"> Spring </td>
-   <td style="text-align:left;"> Summer </td>
-   <td style="text-align:right;"> 0.354 </td>
-   <td style="text-align:left;"> ns </td>
-   <td style="text-align:right;"> 0.178 </td>
-   <td style="text-align:right;"> 14 </td>
-   <td style="text-align:right;"> 15 </td>
-   <td style="text-align:right;"> -0.150 </td>
-   <td style="text-align:right;"> 0.42 </td>
-   <td style="text-align:left;"> small </td>
-  </tr>
-  <tr>
-   <td style="text-align:left;"> Sherbrooke </td>
-   <td style="text-align:left;"> Pollen </td>
-   <td style="text-align:left;"> Spring </td>
-   <td style="text-align:left;"> Fall </td>
-   <td style="text-align:right;"> 0.000 </td>
-   <td style="text-align:left;"> *** </td>
-   <td style="text-align:right;"> 0.660 </td>
-   <td style="text-align:right;"> 14 </td>
-   <td style="text-align:right;"> 14 </td>
-   <td style="text-align:right;"> 0.410 </td>
-   <td style="text-align:right;"> 0.91 </td>
-   <td style="text-align:left;"> large </td>
-  </tr>
-  <tr>
-   <td style="text-align:left;"> Sherbrooke </td>
-   <td style="text-align:left;"> Pollen </td>
-   <td style="text-align:left;"> Summer </td>
-   <td style="text-align:left;"> Fall </td>
-   <td style="text-align:right;"> 0.000 </td>
-   <td style="text-align:left;"> **** </td>
-   <td style="text-align:right;"> 0.713 </td>
-   <td style="text-align:right;"> 15 </td>
-   <td style="text-align:right;"> 14 </td>
-   <td style="text-align:right;"> 0.530 </td>
-   <td style="text-align:right;"> 0.91 </td>
-   <td style="text-align:left;"> large </td>
+   <td style="text-align:left;"> PLAN </td>
+   <td style="text-align:left;"> 1665375 </td>
+   <td style="text-align:left;"> 378 </td>
+   <td style="text-align:left;"> 147 </td>
+   <td style="text-align:left;"> 11329.082 </td>
+   <td style="text-align:left;"> 6440.634 </td>
+   <td style="text-align:left;"> 2543 </td>
+   <td style="text-align:left;"> 30358 </td>
+   <td style="text-align:left;"> 54.04082 </td>
+   <td style="text-align:left;"> 18.07969 </td>
+   <td style="text-align:left;"> 15 </td>
+   <td style="text-align:left;"> 93 </td>
+   <td style="text-align:left;"> 21.01587 </td>
+   <td style="text-align:left;"> 21.68217 </td>
+   <td style="text-align:left;"> 1 </td>
+   <td style="text-align:left;"> 147 </td>
   </tr>
 </tbody>
 </table>

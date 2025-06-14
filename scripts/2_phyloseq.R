@@ -217,8 +217,8 @@ ps_ITS_ctrl <- phyloseq(
 #########################
 
 path_trnL <- file.path(urbanbio.path,'data/trnL')
-taxa_trnL <- read_rds(file.path(path_trnL, '4_taxonomy_E22_100_trunc275/taxonomy.RDS'))
-seqtab_trnL <- read_rds(file.path(path_trnL, '4_taxonomy_E22_100_trunc275/seqtab.RDS'))
+taxa_trnL <- read_rds(file.path(path_trnL, '4_taxonomy_ncbi20250528/taxonomy.RDS'))
+seqtab_trnL <- read_rds(file.path(path_trnL, '4_taxonomy_ncbi20250528/seqtab.RDS'))
 taxa_trnL[is.na(taxa_trnL)] <- 'Unclassified' 
 taxa_trnL <- taxa_trnL[which(taxa_trnL[,1] != 'Bacteria'),] # Remove cyanobacteria
 
@@ -337,7 +337,7 @@ saveRDS(taxtab.ls, file.path(urbanbio.path,'data/taxtab.ls.rds'))
 # Export asvs as fasta
 asv_to_fasta(seqtab_16S_sam_filt, file.path(path_16S, '4_taxonomy/asv.fa'))
 asv_to_fasta(seqtab_ITS_sam_filt, file.path(path_ITS, '4_taxonomy/asv.fa'))
-asv_to_fasta(seqtab_trnL_sam_filt, file.path(path_trnL, '4_taxonomy_E22_100/asv.fa'))
+asv_to_fasta(seqtab_trnL_sam_filt, file.path(path_trnL, '4_taxonomy_ncbi20250528/asv.fa'))
 
 
 

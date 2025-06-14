@@ -281,135 +281,317 @@ border: 0;
 </head>
 <body>
 <table class="table" style="color: black; width: auto !important; margin-left: auto; margin-right: auto;">
-<caption>perMANOVA by terms</caption>
+<caption></caption>
  <thead>
-<tr>
-<th style="border-bottom:hidden;padding-bottom:0; padding-left:3px;padding-right:3px;text-align: left; " colspan="1"><div style="border-bottom: 1px solid #ddd; padding-bottom: 5px; ">Montreal</div></th>
-<th style="border-bottom:hidden;padding-bottom:0; padding-left:3px;padding-right:3px;text-align: center; " colspan="2"><div style="border-bottom: 1px solid #ddd; padding-bottom: 5px; ">Bacteria</div></th>
-<th style="border-bottom:hidden;padding-bottom:0; padding-left:3px;padding-right:3px;text-align: center; " colspan="2"><div style="border-bottom: 1px solid #ddd; padding-bottom: 5px; ">Fungi</div></th>
-<th style="border-bottom:hidden;padding-bottom:0; padding-left:3px;padding-right:3px;text-align: center; " colspan="2"><div style="border-bottom: 1px solid #ddd; padding-bottom: 5px; ">Pollen</div></th>
-</tr>
-<tr>
-<th style="border-bottom:hidden;padding-bottom:0; padding-left:3px;padding-right:3px;text-align: left; " colspan="1"><div style="border-bottom: 1px solid #ddd; padding-bottom: 5px; ">Variables</div></th>
-<th style="border-bottom:hidden;padding-bottom:0; padding-left:3px;padding-right:3px;text-align: center; " colspan="1"><div style="border-bottom: 1px solid #ddd; padding-bottom: 5px; ">R<sup>2</sup>
-</div></th>
-<th style="border-bottom:hidden;padding-bottom:0; padding-left:3px;padding-right:3px;text-align: center; " colspan="1"><div style="border-bottom: 1px solid #ddd; padding-bottom: 5px; "><i>p</i></div></th>
-<th style="border-bottom:hidden;padding-bottom:0; padding-left:3px;padding-right:3px;text-align: center; " colspan="1"><div style="border-bottom: 1px solid #ddd; padding-bottom: 5px; ">R<sup>2</sup>
-</div></th>
-<th style="border-bottom:hidden;padding-bottom:0; padding-left:3px;padding-right:3px;text-align: center; " colspan="1"><div style="border-bottom: 1px solid #ddd; padding-bottom: 5px; "><i>p</i></div></th>
-<th style="border-bottom:hidden;padding-bottom:0; padding-left:3px;padding-right:3px;text-align: center; " colspan="1"><div style="border-bottom: 1px solid #ddd; padding-bottom: 5px; ">R<sup>2</sup>
-</div></th>
-<th style="border-bottom:hidden;padding-bottom:0; padding-left:3px;padding-right:3px;text-align: center; " colspan="1"><div style="border-bottom: 1px solid #ddd; padding-bottom: 5px; "><i>p</i></div></th>
-</tr>
   <tr>
-   <th style="text-align:left;display: none;"> variable </th>
-   <th style="text-align:right;display: none;"> R2_BACT </th>
-   <th style="text-align:right;display: none;"> p_BACT </th>
-   <th style="text-align:right;display: none;"> R2_FUNG </th>
-   <th style="text-align:right;display: none;"> p_FUNG </th>
-   <th style="text-align:right;display: none;"> R2_PLAN </th>
-   <th style="text-align:right;display: none;"> p_PLAN </th>
+   <th style="text-align:left;"> City </th>
+   <th style="text-align:left;"> Barcode </th>
+   <th style="text-align:left;"> group1 </th>
+   <th style="text-align:left;"> group2 </th>
+   <th style="text-align:right;"> p.adj </th>
+   <th style="text-align:left;"> p.adj.signif </th>
+   <th style="text-align:right;"> effsize </th>
+   <th style="text-align:right;"> n1 </th>
+   <th style="text-align:right;"> n2 </th>
+   <th style="text-align:right;"> conf.low </th>
+   <th style="text-align:right;"> conf.high </th>
+   <th style="text-align:left;"> magnitude </th>
   </tr>
  </thead>
 <tbody>
   <tr>
-   <td style="text-align:left;"> concDNA </td>
-   <td style="text-align:right;"> 0.025 </td>
-   <td style="text-align:right;"> 0.005 </td>
-   <td style="text-align:right;"> 0.075 </td>
-   <td style="text-align:right;"> 0.001 </td>
-   <td style="text-align:right;"> 0.146 </td>
-   <td style="text-align:right;"> 0.001 </td>
+   <td style="text-align:left;"> Montreal </td>
+   <td style="text-align:left;"> Bacteria </td>
+   <td style="text-align:left;"> Spring </td>
+   <td style="text-align:left;"> Summer </td>
+   <td style="text-align:right;"> 0.177 </td>
+   <td style="text-align:left;"> ns </td>
+   <td style="text-align:right;"> 0.283 </td>
+   <td style="text-align:right;"> 25 </td>
+   <td style="text-align:right;"> 12 </td>
+   <td style="text-align:right;"> 0.01 </td>
+   <td style="text-align:right;"> 0.55 </td>
+   <td style="text-align:left;"> small </td>
   </tr>
   <tr>
-   <td style="text-align:left;"> median_income </td>
-   <td style="text-align:right;"> 0.034 </td>
-   <td style="text-align:right;"> 0.001 </td>
-   <td style="text-align:right;"> 0.026 </td>
-   <td style="text-align:right;"> 0.005 </td>
-   <td style="text-align:right;"> 0.011 </td>
-   <td style="text-align:right;"> 0.138 </td>
+   <td style="text-align:left;"> Montreal </td>
+   <td style="text-align:left;"> Bacteria </td>
+   <td style="text-align:left;"> Spring </td>
+   <td style="text-align:left;"> Fall </td>
+   <td style="text-align:right;"> 0.209 </td>
+   <td style="text-align:left;"> ns </td>
+   <td style="text-align:right;"> 0.180 </td>
+   <td style="text-align:right;"> 25 </td>
+   <td style="text-align:right;"> 25 </td>
+   <td style="text-align:right;"> -0.08 </td>
+   <td style="text-align:right;"> 0.40 </td>
+   <td style="text-align:left;"> small </td>
   </tr>
   <tr>
-   <td style="text-align:left;"> population_density </td>
-   <td style="text-align:right;"> 0.024 </td>
-   <td style="text-align:right;"> 0.005 </td>
-   <td style="text-align:right;"> 0.019 </td>
-   <td style="text-align:right;"> 0.027 </td>
-   <td style="text-align:right;"> 0.010 </td>
-   <td style="text-align:right;"> 0.154 </td>
-  </tr>
-  <tr>
-   <td style="text-align:left;"> mean_temperature </td>
-   <td style="text-align:right;"> 0.042 </td>
-   <td style="text-align:right;"> 0.001 </td>
-   <td style="text-align:right;"> 0.098 </td>
-   <td style="text-align:right;"> 0.001 </td>
-   <td style="text-align:right;"> 0.132 </td>
-   <td style="text-align:right;"> 0.001 </td>
-  </tr>
-  <tr>
-   <td style="text-align:left;"> vegetation_index_NDVI_landsat </td>
-   <td style="text-align:right;"> 0.022 </td>
-   <td style="text-align:right;"> 0.019 </td>
-   <td style="text-align:right;"> 0.016 </td>
-   <td style="text-align:right;"> 0.070 </td>
+   <td style="text-align:left;"> Montreal </td>
+   <td style="text-align:left;"> Bacteria </td>
+   <td style="text-align:left;"> Summer </td>
+   <td style="text-align:left;"> Fall </td>
    <td style="text-align:right;"> 0.008 </td>
-   <td style="text-align:right;"> 0.233 </td>
+   <td style="text-align:left;"> ** </td>
+   <td style="text-align:right;"> 0.480 </td>
+   <td style="text-align:right;"> 12 </td>
+   <td style="text-align:right;"> 25 </td>
+   <td style="text-align:right;"> 0.26 </td>
+   <td style="text-align:right;"> 0.72 </td>
+   <td style="text-align:left;"> moderate </td>
   </tr>
   <tr>
-   <td style="text-align:left;"> mean_wind_speed </td>
-   <td style="text-align:right;"> 0.016 </td>
-   <td style="text-align:right;"> 0.123 </td>
-   <td style="text-align:right;"> 0.030 </td>
+   <td style="text-align:left;"> Montreal </td>
+   <td style="text-align:left;"> Fungi </td>
+   <td style="text-align:left;"> Spring </td>
+   <td style="text-align:left;"> Summer </td>
+   <td style="text-align:right;"> 0.095 </td>
+   <td style="text-align:left;"> ns </td>
+   <td style="text-align:right;"> 0.358 </td>
+   <td style="text-align:right;"> 24 </td>
+   <td style="text-align:right;"> 12 </td>
+   <td style="text-align:right;"> 0.03 </td>
+   <td style="text-align:right;"> 0.68 </td>
+   <td style="text-align:left;"> moderate </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;"> Montreal </td>
+   <td style="text-align:left;"> Fungi </td>
+   <td style="text-align:left;"> Spring </td>
+   <td style="text-align:left;"> Fall </td>
+   <td style="text-align:right;"> 0.136 </td>
+   <td style="text-align:left;"> ns </td>
+   <td style="text-align:right;"> 0.217 </td>
+   <td style="text-align:right;"> 24 </td>
+   <td style="text-align:right;"> 24 </td>
+   <td style="text-align:right;"> -0.04 </td>
+   <td style="text-align:right;"> 0.46 </td>
+   <td style="text-align:left;"> small </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;"> Montreal </td>
+   <td style="text-align:left;"> Fungi </td>
+   <td style="text-align:left;"> Summer </td>
+   <td style="text-align:left;"> Fall </td>
+   <td style="text-align:right;"> 0.095 </td>
+   <td style="text-align:left;"> ns </td>
+   <td style="text-align:right;"> 0.347 </td>
+   <td style="text-align:right;"> 12 </td>
+   <td style="text-align:right;"> 24 </td>
+   <td style="text-align:right;"> 0.05 </td>
+   <td style="text-align:right;"> 0.63 </td>
+   <td style="text-align:left;"> moderate </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;"> Montreal </td>
+   <td style="text-align:left;"> Pollen </td>
+   <td style="text-align:left;"> Spring </td>
+   <td style="text-align:left;"> Summer </td>
+   <td style="text-align:right;"> 0.000 </td>
+   <td style="text-align:left;"> **** </td>
+   <td style="text-align:right;"> 0.699 </td>
+   <td style="text-align:right;"> 23 </td>
+   <td style="text-align:right;"> 12 </td>
+   <td style="text-align:right;"> 0.56 </td>
+   <td style="text-align:right;"> 0.86 </td>
+   <td style="text-align:left;"> large </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;"> Montreal </td>
+   <td style="text-align:left;"> Pollen </td>
+   <td style="text-align:left;"> Spring </td>
+   <td style="text-align:left;"> Fall </td>
+   <td style="text-align:right;"> 0.295 </td>
+   <td style="text-align:left;"> ns </td>
+   <td style="text-align:right;"> 0.155 </td>
+   <td style="text-align:right;"> 23 </td>
+   <td style="text-align:right;"> 24 </td>
+   <td style="text-align:right;"> -0.09 </td>
+   <td style="text-align:right;"> 0.36 </td>
+   <td style="text-align:left;"> small </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;"> Montreal </td>
+   <td style="text-align:left;"> Pollen </td>
+   <td style="text-align:left;"> Summer </td>
+   <td style="text-align:left;"> Fall </td>
+   <td style="text-align:right;"> 0.000 </td>
+   <td style="text-align:left;"> **** </td>
+   <td style="text-align:right;"> 0.805 </td>
+   <td style="text-align:right;"> 12 </td>
+   <td style="text-align:right;"> 24 </td>
+   <td style="text-align:right;"> 0.71 </td>
+   <td style="text-align:right;"> 0.92 </td>
+   <td style="text-align:left;"> large </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;"> Quebec </td>
+   <td style="text-align:left;"> Bacteria </td>
+   <td style="text-align:left;"> Spring </td>
+   <td style="text-align:left;"> Fall </td>
+   <td style="text-align:right;"> 0.006 </td>
+   <td style="text-align:left;"> ** </td>
+   <td style="text-align:right;"> 0.386 </td>
+   <td style="text-align:right;"> 25 </td>
+   <td style="text-align:right;"> 25 </td>
+   <td style="text-align:right;"> 0.14 </td>
+   <td style="text-align:right;"> 0.64 </td>
+   <td style="text-align:left;"> moderate </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;"> Quebec </td>
+   <td style="text-align:left;"> Fungi </td>
+   <td style="text-align:left;"> Spring </td>
+   <td style="text-align:left;"> Fall </td>
+   <td style="text-align:right;"> 0.009 </td>
+   <td style="text-align:left;"> ** </td>
+   <td style="text-align:right;"> 0.366 </td>
+   <td style="text-align:right;"> 25 </td>
+   <td style="text-align:right;"> 25 </td>
+   <td style="text-align:right;"> 0.12 </td>
+   <td style="text-align:right;"> 0.61 </td>
+   <td style="text-align:left;"> moderate </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;"> Quebec </td>
+   <td style="text-align:left;"> Pollen </td>
+   <td style="text-align:left;"> Spring </td>
+   <td style="text-align:left;"> Fall </td>
+   <td style="text-align:right;"> 0.143 </td>
+   <td style="text-align:left;"> ns </td>
+   <td style="text-align:right;"> 0.220 </td>
+   <td style="text-align:right;"> 24 </td>
+   <td style="text-align:right;"> 21 </td>
+   <td style="text-align:right;"> -0.04 </td>
+   <td style="text-align:right;"> 0.46 </td>
+   <td style="text-align:left;"> small </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;"> Sherbrooke </td>
+   <td style="text-align:left;"> Bacteria </td>
+   <td style="text-align:left;"> Spring </td>
+   <td style="text-align:left;"> Summer </td>
+   <td style="text-align:right;"> 0.250 </td>
+   <td style="text-align:left;"> ns </td>
+   <td style="text-align:right;"> 0.295 </td>
+   <td style="text-align:right;"> 14 </td>
+   <td style="text-align:right;"> 14 </td>
+   <td style="text-align:right;"> -0.03 </td>
+   <td style="text-align:right;"> 0.60 </td>
+   <td style="text-align:left;"> small </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;"> Sherbrooke </td>
+   <td style="text-align:left;"> Bacteria </td>
+   <td style="text-align:left;"> Spring </td>
+   <td style="text-align:left;"> Fall </td>
    <td style="text-align:right;"> 0.002 </td>
-   <td style="text-align:right;"> 0.035 </td>
-   <td style="text-align:right;"> 0.001 </td>
+   <td style="text-align:left;"> ** </td>
+   <td style="text-align:right;"> 0.646 </td>
+   <td style="text-align:right;"> 14 </td>
+   <td style="text-align:right;"> 12 </td>
+   <td style="text-align:right;"> 0.39 </td>
+   <td style="text-align:right;"> 0.93 </td>
+   <td style="text-align:left;"> large </td>
   </tr>
   <tr>
-   <td style="text-align:left;"> precip </td>
+   <td style="text-align:left;"> Sherbrooke </td>
+   <td style="text-align:left;"> Bacteria </td>
+   <td style="text-align:left;"> Summer </td>
+   <td style="text-align:left;"> Fall </td>
+   <td style="text-align:right;"> 0.250 </td>
+   <td style="text-align:left;"> ns </td>
+   <td style="text-align:right;"> 0.252 </td>
+   <td style="text-align:right;"> 14 </td>
+   <td style="text-align:right;"> 12 </td>
+   <td style="text-align:right;"> -0.07 </td>
+   <td style="text-align:right;"> 0.56 </td>
+   <td style="text-align:left;"> small </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;"> Sherbrooke </td>
+   <td style="text-align:left;"> Fungi </td>
+   <td style="text-align:left;"> Spring </td>
+   <td style="text-align:left;"> Summer </td>
+   <td style="text-align:right;"> 0.013 </td>
+   <td style="text-align:left;"> * </td>
+   <td style="text-align:right;"> 0.555 </td>
+   <td style="text-align:right;"> 12 </td>
+   <td style="text-align:right;"> 13 </td>
+   <td style="text-align:right;"> 0.25 </td>
+   <td style="text-align:right;"> 0.87 </td>
+   <td style="text-align:left;"> large </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;"> Sherbrooke </td>
+   <td style="text-align:left;"> Fungi </td>
+   <td style="text-align:left;"> Spring </td>
+   <td style="text-align:left;"> Fall </td>
    <td style="text-align:right;"> 0.016 </td>
-   <td style="text-align:right;"> 0.167 </td>
-   <td style="text-align:right;"> 0.027 </td>
-   <td style="text-align:right;"> 0.005 </td>
-   <td style="text-align:right;"> 0.010 </td>
-   <td style="text-align:right;"> 0.160 </td>
+   <td style="text-align:left;"> * </td>
+   <td style="text-align:right;"> 0.522 </td>
+   <td style="text-align:right;"> 12 </td>
+   <td style="text-align:right;"> 13 </td>
+   <td style="text-align:right;"> 0.23 </td>
+   <td style="text-align:right;"> 0.84 </td>
+   <td style="text-align:left;"> large </td>
   </tr>
   <tr>
-   <td style="text-align:left;"> mean_relative_humidity </td>
-   <td style="text-align:right;"> 0.051 </td>
-   <td style="text-align:right;"> 0.001 </td>
-   <td style="text-align:right;"> 0.087 </td>
-   <td style="text-align:right;"> 0.001 </td>
-   <td style="text-align:right;"> 0.115 </td>
-   <td style="text-align:right;"> 0.001 </td>
+   <td style="text-align:left;"> Sherbrooke </td>
+   <td style="text-align:left;"> Fungi </td>
+   <td style="text-align:left;"> Summer </td>
+   <td style="text-align:left;"> Fall </td>
+   <td style="text-align:right;"> 0.113 </td>
+   <td style="text-align:left;"> ns </td>
+   <td style="text-align:right;"> 0.317 </td>
+   <td style="text-align:right;"> 13 </td>
+   <td style="text-align:right;"> 13 </td>
+   <td style="text-align:right;"> -0.04 </td>
+   <td style="text-align:right;"> 0.65 </td>
+   <td style="text-align:left;"> moderate </td>
   </tr>
   <tr>
-   <td style="text-align:left;"> time </td>
-   <td style="text-align:right;"> 0.088 </td>
-   <td style="text-align:right;"> 0.001 </td>
-   <td style="text-align:right;"> 0.151 </td>
-   <td style="text-align:right;"> 0.001 </td>
-   <td style="text-align:right;"> 0.222 </td>
-   <td style="text-align:right;"> 0.001 </td>
+   <td style="text-align:left;"> Sherbrooke </td>
+   <td style="text-align:left;"> Pollen </td>
+   <td style="text-align:left;"> Spring </td>
+   <td style="text-align:left;"> Summer </td>
+   <td style="text-align:right;"> 0.377 </td>
+   <td style="text-align:left;"> ns </td>
+   <td style="text-align:right;"> 0.170 </td>
+   <td style="text-align:right;"> 14 </td>
+   <td style="text-align:right;"> 15 </td>
+   <td style="text-align:right;"> -0.14 </td>
+   <td style="text-align:right;"> 0.40 </td>
+   <td style="text-align:left;"> small </td>
   </tr>
   <tr>
-   <td style="text-align:left;"> Residual </td>
-   <td style="text-align:right;"> 0.683 </td>
-   <td style="text-align:right;"> NA </td>
-   <td style="text-align:right;"> 0.471 </td>
-   <td style="text-align:right;"> NA </td>
-   <td style="text-align:right;"> 0.311 </td>
-   <td style="text-align:right;"> NA </td>
+   <td style="text-align:left;"> Sherbrooke </td>
+   <td style="text-align:left;"> Pollen </td>
+   <td style="text-align:left;"> Spring </td>
+   <td style="text-align:left;"> Fall </td>
+   <td style="text-align:right;"> 0.004 </td>
+   <td style="text-align:left;"> ** </td>
+   <td style="text-align:right;"> 0.590 </td>
+   <td style="text-align:right;"> 14 </td>
+   <td style="text-align:right;"> 14 </td>
+   <td style="text-align:right;"> 0.34 </td>
+   <td style="text-align:right;"> 0.87 </td>
+   <td style="text-align:left;"> large </td>
   </tr>
   <tr>
-   <td style="text-align:left;"> Shared </td>
-   <td style="text-align:right;"> 0.000 </td>
-   <td style="text-align:right;"> NA </td>
-   <td style="text-align:right;"> 0.000 </td>
-   <td style="text-align:right;"> NA </td>
-   <td style="text-align:right;"> 0.000 </td>
-   <td style="text-align:right;"> NA </td>
+   <td style="text-align:left;"> Sherbrooke </td>
+   <td style="text-align:left;"> Pollen </td>
+   <td style="text-align:left;"> Summer </td>
+   <td style="text-align:left;"> Fall </td>
+   <td style="text-align:right;"> 0.004 </td>
+   <td style="text-align:left;"> ** </td>
+   <td style="text-align:right;"> 0.575 </td>
+   <td style="text-align:right;"> 15 </td>
+   <td style="text-align:right;"> 14 </td>
+   <td style="text-align:right;"> 0.32 </td>
+   <td style="text-align:right;"> 0.86 </td>
+   <td style="text-align:left;"> large </td>
   </tr>
 </tbody>
 </table>
