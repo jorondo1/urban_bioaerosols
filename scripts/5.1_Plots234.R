@@ -27,7 +27,7 @@ source("https://github.com/jorondo1/misc_scripts/raw/refs/heads/main/myFunctions
 source('scripts/0_config.R') # Variable naming and such
 
 ps_rare.ls <- read_rds('data/ps_rare.ls.rds')
-
+theme_set(theme_light())
 # Dataframe with taxrank mean relative abundance by (taxrank, city, date)
 which_taxrank <- 'Family'
 
@@ -273,7 +273,6 @@ map(cities, function(ci) {
       geom_point(size = 1) +
       stat_ellipse(level = 0.95, geom = 'polygon', 
                    alpha = 0.2, aes(fill = time)) +
-      theme_light() +
       scale_colour_manual(values = period_colours) +
       scale_fill_manual(values = period_colours) +
       labs(colour = 'Sampling\nperiod', fill = 'Sampling\nperiod', 
@@ -302,5 +301,4 @@ map(cities, function(ci) {
   
 })
 
-c ('test')
 
