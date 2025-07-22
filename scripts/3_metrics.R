@@ -37,9 +37,67 @@ diversity.df <- imap(ps_rare.ls, function(ps, barcode) {
 
 write_rds(diversity.df, 'data/diversity/alpha_diversity.rds')
 
-######################
-#=== BETA DIVERSITY ###
-########################
+##########################################
+#=== BETA DIVERSITY ALL CITIES TOGETHER ###
+############################################
+
+pcoa_full.ls <- imap(ps_rare.ls, function(ps, barcode){
+  out <- list()
+  out[['robust.aitchison']] <- compute_pcoa(ps, dist = 'robust.aitchison')
+  out[['bray']] <- compute_pcoa(ps, dist = 'bray', vst = TRUE)
+  out
+})
+
+eig_full.df <- imap(pcoa_full.ls, function(pcoa_dist.ls, barcode) {
+  imap(pcoa_dist.ls, function(pcoa, dist) {
+    pcoa$eig %>% 
+      data.frame(Eig = .) %>% 
+      rownames_to_column('MDS') %>% 
+      tibble() %>% 
+      mutate(Barcode = barcode,
+             Dist = dist) %>% 
+      group_by(Barcode, Dist) %>% 
+      mutate(Eig = 100*Eig/sum(Eig)) %>% # Compute %eig
+      filter(MDS %in% c('MDS1', 'MDS2')) # keep the 1st two
+  }) %>% list_rbind
+}) %>% list_rbind %>% 
+  group_by(Barcode, Dist, MDS) %>%
+  mutate(Barcode = recode(Barcode, !!!kingdoms),
+         MDS = case_when(MDS == 'MDS1' ~ 'PCo1',
+                         MDS == 'MDS2' ~ 'PCo2')) %>% 
+  summarize(Eig = paste0(MDS, ": ", round(Eig, 1), "%"), .groups = "drop") %>%
+  pivot_wider(names_from = MDS, values_from = Eig) 
+
+# Compile pcoa data points for plots
+plot_full.df <- imap(pcoa_full.ls, function(pcoa_dist.ls, barcode) {
+    imap(pcoa_dist.ls, function(pcoa, dist) {
+      pcoa$metadata %>% 
+        rownames_to_column('Sample') %>% 
+        select(Sample, city, PCo1, PCo2) %>% 
+        mutate(Barcode = barcode,
+               Dist = dist) # add barcode name for each iteration
+    }) %>% list_rbind
+}) %>% list_rbind %>% tibble %>% 
+  mutate(Barcode = recode(Barcode, !!!kingdoms),
+         city = factor(city, levels = cities))
+
+pcoa_full.ls$plot.df <- plot_full.df
+pcoa_full.ls$eig.df <- eig_full.df
+
+write_rds(pcoa_full.ls,  'data/diversity/beta_diversity_full.ls.rds')
+
+# Sanity check plot : 
+pcoa_full.ls$plot.df %>% 
+  filter(Dist == 'robust.aitchison') %>% 
+  ggplot(aes(x = PCo1, y = PCo2, colour = time)) +
+  geom_point() +
+  stat_ellipse(level = 0.95, geom = 'polygon', 
+               alpha = 0.2, aes(fill = time)) +
+  facet_grid(. ~ Barcode)
+
+##############################
+#=== BETA DIVERSITY BY CITY ###
+################################
 
 # Split every dataset by city
 ps_byCity.ls <- lapply(cities, function(city_name) { # 1st level: city
@@ -113,7 +171,7 @@ plot.df <- imap(pcoa.ls, function(pcoa_barcode.ls, city) {
 pcoa.ls$plot.df <- plot.df
 pcoa.ls$eig.df <- eig.df
 
-write_rds(pcoa.ls,  'data/diversity/beta_diversity.ls.rds')
+write_rds(pcoa.ls,  'data/diversity/beta_diversity_byCity.ls.rds')
 
 # Sanity check plot : 
 pcoa.ls$plot.df %>% 

@@ -3,14 +3,128 @@
 ###############
 
 library(pacman)
-p_load(tidyverse, magrittr, vegan, kableExtra, rstatix, parallel)
+p_load(tidyverse, magrittr, vegan, kableExtra, rstatix, parallel, MetBrewer)
 source('scripts/0_config.R') # Variable naming and such
 source('scripts/myFunctions.R')
 
 
-######################
-# Beta diversity ###
-########################
+#######################################
+# Beta diversity all cities together ###
+#########################################
+
+betadiv_full.ls <- read_rds('data/diversity/beta_diversity_full.ls.rds')
+
+# Permanova-generarting function
+# One permanova by city*barcode
+# Loop by barcode (target all sublists)
+model_vars <- c('city','time','city:time', 'vegetation_index_NDVI_landsat', 
+                'median_income',
+                'vegetation_index_NDVI_landsat:median_income'
+                )
+model_formula <- as.formula(paste("dist.mx ~", paste(model_vars, collapse = " + ")))
+
+adonis_out.ls <- imap(kingdoms, function(barcode, barcode_ID) {
+  pcoa_barcode.ls <- betadiv_full.ls[[barcode_ID]][['bray']]
+  dist.mx <- pcoa_barcode.ls$dist.mx
+  samDat <- pcoa_barcode.ls$metadata
+  
+  # Block strata permutation restriction
+  valid_cols <- intersect(colnames(samDat), model_vars)
+  perm <- how(nperm = 9999)
+  setBlocks(perm) <- samDat %>% 
+    filter(if_all(all_of(valid_cols), ~ !is.na(.))) %>% 
+    pull(time)
+  
+  adonis2(formula = model_formula,
+          permutations = perm,
+          data = samDat,
+          by = 'terms',
+          na.action = na.exclude,
+          parallel = 8)
+})
+
+perm_out_full <- imap(kingdoms, function(barcode, barcode_ID){
+  res <- adonis_out.ls[[barcode_ID]]
+  tibble(
+    Barcode = barcode_ID,
+    variable = rownames(res),
+    R2 = res$R2,
+    p = res$`Pr(>F)`,
+    df = res$Df
+  )
+}) %>% list_rbind() %>% 
+  filter(variable != 'Total') %>% 
+  mutate(variable = factor(variable, 
+                           levels = c(model_vars, 'Residual')))
+
+palette <- c(met.brewer('Austria', n=length(model_vars)), 'grey90')
+perm_out_full %>% 
+  ggplot(aes(x = Barcode, y = R2, #alpha = p_sig,
+             fill = variable)) +
+  geom_col() +
+  scale_fill_manual(values = palette) +
+  theme_light() +
+  facet_grid(~Barcode, scale = 'free')+
+  guides(alpha = 'none') +
+  theme(axis.title.x = element_blank(),
+        axis.text.x = element_blank())
+
+ggsave(paste0('out/stats/perMANOVA_interactions.pdf'), 
+       bg = 'white', width = 1400, height = 2000, 
+       units = 'px', dpi = 220)
+
+
+perm_out_full %>% 
+  pivot_wider(values_from = c('R2', 'p'),
+              names_from = Barcode,
+              id_cols = c('variable'),
+              names_glue = "{.value}_{Barcode}",
+              names_vary = "slowest" # control column order, so ordered by names_from and not by values_from
+  ) %>% 
+  mutate(
+    across(
+      .cols = matches('R2_'),
+      .fns = ~ round(., 3)
+    ),
+    across(
+      .cols = matches('p_'),
+      .fns = ~ round(., 4)
+    ),
+    variable = factor(variable, levels = c(model_vars, 'Residual'))) %>% 
+  arrange(variable) %>% 
+  
+  # Build table
+  kable("html",
+        caption = 'perMANOVA by terms')%>%
+  kable_styling(full_width = FALSE) %>% 
+  add_header_above( # Secondary header
+    header = c(
+      "Variables" = 1,
+      rep(c("R<sup>2</sup>" = 1,
+            "<i>p</i>-value" = 1
+            ), 3)
+    ), 
+    bold = FALSE,
+    align = c('l', rep('c', 6)), # align headers left
+    escape = FALSE # allows html in variable names
+  ) %>%
+  add_header_above( # Top header
+    header = c(
+      "",
+      c( "Bacteria"= 2,
+      "Fungi" = 2,
+      "Plants" = 2
+    )), 
+    align = c('l', rep('c',3)),
+    escape = FALSE) %>% 
+  row_spec(0, extra_css = "display: none;")# %>% # Remove original header 
+  
+
+save_kable(file = paste0('out/stats/perm_terms_interactions.html'))
+
+###########################
+# Beta diversity by city ###
+#############################
 
 # Data from scripts/3_metrics.R
 betadiv.ls <- read_rds('data/diversity/beta_diversity.ls.rds')

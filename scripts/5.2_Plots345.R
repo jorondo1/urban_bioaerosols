@@ -301,4 +301,3 @@ map(cities, function(ci) {
   
 })
 
-
