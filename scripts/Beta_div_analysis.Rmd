@@ -3,6 +3,1273 @@ title: "Beta_partitioning"
 output: html_document
 date: "2024-12-11"
 author: Maria Faticov
+updated: "2025-07-25"
+---
+
+#Loading packages 
+```{r}
+library(pacman)
+library(dplyr)
+p_load(dada2, ggplot2, vegan, ANCOMBC, phyloseq, Biostrings, patchwork, kableExtra, RColorBrewer, paletteer, ggthemes, FSA, rstatix, car, ggsignif, ggpubr, magick, webshot, MASS, tidyr, permute, lme4, lmerTest, lattice, gridExtra, gridBase, Ternary, ggtern)
+```
+
+#Load data
+```{r setup, include=FALSE}
+bact <- ps.ls$BACT 
+fung <- ps.ls$FUNG
+plant <- ps.ls$PLAN
+```
+
+To get an idea what betapart package and beta.multi function does you can read the following article:
+https://besjournals.onlinelibrary.wiley.com/doi/full/10.1111/j.2041-210X.2012.00224.x
+
+In this part of the analysis, we analysed the changes in community composition between pairs of seasons (spring vs summer,summer vs autumn, spring vs autumn) by computing dissimilarity values for each air sample separately for each of 3 cities. For example, we were interested to see whether changes in bacterial community composition between spring and summer seasons for air samples collected in Mtl were explained by species turnover or nestedness(e.g. species numbers). We asked the same questions for samples collected in Sherbrooke and Quebec.
+
+In the analysis, we partitioned the total diversity (Jaccard dissimilarity calculated based on presence-absence data) into two indices, where Beta JTU is the turnover component of Jaccard dissimilarity and Beta JNE is the species richness component of the Jaccard dissimilarity. 
+
+#Dissimilarity in bacterial communities between spring and summer, summer and autumn, and spring and autumn in air samples in Montreal
+```{r}
+phylo16S_MTL <- phyloseq::subset_samples(bact, city =="Montreal")
+
+####extract Sample IDs for each pair of seasons: separately for spring and summer degrees, separately for summer and autumn degrees, separately for spring and autumn degrees
+
+phylo16S_MTL_spsum  <- rownames(phylo16S_MTL @sam_data)[phylo16S_MTL @sam_data$time != 'Fall'] ## extract SampleIDs for samples that were collected in spring and summer (but not samples that were collected in autumn)
+phylo16S_MTL_sumaut <- rownames(phylo16S_MTL @sam_data)[phylo16S_MTL @sam_data$time != 'Spring'] ## extract SampleIDs for samples that were collected in autumn and summer (but not samples that were collected in spring)
+phylo16S_MTL_spaut <- rownames(phylo16S_MTL @sam_data)[phylo16S_MTL @sam_data$time != 'Summer'] ## extract SampleIDs for samples that were collected in autumn and spring (but not samples that were collected in summer)
+
+####extract Sample IDs for each samples type: separately for spring, separately for summer, separately for autumn
+
+spring_mtl <- rownames(phylo16S_MTL@sam_data)[phylo16S_MTL@sam_data$time== 'Spring']
+summer_mtl <- rownames(phylo16S_MTL@sam_data)[phylo16S_MTL@sam_data$time== 'Summer']
+autumn_mtl <- rownames(phylo16S_MTL@sam_data)[phylo16S_MTL@sam_data$time== 'Fall']
+
+filter_rows_same_last_part <- function(df) {
+  # Function to extract the last part of a string
+  extract_last_part <- function(string) {
+    parts <- strsplit(string, "-")[[1]]
+    last_part <- tail(parts, 1)
+    return(last_part)
+  }
+
+  # Extract the last parts of row names
+  last_parts <- sapply(rownames(df), extract_last_part)
+
+  # Find unique last parts for each group
+  last_parts_S_MTL <- unique(last_parts[grep("^22-S-MTL", rownames(df))])
+  last_parts_E_MTL <- unique(last_parts[grep("^22-E-MTL", rownames(df))])
+  last_parts_A_MTL <- unique(last_parts[grep("^22-A-MTL", rownames(df))])
+
+  # Find common last parts for any two groups
+  common_last_parts <- Reduce(union, list(intersect(last_parts_S_MTL, last_parts_E_MTL),
+                                          intersect(last_parts_S_MTL, last_parts_A_MTL),
+                                          intersect(last_parts_E_MTL, last_parts_A_MTL)))
+
+  # Initialize a logical vector to store rows to keep
+  rows_to_keep <- rep(FALSE, length(last_parts))
+
+  # Mark rows with common last parts to keep
+  for (last_part in common_last_parts) {
+    matching_rows_S_MTL <- grep(paste0("^22-S-MTL-.*", last_part, "$"), rownames(df))
+    matching_rows_E_MTL <- grep(paste0("^22-E-MTL-.*", last_part, "$"), rownames(df))
+    matching_rows_A_MTL <- grep(paste0("^22-A-MTL-.*", last_part, "$"), rownames(df))
+    rows_to_keep[matching_rows_S_MTL] <- TRUE
+    rows_to_keep[matching_rows_E_MTL] <- TRUE
+    rows_to_keep[matching_rows_A_MTL] <- TRUE
+  }
+
+  # Subset the dataframe based on rows to keep
+  df_filtered <- df[rows_to_keep, , drop = FALSE]
+
+  return(df_filtered)
+}
+# --- Spring–Summer comparison ---
+# Extract and transpose OTU table
+ASV_spsum_1 <- otu_table(phylo16S_MTL) %>%
+  as("matrix") %>%
+  t() %>%
+  .[, colnames(.) %in% phylo16S_MTL_spsum] %>%
+  t() %>%
+  as.data.frame()
+ASV_spsum_1$ID <- rownames(ASV_spsum_1)
+ASV_spsum_1 <- ASV_spsum_1 %>%
+  mutate(class = if_else(ID %in% summer_mtl, "Summer", "Spring"))
+ASV_spsum_1 <- filter_rows_same_last_part(ASV_spsum_1)
+
+# Summarize to create one row per season
+ASV_spsum_1 <- ASV_spsum_1 %>%
+  group_by(class) %>%
+  summarise(across(where(is.numeric), sum), .groups = "drop") %>%
+  column_to_rownames("class")
+
+# --- Summer–Autumn comparison ---
+ASV_sumau_1 <- otu_table(phylo16S_MTL) %>%
+  as("matrix") %>%
+  t() %>%
+  .[, colnames(.) %in% phylo16S_MTL_sumaut] %>%
+  t() %>%
+  as.data.frame()
+ASV_sumau_1$ID <- rownames(ASV_sumau_1)
+ASV_sumau_1 <- ASV_sumau_1 %>%
+  mutate(class = if_else(ID %in% summer_mtl, "Summer", "Autumn"))
+ASV_sumau_1 <- filter_rows_same_last_part(ASV_sumau_1)
+ASV_sumau_1 <- ASV_sumau_1 %>%
+  group_by(class) %>%
+  summarise(across(where(is.numeric), sum), .groups = "drop") %>%
+  column_to_rownames("class")
+ASV_sumau_pa <- decostand(ASV_sumau_1, method = "pa")
+ASV_sumau_rpa <- beta.multi(ASV_sumau_pa, index.family = "sorensen")
+print(ASV_sumau_rpa)
+
+# --- Summer–Autumn comparison ---
+ASV_sumau_1 <- otu_table(phylo16S_MTL) %>%
+  as("matrix") %>%
+  t() %>%
+  .[, colnames(.) %in% phylo16S_MTL_sumaut] %>%
+  t() %>%
+  as.data.frame()
+ASV_sumau_1$ID <- rownames(ASV_sumau_1)
+ASV_sumau_1 <- ASV_sumau_1 %>%
+  mutate(class = if_else(ID %in% summer_mtl, "Summer", "Autumn"))
+ASV_sumau_1 <- filter_rows_same_last_part(ASV_sumau_1)
+ASV_sumau_1 <- ASV_sumau_1 %>%
+  group_by(class) %>%
+  summarise(across(where(is.numeric), sum), .groups = "drop") %>%
+  column_to_rownames("class")
+# Transform to presence/absence
+ASV_sumau_pa <- decostand(ASV_sumau_1, method = "pa")
+ASV_sumau_rpa <- beta.multi(ASV_sumau_pa, index.family = "sorensen")
+ASV_sumau_rpa
+
+#Spring-autumn comparison
+ASV_spau_new <- t(as(otu_table(phylo16S_MTL), "matrix"))  # Create matrix from OTU table
+ASV_spau_1 <- ASV_spau_new[, colnames(ASV_spau_new) %in% phylo16S_MTL_spaut]
+ASV_spau_1 <- t(ASV_spau_1)
+ASV_spau_1 <- as.data.frame(ASV_spau_1)
+ASV_spau_1$ID <- rownames(ASV_spau_1)
+
+# Assign seasons BEFORE filtering
+ASV_spau_1$class <- NA
+ASV_spau_1$class[ASV_spau_1$ID %in% spring_mtl] <- "Spring"
+ASV_spau_1$class[ASV_spau_1$ID %in% autumn_mtl] <- "Autumn"
+
+# Remove rows not matched to any season
+ASV_spau_1 <- ASV_spau_1 %>% filter(!is.na(class))
+
+# Now filter to keep only samples with matching suffixes in both seasons
+ASV_spau_1 <- filter_rows_same_last_part(ASV_spau_1)
+
+# Double-check
+table(ASV_spau_1$class)
+
+# Summarize by season
+ASV_spau_1 <- ASV_spau_1 %>%
+  group_by(class) %>%
+  summarise(across(where(is.numeric), sum), .groups = "drop")
+
+# Final formatting
+rownames(ASV_spau_1) <- ASV_spau_1$class
+ASV_spau_1$class <- NULL
+library(vegan)
+ASV_spsum_1_pa <- decostand(ASV_spsum_1, method="pa") ##transform to presence absence 
+#install.packages("betapart")
+library(betapart)
+ASV_spsum_1_rpa <-beta.multi(ASV_spsum_1_pa, index.family="sorensen") ###calculate dissimilarity values between 2 matrices  (between 2 temperature treatments, spring and summer)
+
+ASV_sumau_pa<- decostand(ASV_sumau_1 , method="pa") ##transform to presence absence 
+ASV_sumau_rpa <-beta.multi(ASV_sumau_pa, index.family="sorensen") ###calculate dissimilarity values between 2 matrices  (between 2 seasons summer and autumn)
+
+ASV_spau_pa <- decostand(ASV_spau_1, method="pa") ##transform to presence absence 
+ASV_spau_rpa <-beta.multi(ASV_spau_pa, index.family="sorensen") ###calculate dissimilarity values between 2 matrices  (between 2 seasons: spring and autumn)
+
+pa_plot_r <- rbind(as.data.frame(ASV_spsum_1_rpa), as.data.frame(ASV_sumau_rpa), as.data.frame(ASV_spau_rpa)) %>% dplyr::select(-c("beta.SOR")) 
+pa_plot_r$class <- c( 'Spring-Summer','Summer-Autumn','Spring-Autumn')
+pa_data_long_r <- gather(pa_plot_r, beta, value, beta.SIM:beta.SNE, factor_key=TRUE) ####from wide to long format transformation
+
+```
+beta.JTU is the species turnover component of the total dissimilarity in community composition between temperature treatments
+beta. JNE is the nestednesscomponent of the total dissimilarity
+
+
+#Figure 1/Montreal
+Bacteria/MTL. Partitioning of the total beta dissimilarity between seasons(Beta SOM, Sorenson dissimilarity index) between different season pairs (a) Spring and Autumn, (b) Spring and Summer , and (c) Summer and Autumn  into the components of species turnover (Beta SIM) and change in species numbers (Beta SNE)
+```{r}
+
+pa_data_long_r$class <- as.factor(pa_data_long_r$class)
+pa_data_long_r$beta <- as.factor(pa_data_long_r$beta)
+pa_data_long_r$value <- as.numeric(pa_data_long_r$value)
+
+library(tidyverse)
+p1 <- ggplot2::ggplot(pa_data_long_r, aes(fill = beta, y = value, x = class)) + 
+  geom_bar(position = "stack", stat = "identity", width = 0.5) +
+  
+  scale_fill_manual(
+    name = "Total dissimilarity:",
+    values = c("darkslateblue", "grey"),
+    breaks = c("beta.SIM", "beta.SNE"),       
+    labels = c("Turnover component", "Nestedness component")
+  ) +
+  
+  scale_y_continuous(
+    name = "Diversity dissimilarity value",
+    limits = c(0, 0.4)
+  ) +
+  
+  scale_x_discrete(labels = c(
+    "Spring-Summer" = "Spring vs summer",
+    "Summer-Autumn" = "Summer vs fall",
+    "Spring-Autumn" = "Spring vs fall"
+  )) +
+  
+  ggtitle("A  Montréal") +
+  
+  theme_bw() +
+  theme(
+    panel.border = element_blank(),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    axis.line = element_line(colour = "black", size = 0.8),
+    axis.text.x = element_blank(),
+    axis.text.y = element_text(size = 15, colour = "black"),
+    axis.title.y = element_text(size = 14),
+    axis.title.x = element_blank(),
+    axis.ticks.x = element_blank(),
+    legend.text = element_text(size = 14),
+    legend.title = element_text(size = 14),
+    legend.position = "none"
+  )
+
+```
+
+
+#Dissimilarity in bacterial communities between spring and summer, summer and autumn, and spring and autumn air bacterial community in Sherbrooke
+```{r}
+library(betapart)
+phylo16S_Sher <- phyloseq::subset_samples(bact, city =="Sherbrooke")
+
+####extract Sample IDs for each pair of seasons: separately for spring and summer degrees, separately for summer and autumn degrees, separately for spring and autumn degrees
+
+phylo16S_SH_spsum  <- rownames(phylo16S_Sher@sam_data)[phylo16S_Sher@sam_data$time != 'Fall'] ## extract SampleIDs for samples that were collected in spring and summer (but not samples that were collected in autumn)
+phylo16S_SH_sumaut <- rownames(phylo16S_Sher@sam_data)[phylo16S_Sher@sam_data$time != 'Spring'] ## extract SampleIDs for samples that were collected in autumn and summer (but not samples that were collected in spring)
+phylo16S_SH_spaut <- rownames(phylo16S_Sher@sam_data)[phylo16S_Sher@sam_data$time != 'Summer'] ## extract SampleIDs for samples that were collected in autumn and spring (but not samples that were collected in summer)
+
+####extract Sample IDs for each samples type: separately for spring, separately for summer, separately for autumn
+
+spring_sh <- rownames(phylo16S_Sher@sam_data)[phylo16S_Sher@sam_data$time== 'Spring']
+summer_sh <- rownames(phylo16S_Sher@sam_data)[phylo16S_Sher@sam_data$time== 'Summer']
+autumn_sh <- rownames(phylo16S_Sher@sam_data)[phylo16S_Sher@sam_data$time== 'Fall']
+
+# Create matrix from OTU table
+ASV_spsum_sh <- t(as(otu_table(phylo16S_Sher), "matrix"))
+ASV_spsum_sh1 <- ASV_spsum_sh[, colnames(ASV_spsum_sh) %in% phylo16S_SH_spsum]
+ASV_spsum_sh1 <- t(ASV_spsum_sh1)
+ASV_spsum_sh1 <- as.data.frame(ASV_spsum_sh1)
+ASV_spsum_sh1$ID <- rownames(ASV_spsum_sh1)
+# Assign seasons, summarize by class
+ASV_spsum_sh1 <- ASV_spsum_sh1 %>%
+  mutate(class = if_else(ID %in% spring_sh, "Spring", "Summer")) %>%
+  group_by(class) %>%
+  summarise(across(where(is.numeric), sum), .groups = "drop")
+rownames(ASV_spsum_sh1) <- ASV_spsum_sh1$class
+ASV_spsum_sh1 <- as.data.frame(ASV_spsum_sh1)  # ensure it's a plain data.frame
+ASV_spsum_sh1 <- column_to_rownames(ASV_spsum_sh1, "class")
+
+# --- Summer–Autumn ---
+ASV_sumau_sh <- otu_table(phylo16S_Sher) %>%
+  as("matrix") %>%
+  t() %>%
+  .[, colnames(.) %in% phylo16S_SH_sumaut] %>%
+  t() %>%
+  as.data.frame()
+ASV_sumau_sh$ID <- rownames(ASV_sumau_sh)
+ASV_sumau_sh <- ASV_sumau_sh %>%
+  mutate(class = if_else(ID %in% summer_sh, "Summer", "Autumn")) %>%
+  group_by(class) %>%
+  summarise(across(where(is.numeric), sum), .groups = "drop")
+ASV_sumau_sh <- as.data.frame(ASV_sumau_sh)
+rownames(ASV_sumau_sh) <- ASV_sumau_sh$class
+ASV_sumau_sh$class <- NULL
+
+# --- Spring–Autumn ---
+ASV_spau_sh <- otu_table(phylo16S_Sher) %>%
+  as("matrix") %>%
+  t() %>%
+  .[, colnames(.) %in% phylo16S_SH_spaut] %>%
+  t() %>%
+  as.data.frame()
+ASV_spau_sh$ID <- rownames(ASV_spau_sh)
+ASV_spau_sh <- ASV_spau_sh %>%
+  mutate(class = if_else(ID %in% spring_sh, "Spring", "Autumn")) %>%
+  group_by(class) %>%
+  summarise(across(where(is.numeric), sum), .groups = "drop")
+ASV_spau_sh <- as.data.frame(ASV_spau_sh)
+rownames(ASV_spau_sh) <- ASV_spau_sh$class
+ASV_spau_sh$class <- NULL
+
+# Presence/absence transformation
+ASV_spsum_1_pa <- decostand(ASV_spsum_sh1, method = "pa")
+ASV_sumau_shpa <- decostand(ASV_sumau_sh, method = "pa")
+ASV_spau_shpa  <- decostand(ASV_spau_sh1, method = "pa")
+
+# Beta diversity decomposition
+ASV_spsum_sh_rpa <- beta.multi(ASV_spsum_1_pa, index.family = "sorensen")
+ASV_sumau_shrpa  <- beta.multi(ASV_sumau_shpa, index.family = "sorensen")
+ASV_spau_shrpa   <- beta.multi(ASV_spau_shpa, index.family = "sorensen")
+
+# Combine and format results
+pa_plot_r2 <- rbind(
+  as.data.frame(ASV_spsum_sh_rpa),
+  as.data.frame(ASV_sumau_shrpa),
+  as.data.frame(ASV_spau_shrpa)
+) %>%
+  dplyr::select(-beta.SOR) %>%
+  mutate(class = c("Spring-Summer", "Summer-Autumn", "Spring-Autumn"))
+
+# Reshape for plotting
+pa_data_long_r2 <- gather(pa_plot_r2, beta, value, beta.SIM:beta.SNE, factor_key = TRUE)
+
+########################################################################################################################
+
+####beta.JTU is the species turnover component of the total dissimilarity in community composition between temperature treayments
+#####beta. JNE is the species richness component of the total dissimilarity
+
+########################################Result#####################################################################################################
+
+#Figure Bacteria/Sherbrooke. Partitioning of the total beta dissimilarity between seasons(Beta SOM, Sorenson dissimilarity index) between different season pairs (a) Spring and Autumn, (b) Spring and Summer , and (c) Summer and Autumn  into the components of species turnover (Beta SIM) and change in species numbers (Beta SNE). 
+
+p3 <- ggplot(pa_data_long_r2, aes(fill=beta, y=value, x=class)) + 
+  geom_bar(position="stack", stat="identity", width = 0.5) + scale_fill_manual(name = "Total dissimilarity:",values = c("darkslateblue","grey"),
+breaks = c("beta.SIM", "beta.SNE"),       
+labels = c("Turnover component", "Nestedness component")) +
+  theme_bw() + theme(panel.border = element_blank(), panel.grid.major = element_blank(),
+                     panel.grid.minor = element_blank(), axis.line = element_line(colour = "black", size = 0.8)) +
+  scale_x_discrete(labels = c(
+    "Spring-Summer" = "Spring vs summer",
+    "Summer-Autumn" = "Summer vs fall",
+    "Spring-Autumn" = "Spring vs fall"
+  )) +
+  scale_y_continuous(name="Diversity dissimilarity value", limits=c(0, 0.4)) +
+   theme_bw() +
+  theme(
+    panel.border = element_blank(),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    axis.line = element_line(colour = "black", size = 0.8),
+    axis.text.x = element_blank(),
+    axis.text.y = element_text(size = 15, colour = "black"),  
+    axis.ticks.length = unit(0.4, "lines"),
+    legend.position = "none",
+    axis.title.y = element_blank(),  
+    axis.title.x = element_blank(),
+     axis.ticks.x = element_blank()
+    
+  ) +
+   coord_cartesian(ylim = c(0, 0.4)) +
+   ggtitle("C  Sherbrooke")
+p3
+
+
+```
+
+
+#Dissimilarity in bacterial communities between spring and summer, summer and autumn, and spring and autumn air bacterial community in Quebec
+```{r}
+phylo16S_qc <- phyloseq::subset_samples(bact, city =="Quebec")
+
+# Extract sample IDs for spring and autumn
+phylo16S_qc_spaut <- rownames(sample_data(phylo16S_qc))[sample_data(phylo16S_qc)$time != "Summer"]
+spring_qc <- rownames(sample_data(phylo16S_qc))[sample_data(phylo16S_qc)$time == "Spring"]
+autumn_qc <- rownames(sample_data(phylo16S_qc))[sample_data(phylo16S_qc)$time == "Fall"]
+
+# Create matrix for spring and autumn
+ASV_spau_qc <- t(as(otu_table(phylo16S_qc), "matrix"))
+ASV_spau_qc1 <- ASV_spau_qc[, colnames(ASV_spau_qc) %in% phylo16S_qc_spaut]
+ASV_spau_qc1 <- t(ASV_spau_qc1)
+ASV_spau_qc1 <- as.data.frame(ASV_spau_qc1)
+ASV_spau_qc1$ID <- rownames(ASV_spau_qc1)
+
+# Assign class BEFORE summarising
+ASV_spau_qc1 <- ASV_spau_qc1 %>%
+  mutate(class = if_else(ID %in% spring_qc, "Spring", "Autumn")) %>%
+  group_by(class) %>%
+  summarise(across(where(is.numeric), sum), .groups = "drop")
+
+ASV_spau_qc1 <- ASV_spau_qc1 %>%
+  as.data.frame() %>%
+  dplyr::select(-class)
+
+# Transform to presence-absence
+ASV_spau_qc1_pa <- vegan::decostand(ASV_spau_qc1, method = "pa")
+
+# Calculate beta diversity
+ASV_spau_qc_rpa <- beta.multi(ASV_spau_qc1_pa, index.family = "sorensen")
+# Combine results into a plot-friendly format
+pa_plot_r1 <- as.data.frame(ASV_spau_qc_rpa) %>%
+  dplyr::select(-c("beta.SOR"))
+pa_plot_r1$class <- "Spring-Autumn"
+
+# Transform to long format
+library(tidyr)
+pa_data_long_r1 <- gather(pa_plot_r1, beta, value, beta.SIM:beta.SNE, factor_key = TRUE)
+
+########################################################################################################################
+
+####beta.JTU is the species turnover component of the total dissimilarity in community composition between temperature treayments
+#####beta. JNE is the species richness component of the total dissimilarity
+
+########################################Result#####################################################################################################
+
+#Figure Bacteria/Sherbrooke. Partitioning of the total beta dissimilarity between seasons(Beta SOM, Sorenson dissimilarity index) between different season pairs (a) Spring and Autumn, (b) Spring and Summer , and (c) Summer and Autumn  into the components of species turnover (Beta SIM) and change in species numbers (Beta SNE). 
+
+p2 <- ggplot(pa_data_long_r1, aes(x = class, y = value, fill = beta)) +
+  geom_bar(stat = "identity", position = "stack", width = 0.5) +
+  scale_fill_manual(
+    name = "Dissimilarity Component",
+    values = c("darkslateblue", "grey"),
+    labels = c("Turnover", "Nestedness")
+  ) +
+  theme_bw() +
+  theme(
+    panel.border = element_blank(),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    axis.line = element_line(colour = "black", size = 0.8),
+    axis.text.x = element_blank(),
+    axis.text.y = element_text(size = 15, colour = "black"),  # ✔ show values
+    axis.ticks.length = unit(0.4, "lines"),
+    legend.position = "none",
+    axis.title.y = element_blank(),  
+    axis.title.x = element_blank(),
+    axis.ticks.x = element_blank()
+  ) +
+  scale_y_continuous(limits = c(0, 0.4)) +
+  scale_x_discrete(labels = c("Spring-Autumn" = "Spring vs fall")) +
+  ggtitle("B  Québec")
+p2
+
+###*****************************
+#p1, p2, p3
+
+```
+
+#Dissimilarity in fungal communities between spring and summer, summer and autumn, and spring and autumn in air samples in Montreal
+```{r}
+# Subset fungal phyloseq object for Montréal
+phyloITS_MTL <- phyloseq::subset_samples(fung, city == "Montreal")
+
+# Extract Sample IDs for each seasonal pair
+phyloITS_MTL_spsum <- rownames(phyloITS_MTL@sam_data)[phyloITS_MTL@sam_data$time != "Fall"]
+phyloITS_MTL_sumaut <- rownames(phyloITS_MTL@sam_data)[phyloITS_MTL@sam_data$time != "Spring"]
+phyloITS_MTL_spaut <- rownames(phyloITS_MTL@sam_data)[phyloITS_MTL@sam_data$time != "Summer"]
+
+# Extract Sample IDs for each individual season
+spring_mtlf <- rownames(phyloITS_MTL@sam_data)[phyloITS_MTL@sam_data$time == "Spring"]
+summer_mtlf <- rownames(phyloITS_MTL@sam_data)[phyloITS_MTL@sam_data$time == "Summer"]
+autumn_mtlf <- rownames(phyloITS_MTL@sam_data)[phyloITS_MTL@sam_data$time == "Fall"]
+
+# Filter rows with common last parts of IDs (same logic as before)
+filter_rows_same_last_part <- function(df) {
+  # Function to extract the last part of a string
+  extract_last_part <- function(string) {
+    parts <- strsplit(string, "-")[[1]]
+    last_part <- tail(parts, 1)
+    return(last_part)
+  }
+
+  # Extract the last parts of row names
+  last_parts <- sapply(rownames(df), extract_last_part)
+
+  # Find unique last parts for each group
+  last_parts_S_MTL <- unique(last_parts[grep("^22-S-MTL", rownames(df))])
+  last_parts_E_MTL <- unique(last_parts[grep("^22-E-MTL", rownames(df))])
+  last_parts_A_MTL <- unique(last_parts[grep("^22-A-MTL", rownames(df))])
+
+  # Find common last parts for any two groups
+  common_last_parts <- Reduce(union, list(intersect(last_parts_S_MTL, last_parts_E_MTL),
+                                          intersect(last_parts_S_MTL, last_parts_A_MTL),
+                                          intersect(last_parts_E_MTL, last_parts_A_MTL)))
+  rows_to_keep <- rep(FALSE, length(last_parts))
+  for (last_part in common_last_parts) {
+    matching_rows_S_MTL <- grep(paste0("^22-S-MTL-.*", last_part, "$"), rownames(df))
+    matching_rows_E_MTL <- grep(paste0("^22-E-MTL-.*", last_part, "$"), rownames(df))
+    matching_rows_A_MTL <- grep(paste0("^22-A-MTL-.*", last_part, "$"), rownames(df))
+    rows_to_keep[matching_rows_S_MTL] <- TRUE
+    rows_to_keep[matching_rows_E_MTL] <- TRUE
+    rows_to_keep[matching_rows_A_MTL] <- TRUE
+  }
+  df_filtered <- df[rows_to_keep, , drop = FALSE]
+
+  return(df_filtered)
+}
+
+# Prepare presence-absence matrices for each seasonal pair
+ASV_spsum_newf <- t(as(otu_table(phyloITS_MTL), "matrix"))
+ASV_spsum_f <- ASV_spsum_newf[, colnames(ASV_spsum_newf) %in% phyloITS_MTL_spsum]
+ASV_spsum_f <- t(ASV_spsum_f)
+ASV_spsum_f <- as.data.frame(ASV_spsum_f)
+ASV_spsum_f$ID <- rownames(ASV_spsum_f)
+
+ASV_spsum_f <- ASV_spsum_f %>%
+  mutate(class = if_else(ID %in% summer_mtlf, "Summer", "Spring")) %>%
+  filter_rows_same_last_part() %>%
+  group_by(class) %>%
+  summarise(across(where(is.numeric), sum)) %>%
+  column_to_rownames("class")
+
+ASV_sumau_new <- t(as(otu_table(phyloITS_MTL), "matrix"))
+ASV_sumau_f <- ASV_sumau_new[, colnames(ASV_sumau_new) %in% phyloITS_MTL_sumaut]
+ASV_sumau_f <- t(ASV_sumau_f)
+ASV_sumau_f <- as.data.frame(ASV_sumau_f)
+ASV_sumau_f$ID <- rownames(ASV_sumau_f)
+
+ASV_sumau_f <- ASV_sumau_f %>%
+  mutate(class = if_else(ID %in% summer_mtlf, "Summer", "Autumn")) %>%
+  filter_rows_same_last_part() %>%
+  group_by(class) %>%
+  summarise(across(where(is.numeric), sum)) %>%
+  column_to_rownames("class")
+
+ASV_spaut_new <- t(as(otu_table(phyloITS_MTL), "matrix"))
+ASV_spaut_f <- ASV_spaut_new[, colnames(ASV_spaut_new) %in% phyloITS_MTL_spaut]
+ASV_spaut_f <- t(ASV_spaut_f)
+ASV_spaut_f <- as.data.frame(ASV_spaut_f)
+ASV_spaut_f$ID <- rownames(ASV_spaut_f)
+
+ASV_spaut_f <- ASV_spaut_f %>%
+  mutate(class = if_else(ID %in% autumn_mtlf, "Autumn", "Spring")) %>%
+  filter_rows_same_last_part() %>%
+  group_by(class) %>%
+  summarise(across(where(is.numeric), sum)) %>%
+  column_to_rownames("class")
+
+# Transform to presence-absence and calculate beta diversity
+ASV_spsum_f_pa <- decostand(ASV_spsum_f, method = "pa")
+ASV_sumau_f_pa <- decostand(ASV_sumau_f, method = "pa")
+ASV_spaut_f_pa <- decostand(ASV_spaut_f, method = "pa")
+
+ASV_spsum_f_rpa <- beta.multi(ASV_spsum_f_pa, index.family = "sorensen")
+ASV_sumau_f_rpa <- beta.multi(ASV_sumau_f_pa, index.family = "sorensen")
+ASV_spaut_f_rpa <- beta.multi(ASV_spaut_f_pa, index.family = "sorensen")
+
+# Combine results and visualize
+pa_plot_rf1 <- rbind(
+  as.data.frame(ASV_spsum_f_rpa),
+  as.data.frame(ASV_sumau_f_rpa),
+  as.data.frame(ASV_spaut_f_rpa)
+) %>%
+  dplyr::select(-c("beta.SOR"))
+pa_plot_rf1$class <- c("Spring-Summer", "Summer-Autumn", "Spring-Autumn")
+
+pa_data_long_rf23 <- gather(pa_plot_rf1, beta, value, beta.SIM:beta.SNE, factor_key = TRUE)
+pa_data_long_rf23$class <- rep(pa_plot_rf1$class, each = 1)
+
+p4 <- ggplot2::ggplot(pa_data_long_rf23, aes(fill = beta, y = value, x = class)) + 
+  geom_bar(position = "stack", stat = "identity", width = 0.5) +
+  
+  scale_fill_manual(
+    name = "Total dissimilarity:",
+    values = c("darkslateblue", "grey"),
+    breaks = c("beta.SIM", "beta.SNE"),       
+    labels = c("Turnover component", "Nestedness component")
+  ) +
+  
+  scale_x_discrete(labels = c(
+    "Spring-Summer" = "Spring vs summer",
+    "Summer-Autumn" = "Summer vs fall",
+    "Spring-Autumn" = "Spring vs fall"
+  )) +
+  
+  ggtitle("D") +
+  
+  theme_bw() +
+  theme(
+    panel.border = element_blank(),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    axis.line = element_line(colour = "black", size = 0.8),
+    axis.text.x = element_blank(),
+    axis.text.y = element_text(size = 15, colour = "black"),  
+    axis.ticks.length = unit(0.4, "lines"),
+    legend.position = "none",
+    axis.title.y = element_text(size = 15, colour = "black"),  
+    axis.title.x = element_blank(),
+    axis.ticks.x = element_blank()) +
+  
+  scale_y_continuous(name = "Diversity dissimilarity value", limits = c(0, 0.7))
+p4
+
+library(adespatial)
+beta_div <- beta.div.comp(as.matrix(ASV_spaut_f_pa), coef = "S", quant = TRUE)
+print(beta_div)
+
+
+```
+
+
+#Dissimilarity in fungal communities between spring and summer, summer and autumn, and spring and autumn in air samples in SHerbrooke
+```{r}
+# Subset fungal phyloseq object for Sherbrooke
+phyloFungi_Sher <- phyloseq::subset_samples(fung, city == "Sherbrooke")
+
+# Extract Sample IDs for each seasonal pair
+phyloFungi_SH_spsum <- rownames(phyloFungi_Sher@sam_data)[phyloFungi_Sher@sam_data$time != 'Fall']
+phyloFungi_SH_sumaut <- rownames(phyloFungi_Sher@sam_data)[phyloFungi_Sher@sam_data$time != 'Spring']
+phyloFungi_SH_spaut <- rownames(phyloFungi_Sher@sam_data)[phyloFungi_Sher@sam_data$time != 'Summer']
+
+# Extract Sample IDs for each individual season
+spring_sh <- rownames(phyloFungi_Sher@sam_data)[phyloFungi_Sher@sam_data$time == 'Spring']
+summer_sh <- rownames(phyloFungi_Sher@sam_data)[phyloFungi_Sher@sam_data$time == 'Summer']
+autumn_sh <- rownames(phyloFungi_Sher@sam_data)[phyloFungi_Sher@sam_data$time == 'Fall']
+
+ASV_spsum_sh1 <- otu_table(phyloFungi_Sher) %>%
+  as("matrix") %>%
+  t() %>%
+  .[, colnames(.) %in% phyloFungi_SH_spsum] %>%
+  t() %>%
+  as.data.frame()
+ASV_spsum_sh1$ID <- rownames(ASV_spsum_sh1)
+ASV_spsum_sh1 <- ASV_spsum_sh1 %>%
+  mutate(class = if_else(ID %in% spring_sh, "Spring", "Summer")) %>%
+  group_by(class) %>%
+  summarise(across(where(is.numeric), sum), .groups = "drop") %>%
+  column_to_rownames("class")
+
+
+ASV_sumau_sh1 <- otu_table(phyloFungi_Sher) %>%
+  as("matrix") %>%
+  t() %>%
+  .[, colnames(.) %in% phyloFungi_SH_sumaut] %>%
+  t() %>%
+  as.data.frame()
+ASV_sumau_sh1$ID <- rownames(ASV_sumau_sh1)
+ASV_sumau_sh1 <- ASV_sumau_sh1 %>%
+  mutate(class = if_else(ID %in% summer_sh, "Summer", "Autumn")) %>%
+  group_by(class) %>%
+  summarise(across(where(is.numeric), sum), .groups = "drop") %>%
+  column_to_rownames("class")
+
+ASV_spau_sh1 <- otu_table(phyloFungi_Sher) %>%
+  as("matrix") %>%
+  t() %>%
+  .[, colnames(.) %in% phyloFungi_SH_spaut] %>%
+  t() %>%
+  as.data.frame()
+ASV_spau_sh1$ID <- rownames(ASV_spau_sh1)
+ASV_spau_sh1 <- ASV_spau_sh1 %>%
+  mutate(class = if_else(ID %in% spring_sh, "Spring", "Autumn")) %>%
+  group_by(class) %>%
+  summarise(across(where(is.numeric), sum), .groups = "drop") %>%
+  column_to_rownames("class")
+
+# Transform to presence-absence and calculate beta diversity
+ASV_spsum_sh1_pa <- decostand(ASV_spsum_sh1, method = "pa")
+ASV_sumau_shpa <- decostand(ASV_sumau_sh1, method = "pa")
+ASV_spau_shpa <- decostand(ASV_spau_sh1, method = "pa")
+
+ASV_spsum_sh_rpa <- beta.multi(ASV_spsum_sh1_pa, index.family = "sorensen")
+ASV_sumau_shrpa1 <- beta.multi(ASV_sumau_shpa, index.family = "sorensen")
+ASV_spau_shrpa <- beta.multi(ASV_spau_shpa, index.family = "sorensen")
+
+# Combine results and visualize
+pa_plot_rf <- rbind(
+  as.data.frame(ASV_spsum_sh_rpa),
+  as.data.frame(ASV_sumau_shrpa),
+  as.data.frame(ASV_spau_shrpa)
+) %>%
+  dplyr::select(-c("beta.SOR"))
+pa_plot_rf$class <- c("Spring-Summer", "Summer-Autumn", "Spring-Autumn")
+
+pa_data_long_rf22 <- gather(pa_plot_rf, beta, value, beta.SIM:beta.SNE, factor_key = TRUE)
+pa_data_long_rf22$class <- rep(pa_plot_rf$class, each = 1)
+
+
+p6 <- ggplot(pa_data_long_rf22, aes(fill=beta, y=value, x=class)) + 
+  geom_bar(position="stack", stat="identity",width = 0.5) + scale_fill_manual(name = "Total dissimilarity:",values = c("darkslateblue","grey"),
+breaks = c("beta.SIM", "beta.SNE"),       
+labels = c("Turnover component", "Nestedness component")) +
+  theme_bw() + theme(panel.border = element_blank(), panel.grid.major = element_blank(),
+                     panel.grid.minor = element_blank(), axis.line = element_line(colour = "black", size = 0.8)) +
+  scale_x_discrete(labels = c(
+    "Spring-Summer" = "Spring vs summer",
+    "Summer-Autumn" = "Summer vs fall",
+    "Spring-Autumn" = "Spring vs fall"
+  )) +
+  scale_y_continuous(name="Diversity dissimilarity value", limits=c(0, 0.7)) +
+   theme_bw() +
+  theme(
+    panel.border = element_blank(),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    axis.line = element_line(colour = "black", size = 0.8),
+    axis.text.x = element_blank(),
+    axis.text.y = element_text(size = 15, colour = "black"),  # ✔ show values
+    axis.ticks.length = unit(0.4, "lines"),
+    legend.position = "none",
+    axis.title.y = element_blank(),  
+    axis.title.x = element_blank(),
+    axis.ticks.x = element_blank()
+  ) +
+   coord_cartesian(ylim = c(0, 0.7)) +
+   ggtitle("F")
+p6
+
+
+```
+
+#Dissimilarity in fungal communities between spring and summer, summer and autumn, and spring and autumn air bacterial community in Quebec
+```{r}
+phyloITS_qc <- phyloseq::subset_samples(fung, city =="Quebec")
+
+# Extract sample IDs for spring and autumn
+phyloITS_qc_spaut <- rownames(sample_data(phyloITS_qc))[sample_data(phyloITS_qc)$time != "Summer"]
+
+# Extract sample IDs for spring and autumn separately
+spring_qcf <- rownames(sample_data(phyloITS_qc))[sample_data(phyloITS_qc)$time == "Spring"]
+autumn_qcf <- rownames(sample_data(phyloITS_qc))[sample_data(phyloITS_qc)$time == "Fall"]
+
+# Create matrix for spring and autumn
+ASV_spau_qcf <- t(as(otu_table(phyloITS_qc), "matrix"))
+ASV_spau_qc1f <- ASV_spau_qcf[, colnames(ASV_spau_qcf) %in% phylo16S_qc_spaut]
+ASV_spau_qc1f <- t(ASV_spau_qc1f)  # Transpose back
+ASV_spau_qc1f <- as.data.frame(ASV_spau_qc1f)  # Convert to data frame
+ASV_spau_qc1f$ID <- rownames(ASV_spau_qc1f)
+
+# Group by season (spring or autumn) and summarize
+ASV_spau_qc1f <- ASV_spau_qc1f %>%
+  mutate(class = if_else(ID %in% spring_qcf, "Spring", "Autumn")) %>%
+  group_by(class) %>%
+  summarise(across(where(is.numeric), sum, .names = "sum_{.col}"), .groups = "drop")
+rownames(ASV_spau_qc1f) <- ASV_spau_qc1f$class
+ASV_spau_qc1f <- ASV_spau_qc1f[, -which(names(ASV_spau_qc1f) == "class")]
+
+# Transform to presence-absence
+ASV_spau_qc1f_pa <- vegan::decostand(ASV_spau_qc1f, method = "pa")
+# Calculate beta diversity
+ASV_spau_qcf_rpa <- beta.multi(ASV_spau_qc1f_pa, index.family = "sorensen")
+
+# Combine results into a plot-friendly format
+pa_plot_r1f <- as.data.frame(ASV_spau_qcf_rpa) %>%
+  dplyr::select(-c("beta.SOR"))
+pa_plot_r1f$class <- "Spring-Autumn"
+
+# Transform to long format
+pa_data_long_r1f <- gather(pa_plot_r1f, beta, value, beta.SIM:beta.SNE, factor_key = TRUE)
+########################################################################################################################
+
+####beta.JTU is the species turnover component of the total dissimilarity in community composition between temperature treayments
+#####beta. JNE is the species richness component of the total dissimilarity
+
+########################################Result#####################################################################################################
+
+#Figure Bacteria/Sherbrooke. Partitioning of the total beta dissimilarity between seasons(Beta SOM, Sorenson dissimilarity index) between different season pairs (a) Spring and Autumn, (b) Spring and Summer , and (c) Summer and Autumn  into the components of species turnover (Beta SIM) and change in species numbers (Beta SNE). 
+
+p5 <- ggplot(pa_data_long_r1f, aes(x = class, y = value, fill = beta)) +
+  geom_bar(stat = "identity", position = "stack", width = 0.5) +
+  scale_fill_manual(
+    name = "Dissimilarity Component",
+    values = c("darkslateblue", "grey"),
+    labels = c("Turnover", "Nestedness")
+  ) +
+  theme_bw() +
+  theme(
+    panel.border = element_blank(),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    axis.line = element_line(colour = "black", size = 0.8),
+    axis.text.x = element_blank(),
+    axis.text.y = element_text(size = 15, colour = "black"),  # ✔ show values
+    axis.ticks.length = unit(0.4, "lines"),
+    legend.position = "none",
+    axis.title.y = element_blank(),  
+    axis.title.x = element_blank(),
+    axis.ticks.x = element_blank()
+  ) +
+  scale_y_continuous(limits = c(0, 0.7)) +
+  scale_x_discrete(labels = c("Spring-Autumn" = "Spring vs fall")) +
+  ggtitle("E")
+p5
+
+
+combined_plot1 <- p4 | p5 | p6
+combined_plot1 <- (p4 | p5 | p6) +
+  plot_layout(ncol = 3) +
+  plot_annotation(
+    theme = ggplot2::theme(
+      plot.title = ggplot2::element_text(size = 16, face = "bold", hjust = 0.5)
+    )
+  )
+combined_plot1 
+```
+
+#Dissimilarity in pollen communities between spring and summer, summer and autumn, and spring and autumn in air samples in Montreal
+```{r}
+# Subset fungal phyloseq object for Montréal
+phyloplan_MTL <- phyloseq::subset_samples(plant, city == "Montreal")
+
+# Extract Sample IDs for each seasonal pair
+phylo_MTL_spsum <- rownames(phyloplan_MTL@sam_data)[phyloplan_MTL@sam_data$time != "Fall"]
+phylo_MTL_sumaut <- rownames(phyloplan_MTL@sam_data)[phyloplan_MTL@sam_data$time != "Spring"]
+phylo_MTL_spaut <- rownames(phyloplan_MTL@sam_data)[phyloplan_MTL@sam_data$time != "Summer"]
+
+# Extract Sample IDs for each individual season
+spring_mtlf <- rownames(phyloplan_MTL@sam_data)[phyloplan_MTL@sam_data$time == "Spring"]
+summer_mtlf <- rownames(phyloplan_MTL@sam_data)[phyloplan_MTL@sam_data$time == "Summer"]
+autumn_mtlf <- rownames(phyloplan_MTL@sam_data)[phyloplan_MTL@sam_data$time == "Fall"]
+
+# Filter rows with common last parts of IDs (same logic as before)
+filter_rows_same_last_part <- function(df) {
+  extract_last_part <- function(string) {
+    parts <- strsplit(string, "-")[[1]]
+    last_part <- tail(parts, 1)
+    return(last_part)
+  }
+  last_parts <- sapply(rownames(df), extract_last_part)
+  last_parts_S_MTL <- unique(last_parts[grep("^22-S-MTL", rownames(df))])
+  last_parts_E_MTL <- unique(last_parts[grep("^22-E-MTL", rownames(df))])
+  last_parts_A_MTL <- unique(last_parts[grep("^22-A-MTL", rownames(df))])
+  common_last_parts <- Reduce(union, list(intersect(last_parts_S_MTL, last_parts_E_MTL),
+                                          intersect(last_parts_S_MTL, last_parts_A_MTL),
+                                          intersect(last_parts_E_MTL, last_parts_A_MTL)))
+  rows_to_keep <- rep(FALSE, length(last_parts))
+  for (last_part in common_last_parts) {
+    matching_rows_S_MTL <- grep(paste0("^22-S-MTL-.*", last_part, "$"), rownames(df))
+    matching_rows_E_MTL <- grep(paste0("^22-E-MTL-.*", last_part, "$"), rownames(df))
+    matching_rows_A_MTL <- grep(paste0("^22-A-MTL-.*", last_part, "$"), rownames(df))
+    rows_to_keep[matching_rows_S_MTL] <- TRUE
+    rows_to_keep[matching_rows_E_MTL] <- TRUE
+    rows_to_keep[matching_rows_A_MTL] <- TRUE
+  }
+  df_filtered <- df[rows_to_keep, , drop = FALSE]
+  return(df_filtered)
+}
+
+# Prepare presence-absence matrices for each seasonal pair
+ASV_spsum_newf <- t(as(otu_table(phyloplan_MTL), "matrix"))
+ASV_spsum_f <- ASV_spsum_newf[, colnames(ASV_spsum_newf) %in% phylo_MTL_spsum]
+ASV_spsum_f <- t(ASV_spsum_f)
+ASV_spsum_f <- as.data.frame(ASV_spsum_f)
+ASV_spsum_f$ID <- rownames(ASV_spsum_f)
+
+ASV_spsum_f <- ASV_spsum_f %>%
+  mutate(class = if_else(ID %in% summer_mtlf, "Summer", "Spring")) %>%
+  filter_rows_same_last_part() %>%
+  group_by(class) %>%
+  summarise(across(where(is.numeric), sum)) %>%
+  column_to_rownames("class")
+
+ASV_sumau_new <- t(as(otu_table(phyloplan_MTL), "matrix"))
+ASV_sumau_f <- ASV_sumau_new[, colnames(ASV_sumau_new) %in% phylo_MTL_sumaut]
+ASV_sumau_f <- t(ASV_sumau_f)
+ASV_sumau_f <- as.data.frame(ASV_sumau_f)
+ASV_sumau_f$ID <- rownames(ASV_sumau_f)
+
+ASV_sumau_f <- ASV_sumau_f %>%
+  mutate(class = if_else(ID %in% summer_mtlf, "Summer", "Autumn")) %>%
+  filter_rows_same_last_part() %>%
+  group_by(class) %>%
+  summarise(across(where(is.numeric), sum)) %>%
+  column_to_rownames("class")
+
+ASV_spaut_new <- t(as(otu_table(phyloplan_MTL), "matrix"))
+ASV_spaut_f <- ASV_spaut_new[, colnames(ASV_spaut_new) %in% phylo_MTL_spaut]
+ASV_spaut_f <- t(ASV_spaut_f)
+ASV_spaut_f <- as.data.frame(ASV_spaut_f)
+ASV_spaut_f$ID <- rownames(ASV_spaut_f)
+
+ASV_spaut_f <- ASV_spaut_f %>%
+  mutate(class = if_else(ID %in% autumn_mtlf, "Autumn", "Spring")) %>%
+  filter_rows_same_last_part() %>%
+  group_by(class) %>%
+  summarise(across(where(is.numeric), sum)) %>%
+  column_to_rownames("class")
+
+# Transform to presence-absence and calculate beta diversity
+ASV_spsum_f_pa <- decostand(ASV_spsum_f, method = "pa")
+ASV_sumau_f_pa <- decostand(ASV_sumau_f, method = "pa")
+ASV_spaut_f_pa <- decostand(ASV_spaut_f, method = "pa")
+
+ASV_spsum_f_rpa <- beta.multi(ASV_spsum_f_pa, index.family = "sorensen")
+ASV_sumau_f_rpa <- beta.multi(ASV_sumau_f_pa, index.family = "sorensen")
+ASV_spaut_f_rpa <- beta.multi(ASV_spaut_f_pa, index.family = "sorensen")
+
+# Combine results and visualize
+pa_plot_rf25 <- rbind(
+  as.data.frame(ASV_spsum_f_rpa),
+  as.data.frame(ASV_sumau_f_rpa),
+  as.data.frame(ASV_spaut_f_rpa)
+) %>%
+  dplyr::select(-c("beta.SOR"))
+pa_plot_rf25$class <- c("Spring-Summer", "Summer-Autumn", "Spring-Autumn")
+
+pa_data_long_rf26 <- gather(pa_plot_rf25, beta, value, beta.SIM:beta.SNE, factor_key = TRUE)
+pa_data_long_rf26 <- pa_plot_rf25 %>%
+  mutate(class = c("Spring-Summer", "Summer-Autumn", "Spring-Autumn")) %>%
+  pivot_longer(cols = starts_with("beta."), names_to = "beta", values_to = "value")
+
+p7 <- ggplot2::ggplot(pa_data_long_rf26, aes(fill = beta, y = value, x = class)) + 
+  geom_bar(position = "stack", stat = "identity", width = 0.5) +
+  
+  scale_fill_manual(
+    name = "Total dissimilarity:",
+    values = c("darkslateblue", "grey"),
+    breaks = c("beta.SIM", "beta.SNE"),       
+    labels = c("Turnover component", "Nestedness component")
+  ) +
+  
+  scale_y_continuous(
+    name = "Diversity dissimilarity value",
+    limits = c(0, 0.7)
+  ) +
+  
+  scale_x_discrete(labels = c(
+    "Spring-Summer" = "Spring vs summer",
+    "Summer-Autumn" = "Summer vs fall",
+    "Spring-Autumn" = "Spring vs fall"
+  )) +
+  
+  ggtitle("G") +
+  
+  theme_bw() +
+  theme(
+    panel.border = element_blank(),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    axis.line = element_line(colour = "black", size = 0.8),
+    axis.text.x = element_text(size = 15, colour = "black"),
+    axis.text.y = element_text(size = 15, colour = "black"),
+    axis.ticks.length = unit(0.4, "lines"),
+    axis.title.y = element_text(size = 14),
+    axis.title.x = element_blank(),
+    legend.text = element_text(size = 14),
+    legend.title = element_text(size = 14),
+    legend.position = "none"
+  )
+p7
+
+
+```
+
+
+#Dissimilarity in pollen communities between spring and summer, summer and autumn, and spring and autumn in air samples in SHerbrooke
+```{r}
+# Subset fungal phyloseq object for Sherbrooke
+phyloPlan_Sher <- phyloseq::subset_samples(plant, city == "Sherbrooke")
+
+# Extract Sample IDs for each seasonal pair
+phyloPlan_Sh_spsum <- rownames(phyloPlan_Sher@sam_data)[phyloPlan_Sher@sam_data$time != 'Fall']
+phyloPlan_Sh_sumaut <- rownames(phyloPlan_Sher@sam_data)[phyloPlan_Sher@sam_data$time != 'Spring']
+phyloPlan_SH_spaut <- rownames(phyloPlan_Sher@sam_data)[phyloPlan_Sher@sam_data$time != 'Summer']
+
+# Extract Sample IDs for each individual season
+spring_sh <- rownames(phyloPlan_Sher@sam_data)[phyloPlan_Sher@sam_data$time == 'Spring']
+summer_sh <- rownames(phyloPlan_Sher@sam_data)[phyloPlan_Sher@sam_data$time == 'Summer']
+autumn_sh <- rownames(phyloPlan_Sher@sam_data)[phyloPlan_Sher@sam_data$time == 'Fall']
+
+ASV_spsum_sh <- t(as(otu_table(phyloPlan_Sher), "matrix"))
+ASV_spsum_sh1 <- ASV_spsum_sh[, colnames(ASV_spsum_sh) %in% phyloPlan_Sh_spsum]
+ASV_spsum_sh1 <- t(ASV_spsum_sh1)
+ASV_spsum_sh1 <- as.data.frame(ASV_spsum_sh1)
+ASV_spsum_sh1$ID <- rownames(ASV_spsum_sh1)
+ASV_spsum_sh1 <- ASV_spsum_sh1 %>%
+  mutate(class = if_else(ID %in% spring_sh, "Spring", "Summer")) %>%
+  group_by(class) %>%
+  summarise(across(where(is.numeric), sum), .groups = 'drop')
+rownames(ASV_spsum_sh1) <- ASV_spsum_sh1$class
+ASV_spsum_sh1 <- ASV_spsum_sh1 %>%
+  as.data.frame() %>%
+  dplyr::select(-class)
+
+ASV_sumau_sh <- t(as(otu_table(phyloPlan_Sher), "matrix"))
+ASV_sumau_sh1 <- ASV_sumau_sh[, colnames(ASV_sumau_sh) %in% phyloPlan_Sh_sumaut]
+ASV_sumau_sh1 <- t(ASV_sumau_sh1)
+ASV_sumau_sh1 <- as.data.frame(ASV_sumau_sh1)
+ASV_sumau_sh1$ID <- rownames(ASV_sumau_sh1)
+ASV_sumau_sh1 <- ASV_sumau_sh1 %>%
+  mutate(class = if_else(ID %in% summer_sh, "Summer", "Autumn")) %>%
+  group_by(class) %>%
+  summarise(across(where(is.numeric), sum), .groups = 'drop')
+rownames(ASV_sumau_sh1) <- ASV_sumau_sh1$class
+ASV_sumau_sh1<- ASV_sumau_sh1 %>%
+  as.data.frame() %>%
+  dplyr::select(-class)
+
+ASV_spau_sh <- t(as(otu_table(phyloPlan_Sher), "matrix"))
+ASV_spau_sh1 <- ASV_spau_sh[, colnames(ASV_spau_sh) %in% phyloPlan_SH_spaut]
+ASV_spau_sh1 <- t(ASV_spau_sh1)
+ASV_spau_sh1 <- as.data.frame(ASV_spau_sh1)
+ASV_spau_sh1$ID <- rownames(ASV_spau_sh1)
+ASV_spau_sh1 <- ASV_spau_sh1 %>%
+  mutate(class = if_else(ID %in% spring_sh, "Spring", "Autumn")) %>%
+  group_by(class) %>%
+  summarise(across(where(is.numeric), sum), .groups = 'drop')
+rownames(ASV_spau_sh1) <- ASV_spau_sh1$class
+ASV_spau_sh1 <- ASV_spau_sh1 %>%
+  as.data.frame() %>%
+  dplyr::select(-class)
+
+
+# Transform to presence-absence and calculate beta diversity
+ASV_spsum_1_pa <- decostand(ASV_spsum_sh1, method = "pa")
+ASV_sumau_shpa <- decostand(ASV_sumau_sh1, method = "pa")
+ASV_spau_shpa <- decostand(ASV_spau_sh1, method = "pa")
+
+ASV_spsum_sh_rpa <- beta.multi(ASV_spsum_1_pa, index.family = "sorensen")
+ASV_sumau_shrpa1 <- beta.multi(ASV_sumau_shpa, index.family = "sorensen")
+ASV_spau_shrpa <- beta.multi(ASV_spau_shpa, index.family = "sorensen")
+
+# Combine results and visualize
+pa_plot_rf <- rbind(
+  as.data.frame(ASV_spsum_sh_rpa),
+  as.data.frame(ASV_sumau_shrpa1),
+  as.data.frame(ASV_spau_shrpa)
+) %>%
+  dplyr::select(-c("beta.SOR"))
+pa_plot_rf$class <- c("Spring-Summer", "Summer-Autumn", "Spring-Autumn")
+
+pa_data_long_rf23 <- gather(pa_plot_rf, beta, value, beta.SIM:beta.SNE, factor_key = TRUE)
+pa_data_long_rf23$class <- rep(pa_plot_rf$class, each = 1)
+
+p9 <- ggplot(pa_data_long_rf23, aes(fill=beta, y=value, x=class)) + 
+  geom_bar(position="stack", stat="identity", width = 0.5) + scale_fill_manual(name = "Total dissimilarity:",values = c("darkslateblue","grey"),
+breaks = c("beta.SIM", "beta.SNE"),       
+labels = c("Turnover component", "Nestedness component")) +
+  theme_bw() + theme(panel.border = element_blank(), panel.grid.major = element_blank(),
+                     panel.grid.minor = element_blank(), axis.line = element_line(colour = "black", size = 0.8)) +
+  scale_x_discrete(labels = c(
+    "Spring-Summer" = "Spring vs summer",
+    "Summer-Autumn" = "Summer vs fall",
+    "Spring-Autumn" = "Spring vs fall"
+  )) +
+  scale_y_continuous(name="Diversity dissimilarity value", limits=c(0, 0.7)) +
+   theme_bw() +
+  theme(
+    panel.border = element_blank(),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    axis.line = element_line(colour = "black", size = 0.8),
+    axis.text.x = element_text(size = 15, colour = "black"),
+    axis.text.y = element_text(size = 15, colour = "black"),  
+    axis.ticks.length = unit(0.4, "lines"),
+    legend.position = "none",
+    axis.title.y = element_blank(),  
+    axis.title.x = element_blank()
+  ) +
+   coord_cartesian(ylim = c(0, 0.7)) +
+   ggtitle("I")
+p9
+
+```
+
+#Dissimilarity in pollen communities between spring and summer, summer and autumn, and spring and autumn air bacterial community in Quebec
+```{r}
+phylo_plan_qc <- phyloseq::subset_samples(plant, city =="Quebec")
+
+# Extract sample IDs for spring and autumn
+phylo_qc_spaut <- rownames(sample_data(phylo_plan_qc ))[sample_data(phylo_plan_qc )$time != "Summer"]
+
+# Extract sample IDs for spring and autumn separately
+spring_qcf <- rownames(sample_data(phylo_plan_qc))[sample_data(phylo_plan_qc)$time == "Spring"]
+autumn_qcf <- rownames(sample_data(phylo_plan_qc))[sample_data(phylo_plan_qc)$time == "Fall"]
+
+# Create matrix for spring and autumn
+ASV_spau_qcf <- t(as(otu_table(phylo_plan_qc), "matrix"))
+ASV_spau_qc1f <- ASV_spau_qcf[, colnames(ASV_spau_qcf) %in% phylo_qc_spaut]
+ASV_spau_qc1f <- t(ASV_spau_qc1f)  # Transpose back
+ASV_spau_qc1f <- as.data.frame(ASV_spau_qc1f)  # Convert to data frame
+ASV_spau_qc1f$ID <- rownames(ASV_spau_qc1f)
+
+# Group by season (spring or autumn) and summarize
+ASV_spau_qc1f <- ASV_spau_qc1f %>%
+  mutate(class = if_else(ID %in% spring_qcf, "Spring", "Autumn")) %>%
+  group_by(class) %>%
+  summarise(across(where(is.numeric), sum, .names = "sum_{.col}"), .groups = "drop")
+
+rownames(ASV_spau_qc1f) <- ASV_spau_qc1f$class
+ASV_spau_qc1f <- ASV_spau_qc1f[, -which(names(ASV_spau_qc1f) == "class")]
+ASV_spau_qc1f_pa <- vegan::decostand(ASV_spau_qc1f, method = "pa")
+
+# Calculate beta diversity
+ASV_spau_qcf_rpa <- beta.multi(ASV_spau_qc1f_pa, index.family = "sorensen")
+
+# Combine results into a plot-friendly format
+pa_plot_r1f <- as.data.frame(ASV_spau_qcf_rpa) %>%
+  dplyr::select(-c("beta.SOR"))
+pa_plot_r1f$class <- "Spring-Autumn"
+
+# Transform to long format
+pa_data_long_r1f <- gather(pa_plot_r1f, beta, value, beta.SIM:beta.SNE, factor_key = TRUE)
+
+p8 <- ggplot(pa_data_long_r1, aes(x = class, y = value, fill = beta)) +
+  geom_bar(stat = "identity", position = "stack", width = 0.5) +
+  scale_fill_manual(
+    name = "Dissimilarity Component",
+    values = c("darkslateblue", "grey"),
+    labels = c("Turnover", "Nestedness")
+  ) +
+    theme_bw() +
+  theme(
+    panel.border = element_blank(),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    axis.line = element_line(colour = "black", size = 0.8),
+    axis.text.x = element_text(size = 14),
+    axis.text.y = element_text(size = 15),
+    axis.title.y = element_blank(),
+    axis.title.x = element_blank(),  # <- This line removes the "class" label
+    axis.ticks.length = unit(0.4, "lines"),
+    legend.position = "bottom",
+    legend.text = element_text(size = 14),
+    legend.title = element_text(size = 14)
+  ) +
+  scale_y_continuous(limits = c(0, 0.7)) +
+  scale_x_discrete(labels = c("Spring-Autumn" = "Spring vs fall")) +
+  ggtitle("H")
+p8
+library(patchwork)
+
+combined_plot <- p7 | p8 | p9
+combined_plot <- (p7 | p8 | p9) +
+  plot_layout(ncol = 3) +
+  plot_annotation(
+    #title = "Seasonal dissimilarity in pollen community composition across cities",
+    theme = ggplot2::theme(
+      plot.title = ggplot2::element_text(size = 16, face = "bold", hjust = 0.5)
+    )
+  )
+combined_plot
+
+#Plot final
+row1 <- (p1 | p2 | p3) + plot_layout(widths = c(1, 0.6, 1))
+row2 <- (p4 | p5 | p6) + plot_layout(widths = c(1, 0.6, 1))
+row3 <- (p7 | p8 | p9) + plot_layout(widths = c(1, 0.6, 1))
+
+# Combine all
+combined_plot_final <- row1 / row2 / row3 +
+  plot_annotation(
+    theme = ggplot2::theme(
+      plot.title = ggplot2::element_text(size = 16, face = "bold", hjust = 0.5)
+    )
+  )
+combined_plot_final
+```
+
+
+#Indicator species analysis 
+```{r}
+# ASV table and taxonomic information
+otu_table <- as.data.frame(t(otu_table(phylo16S_MTL))) 
+tax_table <- as.data.frame(tax_table(phylo16S_MTL)) 
+
+otu_table$TaxaID <- rownames(otu_table)  
+tax_table$TaxaID <- rownames(tax_table)
+
+# merge taxonomy with ASV table based on TaxaID
+community_with_tax <- merge(otu_table, tax_table, by = "TaxaID")
+
+# choose the taxonomy level to aggregate (in our case Genus)
+taxonomy_level <- "Genus"
+
+community_aggregated <- community_with_tax %>%
+  group_by_at(taxonomy_level) %>%
+  summarise(across(where(is.numeric), sum)) %>%
+  ungroup()
+
+community_matrix_tax <- as.data.frame(community_aggregated)
+#community_matrix_tax <- community_matrix_tax[, -1]  # Remove taxonomy column
+head(community_matrix_tax)
+
+library(indicspecies)
+
+# Replace NA values in the 'Genus' column with 'Unknown'
+community_matrix_tax$Genus[is.na(community_matrix_tax$Genus)] <- "Unknown"
+head(community_matrix_tax)
+community_matrix_numeric <- community_matrix_tax %>% 
+  select(-Genus) %>% 
+  as.data.frame()
+community_matrix_numeric <- t(community_matrix_numeric)
+  
+# indicator species analysis using season (time) as the grouping variable
+indicator_result <- multipatt(
+  community_matrix_numeric,
+  metadata$time,  
+  func = "r.g",   
+  control = how(nperm = 999)  
+)
+
+indicator_result_summary <- summary(indicator_result)
+sig_species <- indicator_result$sign
+sig_species$Genus <- community_matrix_tax$Genus[match(rownames(sig_species), rownames(community_matrix_tax))]
+
+sig_species_filtered <- sig_species %>%
+  filter(p.value < 0.05) %>%
+  arrange(p.value, desc(stat)) # Sort by p.value ascending, and stat descending
+head(sig_species_filtered)
+
+# Prepare data for visualization
+sig_species_long <- sig_species_filtered %>%
+  mutate(Fall = ifelse(s.Fall == 1, stat, NA),
+         Spring = ifelse(s.Spring == 1, stat, NA),
+         Summer = ifelse(s.Summer == 1, stat, NA)) %>%
+  select(Genus, Fall, Spring, Summer, p.value) %>%
+  pivot_longer(cols = c(Fall, Spring, Summer), names_to = "Season", values_to = "Stat") %>%
+  filter(!is.na(Stat))  # Keep only significant results
+
+# Filter top 30 genera per season
+top_20_sig_species <- sig_species_long %>%
+  group_by(Season) %>%
+  slice_max(order_by = Stat, n = 30)
+
+# Create a facet plot by season
+library(stringr)
+library(ggthemr)
+str(top_20_sig_species)
+
+#top_20_sig_species <- top_20_sig_species %>%
+#  mutate(Genus = ifelse(nchar(as.character(Genus)) > 20, 
+#                        paste0(substr(as.character(Genus)), 1, 17), 
+#                        as.character(Genus)))
+
+top_20_sig_species <- top_20_sig_species %>%
+  mutate(Season = factor(Season, levels = c("Spring", "Summer", "Fall")))
+
+top_20_sig_species <- top_20_sig_species %>%
+  group_by(Season) %>%
+  arrange(Season, Genus) %>%
+  mutate(Genus = fct_inorder(Genus)) %>%  # Force order preservation
+  ungroup()
+
+top_20_sig_species <- top_20_sig_species %>%
+  group_by(Season) %>%
+  arrange(Season, Genus) %>%
+  mutate(Genus = factor(Genus, levels = rev(unique(sort(as.character(Genus)))))) %>%
+  ungroup()
+
+# Plot with consistent y-axis order across facets
+ggthemr("fresh")
+ggplot(top_20_sig_species, aes(x = Stat, y = Genus)) +
+  geom_point(aes(color = p.value), size = 4) +  # Color by p-value
+  scale_color_gradient(low = "lightsteelblue", high = "orchid", name = "P-value") +
+  facet_wrap(~ Season, scales = "free_y") +
+  labs(
+    title = "Montreal (16s)",
+    x = "IndVal (Stat)",
+    y = "Bacteria (Genus)"
+  ) +
+  theme(
+    axis.text.y = element_text(size = 8),
+    axis.text.x = element_text(size = 10, angle = 45, hjust = 1),
+    strip.text = element_text(size = 12, face = "bold"),
+    plot.title = element_text(hjust = 0.5)
+  )
+
+
+```
+
+
+
+title: "Beta_partitioning"
+output: html_document
+date: "2024-12-11"
+author: Maria Faticov
 updated: "2025-03-15"
 ---
 
