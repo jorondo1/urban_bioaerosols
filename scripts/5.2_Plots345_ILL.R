@@ -18,7 +18,7 @@
 # X. SETUP ###
 ###############
 library(pacman)
-p_load(tidyverse, RColorBrewer, phyloseq, patchwork, magrittr,ggrain)
+p_load(tidyverse, RColorBrewer, phyloseq, patchwork, magrittr,ggrain, ggpubr)
 
 source('scripts/myFunctions.R')
 source("https://github.com/jorondo1/misc_scripts/raw/refs/heads/main/psflashmelt.R")
@@ -296,11 +296,11 @@ map(cities, function(ci) {
           legend.justification = "left",
           legend.box.spacing = unit(0, "cm"),
     )
-  
+  plot
   # EXPORT
-  ggsave(paste0('out/_MAIN/community', ci,'.pdf'),
-         plot = plot, bg = 'white', width = 2000, height = 2600,
-         units = 'px', dpi = 160)
+  # ggsave(paste0('out/_MAIN/community', ci,'.pdf'),
+  #        plot = plot, bg = 'white', width = 2000, height = 2600,
+  #        units = 'px', dpi = 160)
   
 })
 

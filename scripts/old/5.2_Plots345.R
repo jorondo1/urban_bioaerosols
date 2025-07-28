@@ -247,14 +247,14 @@ community_plots.ls <- map(cities, function(ci) {
 
 # From scripts/3_metrics.R
 alphadiv.df <- read_rds('data/diversity/alpha_diversity.rds')
-betadiv.ls <- read_rds('data/diversity/beta_diversity.ls.rds')
+betadiv.ls <- read_rds('data/diversity/beta_diversity_byCity.ls.rds')
 
 map(cities, function(ci) {
   
   adiv.plot <- 
     alphadiv.df %>%
     filter(City == ci) %>% 
-    ggplot(aes(x = time, y = Shannon, fill = factor(veg_index_bracket.))) + 
+    ggplot(aes(x = time, y = Hill_1, fill = factor(veg_index_bracket.))) + 
     scale_fill_manual(values = nvdi_colours) +
     geom_boxplot(linewidth = 0.2) +
     facet_grid(.~Barcode) +
@@ -293,11 +293,11 @@ map(cities, function(ci) {
           legend.justification = "left",
           legend.box.spacing = unit(0, "cm"),
     )
-  
+  plot
   # EXPORT
-  ggsave(paste0('out/_MAIN/community', ci,'.pdf'),
-         plot = plot, bg = 'white', width = 2000, height = 2600,
-         units = 'px', dpi = 160)
-  
+  # ggsave(paste0('out/_MAIN/community', ci,'.pdf'),
+  #        plot = plot, bg = 'white', width = 2000, height = 2600,
+  #        units = 'px', dpi = 160)
+  # 
 })
 

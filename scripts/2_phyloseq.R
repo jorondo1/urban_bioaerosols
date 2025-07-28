@@ -258,7 +258,6 @@ ps_trnL_ctrl <- phyloseq(
   sample_data(meta_ctrl_trnL)
 ) # %>% prune_contam(contam_freq_trnL$decontam) # birch?!
 
-
 #######################"#######
 # 1.4. trnL passive samples ####
 #################################
@@ -272,7 +271,6 @@ meta_passive <- read_xlsx(file.path(urbanbio.path,"data/metadata/metadata_vaseli
                        names = c('Year', 'City', 'site_id' , 'TX'),
                        cols_remove= FALSE)
   
-
 path_trnl_p <- file.path(urbanbio.path,'data/trnL_passive')
 taxa_trnl_p <- read_rds(file.path(path_trnl_p, '4_taxonomy/taxonomy.RDS'))
 seqtab_trnL_p <- read_rds(file.path(path_trnl_p, '4_taxonomy/seqtab.RDS'))

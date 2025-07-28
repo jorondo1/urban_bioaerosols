@@ -3,7 +3,9 @@
 ###############
 
 library(pacman)
-p_load(tidyverse, magrittr, vegan, kableExtra, ANCOMBC, parallel, MetBrewer)
+p_load(tidyverse, magrittr, vegan, kableExtra, 
+       patchwork, gridExtra, cowplot, gtable,
+       ANCOMBC, parallel, MetBrewer, phyloseq)
 source('scripts/0_config.R') # Variable naming and such
 source('scripts/myFunctions.R')
 source(url('https://raw.githubusercontent.com/jorondo1/misc_scripts/refs/heads/main/tax_glom2.R'))
@@ -87,13 +89,13 @@ ancom_out_long.ls <- imap(ancom_out_filt.ls, function(ancom_filt, domain) {
                   Group == 'timeFall' ~ 'Fall')
       ), 
       q=q, 
-      taxon = str_replace(taxon, '_gen_Incertae_sedis', '*'),
       .keep = 'unused'
     ) %>% 
     left_join(ps_glom.ls[[domain]] %>% # identifier \ species association table
                 tax_table() %>% data.frame() %>% 
-                select(taxLvl, Class) %>% tibble(),
+                select(all_of(taxLvl), Class) %>% tibble(),
               join_by(taxon == !!sym(taxLvl))) %>% 
+    mutate(taxon = str_replace(taxon, '_gen_Incertae_sedis', '*')) %>% 
     filter(lfc!=0) 
 })
 
@@ -106,10 +108,8 @@ legend_labels <- c(#'' = 'white',
   'Lower in Fall' = met.brewer("VanGogh2")[2],
   'Lower in Spring' = met.brewer("VanGogh2")[4])
 
-
-
-waterfall_plots.ls <- imap(ancom_out_long.ls, function(ancom_long, domain) {
-  
+# --- 1. Dataframes for plots
+waterfall_plot_df.ls <- imap(ancom_out_long.ls, function(ancom_long, domain) {
   
   # Filter fungi because there are too many abundant genera
   if(domain == 'FUNG') {
@@ -131,7 +131,7 @@ waterfall_plots.ls <- imap(ancom_out_long.ls, function(ancom_long, domain) {
     summarise(mean_lfc = mean(lfc)) %>% 
     arrange(desc(mean_lfc)) %$% taxon %>% unique()
   
-  ancom_long %<>% 
+  ancom_long %>% 
     # reorder taxa by taxLvl
     mutate(taxon = factor(taxon, levels = taxLvls2),
            Group = factor(Group, levels = c('Spring', 'Fall')),
@@ -145,10 +145,13 @@ waterfall_plots.ls <- imap(ancom_out_long.ls, function(ancom_long, domain) {
              ), levels = names(legend_labels)
            )
     )
-  
+})
+
+# --- 2. Waterfall plots
+wf_plots.ls <- imap(waterfall_plot_df.ls, function(plot_df, domain) {
   
   # Background tile
-  bg_waterfall_data <- ancom_long %>%
+  bg_waterfall_data <- plot_df %>%
     distinct(taxon) %>% # Get unique taxa
     mutate(
       taxon_index = as.numeric(as.factor(taxon)),
@@ -159,7 +162,7 @@ waterfall_plots.ls <- imap(ancom_out_long.ls, function(ancom_long, domain) {
   taxon_levels <- levels(bg_waterfall_data$taxon)
   num_taxa <- length(taxon_levels)
   
-  ancom_long %>% 
+  plot_df %>% 
     ggplot(aes(x = lfc, y = taxon,
                fill = lfc_cat)) +
     geom_rect(data = bg_waterfall_data, 
@@ -173,66 +176,171 @@ waterfall_plots.ls <- imap(ancom_out_long.ls, function(ancom_long, domain) {
     geom_errorbar(aes(x = lfc,
                       xmin = lfc - se, 
                       xmax = lfc + se), 
-                  width = 0.3,
+                  width = 0.2,
                   linewidth = 0.3,
                   position = position_dodge(width = 0.9), 
                   color = "grey20") +
     scale_fill_manual(values = legend_labels,
                       limits = names(legend_labels),
                       drop = FALSE) +
-    # scale_alpha_discrete(range = c(0.5,1),
-    #                      guide = FALSE) +
     theme_minimal() +
-    labs(fill = 'Log fold-changes in absolute abundances relative to summer') +
-    theme(legend.position = 'none') +
+    theme(legend.position = 'none',
+          axis.title = element_blank(),
+          axis.text.y = element_blank()
+    ) +
     guides(fill = guide_legend(override.aes = list(shape = 21)))  # Ensure shapes show in legend
   
 })
 
-p1 <- waterfall_plots.ls$BACT + labs(title = 'A')
-p2 <- waterfall_plots.ls$FUNG + labs(title = 'B') 
-p3 <- waterfall_plots.ls$PLAN + labs(title = 'C')
+# --- 3. Class tiles for left side of the plot
+tile_palettes <- list(
+  'BACT' = c("#E41A1C", "#377EB8", "#4DAF4A", "#984EA3", 
+             "#FF7F00", "#FFFF33", "#A65628", "#F781BF"),
+  'FUNG' = c("#66C2A5", "#FC8D62", "#8DA0CB", "#E78AC3",
+             "#A6D854", "#FFD92F", "#E5C494", "#B3B3B3"),
+  'PLAN' = c("#FFFFB3", "#BEBADA", "#FB8072", "#FDB462")
+)
 
-p1 + p2 +p3 +
-  plot_layout(guides = 'collect',
-              design = "
-              AB
-              AB
-              AB
-              AB
-              AB
-              AB
-              CB
-              CB") &
-  theme(legend.position = 'bottom',
-        plot.title = element_text(
-          hjust = 0,
-          margin = margin(l = -85, b = 0, unit = "pt")),
+
+tile_plots.ls <- imap(waterfall_plot_df.ls, function(plot_df, barcode) {
+  plot_df %>% 
+    ggplot(aes(x = '1', y = taxon, fill = Class)) +
+    geom_tile(width = 2) + theme_minimal()+
+    theme(axis.text.x = element_blank(), 
+          axis.title = element_blank(),
+          axis.text.y = element_text(hjust = 1),
+          legend.position = 'none') +
+    scale_fill_manual(values = tile_palettes[[barcode]])
+})
+
+# --- 4. Extract legends
+# Common LFC legend :
+common_legend_plot <- waterfall_plot_df.ls$BACT %>%
+  ggplot(aes(x = 1, y = 1, fill = lfc_cat)) +
+  geom_tile() +
+  labs(fill = "Log fold-changes in absolute abundances relative to summer") +
+  scale_fill_manual(values = legend_labels,
+                    limits = names(legend_labels),
+                    drop = FALSE) +
+  theme(legend.position = "bottom",
         legend.title.position = 'top',
-        axis.title = element_blank(),
-        panel.grid.major.y = element_blank(), # Remove major Y grid lines
-        panel.grid.minor.y = element_blank(), # Remove minor Y grid lines
-        panel.background = element_rect(fill = "white", color = NA),
-        plot.background = element_rect(fill = "white", color = NA)
+        # Add some margin to the bottom to push the title up if needed
+        legend.box.margin = margin(t = 0, r = 0, b = 0, l = 0))
+
+common_legend <- get_plot_component(common_legend_plot, "guide-box-bottom")
+
+# Distinct Class legends: 
+class_legends_grobs <- imap(waterfall_plot_df.ls, function(waterfall_plot_df, barcode) {
+  dummy_plot <- waterfall_plot_df %>%
+    ggplot(aes(x = lfc, y = taxon, fill = Class)) +
+    geom_bar(stat = "identity") +
+    labs(fill = paste(kingdoms[barcode], 'classes')) +
+    scale_fill_manual(values = tile_palettes[[barcode]]) +
+    theme_void() + # Important for extracting just the legend
+    theme(
+      legend.position = "right", 
+      legend.justification = "left",
+      #  legend.direction = "vertical",
+      legend.box.just = "left", # Align legend box to the left
+      legend.box.margin = margin(0,0,0,0) # Remove any default margins
+    )
+  
+  get_plot_component(dummy_plot, "guide-box-right") # get the legend
+})
+
+# --- 5. Manual alignment of legend labels 
+lg_bact <- class_legends_grobs$BACT
+lg_fung <- class_legends_grobs$FUNG
+lg_plan <- class_legends_grobs$PLAN
+# 
+# # Must be at least as 
+# max_lg_width <- max(lg_bact$widths, lg_fung$widths, lg_plan$widths)
+# lg_bact <- patchwork::wrap_elements(lg_bact) & plot_layout(widths = max_lg_width)
+# lg_fung <- patchwork::wrap_elements(lg_fung) & plot_layout(widths = max_lg_width)
+# lg_plan <- patchwork::wrap_elements(lg_plan) & plot_layout(widths = max_lg_width)
+
+stacked_distinct_legends <- plot_grid(
+  lg_bact,
+  lg_fung,
+  lg_plan,
+  ncol = 1,
+  # Use NULL for rel_heights to let cowplot auto-distribute based on content,
+  # or provide values like c(4,4,8) if you want specific proportions.
+  # For legends, equal spacing is often fine.
+  rel_heights = c(1, 1, 1) # Equal heights for simplicity within this stack
+)
+
+# --- 6. Define the plots without legends 
+P1 <- tile_plots.ls$BACT + labs(title = 'A')
+P2 <- tile_plots.ls$FUNG + labs(title = 'B') 
+P3 <- tile_plots.ls$PLAN + labs(title = 'C')
+
+P1_combined <- (P1 + wf_plots.ls$BACT + plot_layout(widths = c(1, 20))) & theme(legend.position = "none")
+P2_combined <- (P2 + wf_plots.ls$FUNG + plot_layout(widths = c(1, 20))) & theme(legend.position = "none")
+P3_combined <- (P3 + wf_plots.ls$PLAN + plot_layout(widths = c(1, 20))) & theme(legend.position = "none")
+
+# --- 7. Grid layout for three plots
+
+# Proportions :
+design_layout <- "
+acd
+acd
+acd
+bcd
+"
+
+# Now, define the full top panel using wrap_plots with this design
+# Pass the elements in the order corresponding to the 'a', 'b', 'c', 'd' in the design string
+top_panel <- wrap_plots(
+  a = P1_combined,
+  b = P3_combined,
+  c = P2_combined,
+  d = stacked_distinct_legends,
+  design = design_layout,
+  widths = c(21, 21, 12), # Col 1 (for a/b), Col 2 (for c), Col 3 (for d)
+  heights = c(4, 4)      # Row 1 (for a/c/d top half), Row 2 (for b/c/d bottom half)
+)
+
+# --- 8. Assemble the complete plot : 
+top_panel / common_legend +
+  plot_layout(
+    heights = c(14, 1) # Total height of top_panel and common_legend
+  ) & # Adjust the plot letter identifier placement :
+  theme(
+    plot.title = element_text(
+      hjust = 0,
+      margin = margin(l = -85, b = -20, unit = "pt")),
+    panel.grid.major.y = element_blank(), # Remove major Y grid lines
+    panel.grid.minor = element_blank(), # Remove minor Y grid lines
+    
   )
 
+# SAVE !
 ggsave(paste0('out/DAA/waterfall_composite.pdf'), 
-       bg = 'white', width = 1400, height = 2000, 
+       bg = 'white', width = 2000, height = 2400, 
        units = 'px', dpi = 200)
 
+
+theme(legend.position = 'bottom',
+      ,
+      legend.title.position = 'top',
+      axis.title = element_blank(),
+      panel.background = element_rect(fill = "white", color = NA),
+      plot.background = element_rect(fill = "white", color = NA)
+)
 
 
 #########################
 ### --- HEATMAP PLOT
 ###########################
-taxLvls <- ancom_out_long %>% 
+taxLvls <- ancom_out_long.ls$BACT %>% 
   arrange(desc(Class), desc(taxon)) %$% taxon %>% unique
 
-ancom_out_long %<>% 
+ancom_out_long.heatmap <- ancom_out_long.ls$BACT  %>% 
   # reorder taxa by taxLvl
   mutate(taxon = factor(taxon, levels = taxLvls))
 
-p_main <- ancom_out_long %>% 
+p_main <- ancom_out_long.heatmap %>% 
   ggplot(aes(x = Group, y = taxon, fill = lfc)) +
   geom_tile() +
   scale_fill_gradient2(low = met.brewer("Homer2")[1], 
@@ -240,27 +348,26 @@ p_main <- ancom_out_long %>%
                        high = met.brewer("Homer2")[6], 
                        midpoint = 0) +
   geom_text(aes(Group, taxon, label = round(lfc, 2), color=textcolour)) +
-  scale_color_identity(guide = FALSE) + 
+  scale_color_identity(guide = 'none') + 
+  theme_minimal()+
   theme(axis.text.x = element_text(margin = margin(t = 5, r = 5, b = 5, l = 5)),
         axis.text.y = element_blank()
         #legend.position = 'bottom'
   ) +
   labs(x = '', y = '', fill = "Log2 fold-change\nrelative to Summer")
 
-
 # taxLvl -coloured tile:
-p_tile <- ancom_out_long %>% 
+p_tile <- ancom_out_long.heatmap %>% 
   ggplot(aes(x = '1', y = taxon, fill = Class)) +
-  geom_tile() + #theme_void() + 
+  geom_tile() + theme_minimal()+
   theme(axis.text.x = element_blank(), 
         axis.title = element_blank(),
         axis.text.y = element_text(hjust = 1)) +
   scale_fill_met_d(name = 'Signac', direction = -1)
 
-
 p_tile + p_main  + plot_layout(
   guides = "collect",
-  design = "ABBBBBBBBBBBBB")
+  design = "ABBBBBBBBBBBBB") 
 
 ggsave(paste0('out/DAA/heatmap_',domain,'.pdf'), 
        bg = 'white', width = 1400, height = 2000, 

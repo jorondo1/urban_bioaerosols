@@ -117,7 +117,7 @@ perm_out_full %>%
     )), 
     align = c('l', rep('c',3)),
     escape = FALSE) %>% 
-  row_spec(0, extra_css = "display: none;")# %>% # Remove original header 
+  row_spec(0, extra_css = "display: none;") %>% # Remove original header 
   
 
 save_kable(file = paste0('out/stats/perm_terms_interactions.html'))
