@@ -38,16 +38,21 @@ list_core_ASV <- function(ps, minPrev, minAbund) {
   core_prev <- prev[core_ASVs]
   core_prev <- as.data.frame(core_prev) %>% 
     rownames_to_column('OTU')
+
+  # Melt ps object  
+  melt <- psflashmelt(ps)
+  
+  # If species is available, we want it
+  tax_ranks_to_include <- intersect(colnames(melt), c(taxRanks[1:6], 'Species'))
   
   # Extract relative abundance from complete dataset
-  ps %>% 
-    psflashmelt() %>% 
-    dplyr::select(Sample, Abundance, all_of(taxRanks[1:6]), OTU) %>% # exclude Species
+  melt %>% 
+  dplyr::select(Sample, Abundance, all_of(tax_ranks_to_include), OTU) %>% # exclude Species
     group_by(Sample) %>% 
     mutate(relAb = Abundance/sum(Abundance), .keep = 'unused') %>% 
     ungroup() %>% 
     filter(OTU %in% core_ASVs) %>% 
-    group_by(OTU, !!!syms(taxRanks[1:6])) %>% 
+    group_by(OTU, !!!syms(tax_ranks_to_include)) %>% 
     summarise(mean_relAb = mean(relAb),
               sd_relAb = sd(relAb), .groups = 'drop') %>% 
     left_join(core_prev, by = 'OTU') %>% 
