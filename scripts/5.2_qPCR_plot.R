@@ -67,7 +67,7 @@ P_city <- bact_load_noExtremes %>%
   facet_grid(.~city) +
   #scale_y_continuous(labels = label_scientific()) +
   scale_fill_manual(values = period_colours) +
-  labs(fill = 'Sampling period')
+  labs(fill = 'Sampling period', tag = 'A')
 
 # By City
 wilcox_byTime <- bact_load_noExtremes %>%
@@ -89,7 +89,7 @@ P_time<- bact_load_noExtremes %>%
   ) +
   scale_fill_manual(values = city_colours) +
   facet_grid(.~time) +
-  labs(fill = 'City')
+  labs(fill = 'City', tag = 'B')
 
 P_city / P_time &
   theme(strip.text = element_text(color = "black",size = 14,face = "bold"),
