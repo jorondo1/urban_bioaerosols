@@ -238,9 +238,9 @@ community_plots.ls <- map(cities, function(ci) {
   p_bact / p_fung / p_plan &
     theme(
       legend.text = element_text(margin = margin(l = 5),
-                                 size = 10),
-      legend.key.size = unit(12,"pt")) 
-});community_plots.ls
+                                 size = 8),
+      legend.key.size = unit(10,"pt")) 
+})
 
 #############################
 # 3. Add Diversity plots ###
@@ -259,7 +259,7 @@ map(cities, function(ci) {
     scale_fill_manual(values = period_colours) +
     geom_violin(width = 1, alpha = 0.5) + #Add violin & boxplot next line
     geom_boxplot(width = 0.1, outlier.shape = NA)+  # Removes points from boxplot
-    geom_pwc(method = "dunn_test", label = "p.adj.signif")+ #Add stats
+    geom_pwc(method = "wilcox_test", label = "p.adj.signif")+ #Add stats
     facet_grid(.~Barcode) +
     labs(fill = 'Sampling\nperiod', tag = "D")+ # Tags
     ylim(0,8.5)
@@ -286,7 +286,9 @@ map(cities, function(ci) {
   })
   
   bdiv.plot <- 
-    (bdiv.plot.ls$BACT+labs(tag="E")) + bdiv.plot.ls$FUNG + bdiv.plot.ls$PLAN + # Tags
+    (bdiv.plot.ls$BACT + labs(tag="E")) + 
+    bdiv.plot.ls$FUNG + 
+    bdiv.plot.ls$PLAN + # Tags
     plot_layout(guides = 'collect')
   
   ### BUILD MEGAPLOT
@@ -296,256 +298,11 @@ map(cities, function(ci) {
           legend.justification = "left",
           legend.box.spacing = unit(0, "cm"),
     )
-  plot
+  
   # EXPORT
-  # ggsave(paste0('out/_MAIN/community', ci,'.pdf'),
-  #        plot = plot, bg = 'white', width = 2000, height = 2600,
-  #        units = 'px', dpi = 160)
-  
+  ggsave(paste0('out/_MAIN/community', ci,'.pdf'),
+         plot = plot, bg = 'white', width = 2000, height = 2600,
+         units = 'px', dpi = 180)
+
 })
 
-# Plot for Figure S8
-# Bioaerosol alpha diversity across season
-# All data from all cities together
-
-#S8A All cities a-div ~ Sampling period
-adiv.plot.all<-alphadiv.df %>%
-  ggplot(aes(x = time, y = Shannon, fill=time)) + 
-  scale_fill_manual(values = period_colours) +
-  geom_violin(width = 1, alpha = 0.5) +
-  geom_boxplot(width = 0.1, outlier.shape = NA)+  # Removes points from boxplot
-  geom_pwc(method = "dunn_test", label = "p.adj.signif")+
-  facet_grid(.~Barcode) +
-  labs(fill = 'Sampling\nperiod',tag="A")+
-  ylim(0,NA)+xlab("Sampling period")+ylab("Shannon Index")+
-  theme(strip.text = element_text(color = "black",size = 14,face = "bold"),
-        legend.position = c(0.04, 0.18),  # Adjust position inside plot area
-        legend.background = element_rect(fill = "white", color = "black"),
-        legend.title = element_text(face = "bold"));adiv.plot.all
-
-#S8B All cities a-div ~ NDVI
-adiv.plot.ndvi.all <- alphadiv.df %>%
-  ggplot(aes(x = as.factor(veg_index_bracket.), y = Shannon, fill=as.factor(veg_index_bracket.))) + 
-  scale_fill_manual(values = nvdi_colours) +
-  geom_violin(width = 1, alpha = 0.5) +
-  geom_boxplot(width = 0.1, outlier.shape = NA)+  # Removes points from boxplot
-  #geom_pwc(method = "dunn_test", label = "p.adj.signif")+
-  facet_grid(.~Barcode) +
-  labs(fill = 'Vegetation\nindex',tag="B")+
-  ylim(0,NA)+xlab("Vegetation index")+ylab("Shannon Index")+
-  theme(strip.text = element_text(color = "black",size = 14,face = "bold"),
-        legend.position = c(0.04, 0.18),  # Adjust position inside plot area
-        legend.background = element_rect(fill = "white", color = "black"),
-        legend.title = element_text(face = "bold"));adiv.plot.ndvi.all
-
-#S8C All cities a-div ~ Median Income
-adiv.plot.income.all <- alphadiv.df %>%
-  ggplot(aes(x = as.factor(median_income_bracket.), y = Shannon, fill=as.factor(median_income_bracket.))) + 
-  scale_fill_manual(values = c("#6A51A3", "#807DBA", "#9ECAE1", "#FFFFB2")) +
-  geom_violin(width = 1, alpha = 0.5) +
-  geom_boxplot(width = 0.1, outlier.shape = NA)+  # Removes points from boxplot
-  #geom_pwc(method = "dunn_test", label = "p.adj.signif")+
-  facet_grid(.~Barcode) +
-  labs(fill = 'Median\nHousehold\nIncome',tag="C")+
-  ylim(0,NA)+xlab("Median Household Income")+ylab("Shannon Index")+
-  theme(strip.text = element_text(color = "black",size = 14,face = "bold"),
-        legend.position = c(0.04, 0.23),  # Adjust position inside plot area
-        legend.background = element_rect(fill = "white", color = "black"),
-        legend.title = element_text(face = "bold")); adiv.plot.income.all
-plot_adiv.all <- adiv.plot.all/ adiv.plot.ndvi.all / adiv.plot.income.all
-ggsave(paste0('out/_MAIN/alphadiv_allcities.pdf'),plot = plot_adiv.all,
-       bg = 'white', width = 3000, height = 3000,
-       units = 'px', dpi = 200)
-
-# Plot for Figure S9
-# Bioaerosol alpha diversity across season
-# All data from all cities together
-
-#S9A All cities in Spring a-div ~ City
-alphadiv.dfSpring<-alphadiv.df %>%
-  filter(time=="Spring") %>%
-  ggplot(aes(x = City, y = Shannon, fill=City)) + 
-  scale_fill_manual(values = c("#C60C30", "#1D4E89", "#2E8B57")) +
-  geom_violin(width = 1, alpha = 0.5) +
-  geom_boxplot(width = 0.1, outlier.shape = NA)+
-  geom_pwc(method = "dunn_test", label = "p.adj.signif")+
-  facet_wrap(.~Barcode) +
-  theme(strip.text = element_text(color = "black",size = 14,face = "bold"),
-        axis.title.x = element_blank())+
-  guides(fill="none")+ylab("Shannon Index")+
-  labs(tag="A")+
-  #theme(strip.text.x = element_blank())+
-  ylim(0,9)
-
-#S9B All cities in Summer a-div ~ City
-alphadiv.dfSummer<-alphadiv.df %>%
-  filter(time=="Summer" & City != "Quebec") %>%
-  ggplot(aes(x = City, y = Shannon, fill=City)) + 
-  scale_fill_manual(values = c("#C60C30", "#1D4E89", "#2E8B57")) +
-  geom_violin(width = 1, alpha = 0.5) +
-  geom_boxplot(width = 0.1, outlier.shape = NA)+
-  geom_pwc(method = "dunn_test", label = "p.adj.signif")+
-  facet_wrap(.~Barcode) +
-  theme(strip.text = element_text(color = "black",size = 14,face = "bold"),
-        axis.title.x = element_blank())+
-  guides(fill="none")+ylab("Shannon Index")+
-  labs(tag="B")+
-  #theme(strip.text.x = element_blank())+
-  ylim(0,9)
-
-#S9C All cities in Fall a-div ~ City
-alphadiv.dfFall<-alphadiv.df %>%
-  filter(time=="Fall") %>%
-  ggplot(aes(x = City, y = Shannon, fill=City)) + 
-  scale_fill_manual(values = c("#C60C30", "#1D4E89", "#2E8B57")) +
-  geom_violin(width = 1, alpha = 0.5) +
-  geom_boxplot(width = 0.1, outlier.shape = NA)+
-  geom_pwc(method = "dunn_test", label = "p.adj.signif")+
-  facet_wrap(.~Barcode) +
-  guides(fill="none")+ylab("Shannon Index")+
-  labs(tag="C")+
-  theme(strip.text = element_text(color = "black",size = 14,face = "bold"))+
-  ylim(0,9)
-
-# Combine S9ABC
-plot_adiv <- 
-  alphadiv.dfSpring/ alphadiv.dfSummer / alphadiv.dfFall &
-  theme(legend.position = "right",
-        legend.justification = "left",
-        legend.box.spacing = unit(0, "cm"),
-  )
-
-# Export
-ggsave(paste0('out/_MAIN/adiversityseasonallcities.pdf'),
-       plot = plot_adiv, bg = 'white', width = 1500, height = 1500,
-       units = 'px', dpi = 160)
-
-# Plots for Figures S10-11-12
-# Bioaerosol alpha diversity across NDVI and INCOME
-# For each city separated
-
-map(cities, function(ci) {
-  
-  #NDVI
-  adiv.plot.ndvi <- 
-    alphadiv.df %>%
-    filter(City == ci) %>% 
-    ggplot(aes(x = as.factor(veg_index_bracket.), y = Shannon, fill=as.factor(veg_index_bracket.))) + 
-    scale_fill_manual(values = nvdi_colours) +
-    geom_violin(width = 1, alpha = 0.5) +
-    geom_boxplot(width = 0.1, outlier.shape = NA)+
-    facet_grid(.~Barcode) +
-    labs(fill = 'Vegetation\nindex',tag="A")+
-    xlab("Vegetation Index")+ylab("Shannon Index")+
-    theme(strip.text = element_text(color = "black",size = 14,face = "bold"),
-          legend.position = c(0.045, 0.16),  # Adjust position inside plot area
-          legend.background = element_rect(fill = "white", color = "black"),
-          legend.title = element_text(face = "bold"))+
-    ylim(0,NA)
-
-  # Income 
-  adiv.plot.income <- 
-    alphadiv.df %>%
-    filter(City == ci) %>% 
-    ggplot(aes(x = as.factor(median_income_bracket.), y = Shannon, fill=as.factor(median_income_bracket.))) + 
-    scale_fill_manual(values = c("#6A51A3", "#807DBA", "#9ECAE1", "#FFFFB2")) +
-    geom_violin(width = 1, alpha = 0.5) +
-    geom_boxplot(width = 0.1, outlier.shape = NA)+
-    facet_grid(.~Barcode) +
-    xlab("Median Household Income")+ylab("Shannon Index")+
-    theme(strip.text = element_text(color = "black",size = 14,face = "bold"),
-          legend.position = c(0.045, 0.20),  # Adjust position inside plot area
-          legend.background = element_rect(fill = "white", color = "black"),
-          legend.title = element_text(face = "bold"))+
-    labs(fill = 'Median\nHousehold\nIncome',tag="B")+
-    ylim(0,NA)
-  
-  # Income & NDVI
-  adiv.plot.income.by.veg <- 
-    alphadiv.df %>%
-    filter(City == ci) %>% 
-    ggplot(aes(x = as.factor(veg_index_bracket.), y = Shannon, fill=as.factor(median_income_bracket.))) + 
-    scale_fill_manual(values = c("#6A51A3", "#807DBA", "#9ECAE1", "#FFFFB2")) +
-    geom_boxplot(width = 1, outlier.shape = NA)+
-    facet_grid(.~Barcode) +
-    xlab("Vegetation Index")+ylab("Shannon Index")+
-    theme(strip.text = element_text(color = "black",size = 14,face = "bold"),
-          legend.position = c(0.046, 0.20),  # Adjust position inside plot area
-          legend.background = element_rect(fill = "white", color = "black"),
-          legend.title = element_text(face = "bold"))+
-    labs(fill = 'Median\nHousehold\nIncome',tag="C")+
-    ylim(0,NA)
-  
-  # Pop density (not used)
-  adiv.plot.popdensity <- 
-    alphadiv.df %>%
-    filter(City == ci) %>% 
-    ggplot(aes(x = as.factor(population_density_index), y = Shannon, fill=as.factor(population_density_index))) + 
-    geom_boxplot()+  # Removes points from boxplot
-    geom_pwc(method = "dunn_test", label = "p.adj.signif")+
-    facet_grid(.~Barcode) +
-    theme(strip.text = element_text(color = "black",size = 14,face = "bold"),
-          legend.position = c(0.04, 0.23),  # Adjust position inside plot area
-          legend.background = element_rect(fill = "white", color = "black"),
-          legend.title = element_text(face = "bold"))+
-    labs(fill = 'Population\ndensity',tag="D")+
-    xlab("Population density")+ylab("Shannon Index")+
-    ylim(0,NA)
-
-### BUILD MEGAPLOT (not using pop density)
-plot <- adiv.plot.ndvi / adiv.plot.income / adiv.plot.income.by.veg
-
-# EXPORT
-ggsave(paste0('out/_MAIN/adiversity', ci,'.pdf'),
-       plot = plot, bg = 'white', width = 2000, height = 2600,
-       units = 'px', dpi = 160)
-})
-
-# Plots for Figures S1
-# Site values for NDVI and Income gradients for each City
-  plot.gradients <- 
-    alphadiv.df %>%
-    filter(Barcode == "Bacteria",time=="Spring") %>% 
-    ggplot(aes(x = as.factor(veg_index_bracket.), y = as.factor(median_income_bracket.), color=City, fill=City)) + 
-    geom_jitter(size=3,width = 0.1,height = 0.1,shape=21,alpha=0.9)+
-    xlab("Vegedation density")+
-    ylab("Median Household Income")+
-    scale_color_manual(values = c("black", "black", "black")) +
-    scale_fill_manual(values = c("#C60C30", "#1D4E89", "#2E8B57")) +
-    facet_grid(.~City)+
-    theme(strip.text = element_text(color = "black",size = 14,face = "bold"),
-          legend.position = c(0.95, 0.16),  # Adjust position inside plot area
-          legend.background = element_rect(fill = "white", color = "black"),
-          legend.title = element_text(face = "bold")
-    );plot.gradients
-ggsave(paste0('out/_MAIN/gradients.pdf'),
-         plot = plot.gradients, bg = 'white', width = 2000, height = 800,
-         units = 'px', dpi = 160)
-
-# Not used, smoothing graphs rather than boxplots
-map(cities, function(ci) {
-  adiv.plot.smooth <- 
-    alphadiv.df %>%
-    filter(City == ci) %>% 
-    ggplot(aes(x = veg_index_bracket., y = Shannon, fill=as.factor(median_income_bracket.))) +
-    geom_point()+
-    geom_smooth()+
-    facet_grid(.~Barcode)+
-    labs(fill = "Income")+
-    theme(strip.text = element_text(color = "black",size = 14,face = "bold"),
-          legend.position = c(0.06, 0.16),  # Adjust position inside plot area
-          legend.background = element_rect(fill = "white", color = "black"),
-          legend.title = element_text(face = "bold"))
-  adiv.plot.smooth2 <- 
-    alphadiv.df %>%
-    filter(City == ci) %>% 
-    ggplot(aes(x = median_income_bracket., y = Shannon, fill=as.factor(veg_index_bracket.))) +
-    geom_point()+
-    geom_smooth()+
-    facet_grid(.~Barcode)+
-    labs(fill = "Vegetation")+
-    theme(strip.text = element_text(color = "black",size = 14,face = "bold"),
-          legend.position = c(0.06, 0.16),  # Adjust position inside plot area
-          legend.background = element_rect(fill = "white", color = "black"),
-          legend.title = element_text(face = "bold"))
-})
