@@ -24,9 +24,12 @@ barcodes <- c(
 period_colours <- c('Spring' = 'springgreen3',
                     'Summer' = 'skyblue3', 
                     'Fall' = 'orange3')
+
 nvdi_colours <- c("#E1BE6A", "#40B0A6", "#E66100")
 
-city_colours <- c("#C60C30", "#1D4E89", "#2E8B57")
+city_colours <- c('Montreal' = "#C60C30", 
+                  'Quebec' = "#1D4E89", 
+                  'Sherbrooke' = "#00A759")
 # Microbial families for community plots:
 palettes <- list() 
 palettes$BACT <- c(
