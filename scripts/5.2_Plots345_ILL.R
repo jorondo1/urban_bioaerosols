@@ -38,6 +38,8 @@ nTax_by_barcode <- c(
   'PLAN' = 8
 )
 
+dist_metric <- 'robust.aitchison'
+
 ##############################
 # 1. Prepare plot dataframe ###
 ################################
@@ -67,7 +69,7 @@ melted <- imap(ps_rare.ls, function(ps, barcode) {
                               day(date)),
            # Recode date as character factor 
            date = as.character(date))
-}) %>% list_rbind
+}) %>% list_rbind()
 
 # Count number of sample by unique (taxrank, city, date) for each barcode
 sample_counts <- imap(ps_rare.ls, function(ps, barcode){
@@ -78,7 +80,7 @@ sample_counts <- imap(ps_rare.ls, function(ps, barcode){
            date_label = paste(month(date, label = TRUE, abbr=TRUE), 
                               day(date)),
            date = as.character(date))
-}) %>% list_rbind
+}) %>% list_rbind()
 
 ###############################
 # 2. Community plots by city ###

@@ -126,6 +126,10 @@ taxa_16S <- cbind(taxa_16S_genus, Species_16S) %>%
   mutate(Species = Species_16S, .keep = 'unused')
 taxa_16S[is.na(taxa_16S)] <- 'Unclassified' 
 
+# Replace Methylorubrum with Methylobacterium
+taxa_16S[which(taxa_16S$Genus=='Methylorubrum'),"Genus"] <- "Methylobacterium"
+which(taxa_16S$Genus=="Methylobacterium")
+
 # Keep samples with metadata info
 seqtab_16S_sam <- subset_samples(seqtab_16S, sample.names)
 seqtab_16S_ctrl <- subset_samples(seqtab_16S, ctrl.names)
@@ -217,8 +221,8 @@ ps_ITS_ctrl <- phyloseq(
 #########################
 
 path_trnL <- file.path(urbanbio.path,'data/trnL')
-taxa_trnL <- read_rds(file.path(path_trnL, '4_taxonomy_ncbi20250528/taxonomy.RDS'))
-seqtab_trnL <- read_rds(file.path(path_trnL, '4_taxonomy_ncbi20250528/seqtab.RDS'))
+taxa_trnL <- read_rds(file.path(path_trnL, '4_taxonomy_E22_100_trunc275/taxonomy.RDS'))
+seqtab_trnL <- read_rds(file.path(path_trnL, '4_taxonomy_E22_100_trunc275/seqtab.RDS'))
 taxa_trnL[is.na(taxa_trnL)] <- 'Unclassified' 
 taxa_trnL <- taxa_trnL[which(taxa_trnL[,1] != 'Bacteria'),] # Remove cyanobacteria
 
@@ -278,7 +282,7 @@ taxa_trnl_p[is.na(taxa_trnl_p)] <- 'Unclassified'
 taxa_trnl_p <- taxa_trnl_p[which(taxa_trnl_p[,1] != 'Bacteria'),] # Remove cyanobacteria
 
 # Keep samples with metadata info
-seqtab_trnL_sam_p <- subset_samples(seqtab_trnL_p, meta_passive$SampleID)
+seqtab_trnL_sam_p <- subset_samples(seqtab_trnL_p, meta_passive$Sample_ID)
 
 # Subset ASVs
 taxa_trnL_sam_p <- subset_asvs(taxa_trnl_p, seqtab_trnL_sam_p, min_seq = 50)
@@ -335,7 +339,7 @@ saveRDS(taxtab.ls, file.path(urbanbio.path,'data/taxtab.ls.rds'))
 # Export asvs as fasta
 asv_to_fasta(seqtab_16S_sam_filt, file.path(path_16S, '4_taxonomy/asv.fa'))
 asv_to_fasta(seqtab_ITS_sam_filt, file.path(path_ITS, '4_taxonomy/asv.fa'))
-asv_to_fasta(seqtab_trnL_sam_filt, file.path(path_trnL, '4_taxonomy_ncbi20250528/asv.fa'))
+asv_to_fasta(seqtab_trnL_sam_filt, file.path(path_trnL, '4_taxonomy_E22_100_trunc275/asv.fa'))
 
 
 

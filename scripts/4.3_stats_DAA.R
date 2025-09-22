@@ -5,12 +5,14 @@
 library(pacman)
 p_load(tidyverse, magrittr, vegan, kableExtra, 
        patchwork, gridExtra, cowplot, gtable,
-       ANCOMBC, parallel, MetBrewer, phyloseq)
+       ANCOMBC, parallel, MetBrewer, phyloseq,
+       update = FALSE)
 source('scripts/0_config.R') # Variable naming and such
 source('scripts/myFunctions.R')
 source(url('https://raw.githubusercontent.com/jorondo1/misc_scripts/refs/heads/main/tax_glom2.R'))
 
 ps.ls <- read_rds('data/ps.ls.rds')
+
 taxLvl <- 'Genus'
 ps_glom.ls <- lapply(ps.ls, tax_glom2, taxrank = taxLvl)
 
@@ -26,7 +28,7 @@ run_ancom <- function(ps){
   ancom_out <- ancombc2(
     data = ps, 
     #tax_level= "taxLvl", # we do it ourselves above to retain the taxLvl level ids
-    prv_cut = 0.30, 
+    prv_cut = 0.20, 
     fix_formula="city + time + vegetation_index_NDVI_landsat", 
     group = "time", # specify group if >=3 groups exist, allows structural zero detection 
     struc_zero = TRUE,
@@ -43,7 +45,7 @@ run_ancom <- function(ps){
 # write_rds(ancom_out_dunnett.ls, paste0('data/ancom_out_dunnett_',taxLvl,'.RDS'))
 # write_rds(ancom_out, 'data/ancom_out_ASV_BACT.RDS') # run by mistake lol
 
-ancom_out_dunnett.ls <- read_rds('data/ancom_out_dunnett_Genus20.RDS')
+ancom_out_dunnett.ls <- read_rds('data/ancom_out_dunnett_Genus.RDS')
 
 ############################
 # processing ancombc out 
@@ -51,10 +53,26 @@ ancom_out_dunnett.ls <- read_rds('data/ancom_out_dunnett_Genus20.RDS')
 
 signif_threshold <- 0.01
 
+# Manual p-value corrections, because we are testing multiple datasets and
+# ancom will only apply correction per dataset (since one ancom function per
+# dataset is executed )
+
+# Number of tests performed, multiplied by two because we have 3 groups (two comparisons to the ref group)
+num_tests <- 2*sum(sapply(ancom_out_dunnett.ls, 
+                          function(x) nrow(x$res_dunn)))
+
 ancom_out_filt.ls <- map(ancom_out_dunnett.ls, function(ancom_out) {
   
   tibble(ancom_out$res_dunn) %>%
-    dplyr::select(-starts_with('W_'), -starts_with('p_'), -starts_with('diff_')) %>% 
+    dplyr::select(-starts_with('W_'), -starts_with('q_'), -starts_with('diff_')) %>% 
+    # Manual apply holm test with the TOTAL number of statistical tests
+    mutate(across(
+      starts_with("p_"),
+      ~ p.adjust(.x, method = "holm", n = num_tests),
+      .names = "{.col}"
+    )) %>%
+    rename_with(~ sub("^p_", "q_", .), starts_with("p_")) %>% 
+    select(-starts_with('p_')) %>% 
     # Remove taxon for which no comparison passed the ss 
     filter(!if_all(.cols = contains('passed_ss_'), 
                    .fns = ~ .x == FALSE)) %>%
@@ -215,19 +233,22 @@ tile_plots.ls <- imap(waterfall_plot_df.ls, function(plot_df, barcode) {
 
 # --- 4. Extract legends
 # Common LFC legend :
-common_legend_plot <- waterfall_plot_df.ls$BACT %>%
+common_legend_plot <- waterfall_plot_df.ls$FUNG %>%
   ggplot(aes(x = 1, y = 1, fill = lfc_cat)) +
   geom_tile() +
-  labs(fill = "Log fold-changes in absolute abundances relative to summer") +
+  labs(fill = "Log fold-changes\nin absolute abundances\nrelative to summer") +
   scale_fill_manual(values = legend_labels,
                     limits = names(legend_labels),
                     drop = FALSE) +
-  theme(legend.position = "bottom",
+  theme(legend.position = "right",
         legend.title.position = 'top',
         # Add some margin to the bottom to push the title up if needed
-        legend.box.margin = margin(t = 0, r = 0, b = 0, l = 0))
+        legend.justification = "left",
+        legend.box.just = "left", # Align legend box to the left
+      legend.box.margin = margin(t = 10, r = 10, b = 10, l = 10)
+       )
 
-common_legend <- get_plot_component(common_legend_plot, "guide-box-bottom")
+common_legend <- get_plot_component(common_legend_plot, "guide-box-right")
 
 # Distinct Class legends: 
 class_legends_grobs <- imap(waterfall_plot_df.ls, function(waterfall_plot_df, barcode) {
@@ -236,39 +257,32 @@ class_legends_grobs <- imap(waterfall_plot_df.ls, function(waterfall_plot_df, ba
     geom_bar(stat = "identity") +
     labs(fill = paste(kingdoms[barcode], 'classes')) +
     scale_fill_manual(values = tile_palettes[[barcode]]) +
-    theme_void() + # Important for extracting just the legend
+    #theme_void() + # Important for extracting just the legend
     theme(
       legend.position = "right", 
       legend.justification = "left",
-      #  legend.direction = "vertical",
       legend.box.just = "left", # Align legend box to the left
-      legend.box.margin = margin(0,0,0,0) # Remove any default margins
+     legend.box.margin = margin(10,10,10,10) # Remove any default margins
     )
   
   get_plot_component(dummy_plot, "guide-box-right") # get the legend
 })
 
 # --- 5. Manual alignment of legend labels 
-lg_bact <- class_legends_grobs$BACT
-lg_fung <- class_legends_grobs$FUNG
-lg_plan <- class_legends_grobs$PLAN
-# 
-# # Must be at least as 
-# max_lg_width <- max(lg_bact$widths, lg_fung$widths, lg_plan$widths)
-# lg_bact <- patchwork::wrap_elements(lg_bact) & plot_layout(widths = max_lg_width)
-# lg_fung <- patchwork::wrap_elements(lg_fung) & plot_layout(widths = max_lg_width)
-# lg_plan <- patchwork::wrap_elements(lg_plan) & plot_layout(widths = max_lg_width)
 
-stacked_distinct_legends <- plot_grid(
-  lg_bact,
-  lg_fung,
-  lg_plan,
-  ncol = 1,
-  # Use NULL for rel_heights to let cowplot auto-distribute based on content,
-  # or provide values like c(4,4,8) if you want specific proportions.
-  # For legends, equal spacing is often fine.
-  rel_heights = c(1, 1, 1) # Equal heights for simplicity within this stack
-)
+wrapped_bact_legend <- wrap_elements(panel = class_legends_grobs$BACT)
+wrapped_fung_legend <- wrap_elements(panel = class_legends_grobs$FUNG)
+wrapped_plan_legend <- wrap_elements(panel = class_legends_grobs$PLAN)
+wrapped_common_legend <- wrap_elements(panel = common_legend)
+
+# 
+# stacked_distinct_legends <- plot_grid(
+#   class_legends_grobs$BACT,
+#   class_legends_grobs$FUNG,
+#   class_legends_grobs$PLAN,
+#   common_legend,
+#   ncol = 2
+#   )
 
 # --- 6. Define the plots without legends 
 P1 <- tile_plots.ls$BACT + labs(title = 'A')
@@ -283,36 +297,39 @@ P3_combined <- (P3 + wf_plots.ls$PLAN + plot_layout(widths = c(1, 20))) & theme(
 
 # Proportions :
 design_layout <- "
-acd
-acd
-acd
-bcd
+aacc
+aacc
+aacc
+bbcc
+bbcc
+bbcc
+bbcc
+decc
+decc
+gfcc
+gfcc
 "
-
 # Now, define the full top panel using wrap_plots with this design
 # Pass the elements in the order corresponding to the 'a', 'b', 'c', 'd' in the design string
 top_panel <- wrap_plots(
   a = P1_combined,
   b = P3_combined,
   c = P2_combined,
-  d = stacked_distinct_legends,
-  design = design_layout,
-  widths = c(21, 21, 12), # Col 1 (for a/b), Col 2 (for c), Col 3 (for d)
-  heights = c(4, 4)      # Row 1 (for a/c/d top half), Row 2 (for b/c/d bottom half)
-)
+  d = wrapped_bact_legend,
+  e = wrapped_fung_legend,
+  f = wrapped_plan_legend,
+  g = wrapped_common_legend,
+  design = design_layout
+) ; top_panel
 
 # --- 8. Assemble the complete plot : 
-top_panel / common_legend +
-  plot_layout(
-    heights = c(14, 1) # Total height of top_panel and common_legend
-  ) & # Adjust the plot letter identifier placement :
+top_panel & # Adjust the plot letter identifier placement :
   theme(
     plot.title = element_text(
       hjust = 0,
       margin = margin(l = -85, b = -20, unit = "pt")),
     panel.grid.major.y = element_blank(), # Remove major Y grid lines
     panel.grid.minor = element_blank(), # Remove minor Y grid lines
-    
   )
 
 # SAVE !

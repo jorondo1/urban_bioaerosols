@@ -14,7 +14,7 @@ source('scripts/myFunctions.R')
 
 betadiv_full.ls <- read_rds('data/diversity/beta_diversity_full.ls.rds')
 
-# Permanova-generarting function
+# Permanova-generating function
 # One permanova by city*barcode
 # Loop by barcode (target all sublists)
 model_vars <- c('city','time','city:time', 'vegetation_index_NDVI_landsat', 

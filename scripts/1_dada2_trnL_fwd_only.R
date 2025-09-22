@@ -223,7 +223,7 @@ dadaFs <- dada(filtFs_survived, err = errF, pool = 'pseudo',
 ### taxonomic assignment rate than just using the forwards. 
 ### So we stick to the forwards, as recommended here https://github.com/benjjneb/dada2/issues/2091
 
-path.tax <- file.path(path_data, "4_taxonomy_ncbi20250528")
+path.tax <- file.path(path_data, "4_taxonomy_E22_100_trunc275")
 if(!dir.exists(path.tax)) dir.create(path.tax)
 
 seqtab <- # makeSequenceTable(mergers_pooled) 

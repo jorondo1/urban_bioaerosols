@@ -33,7 +33,7 @@ diversity.df <- imap(ps_rare.ls, function(ps, barcode) {
            time = factor(time, periods)) %>% 
     tibble() %>% 
     dplyr::rename(City = city) #plyr doesnt work
-}) %>% list_rbind 
+}) %>% list_rbind()
 
 write_rds(diversity.df, 'data/diversity/alpha_diversity.rds')
 
