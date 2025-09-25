@@ -86,12 +86,12 @@ plot_MTL <- ggplot(meteo_MTL, aes(x=Time, y=Mean, color = City, group = City)) +
   geom_point()+ 
   geom_line()+
   theme_bw()+
-  scale_color_manual(values = "indianred3")+
-  annotate("rect", xmin = "05-03", xmax = "05-07", ymin = 0, ymax = 25, alpha = 0.5, fill = "#ffb3c6")+
-  annotate("rect", xmin = "06-08", xmax = "06-09", ymin = 0, ymax = 25, alpha = 0.5, fill = "#61a5c2")+
-  annotate("rect", xmin = "06-10", xmax = "06-11", ymin = 0, ymax = 25, alpha = 0.5, fill = "#61a5c2")+
-  annotate("rect", xmin = "06-12", xmax = "06-14", ymin = 0, ymax = 25, alpha = 0.5, fill = "#61a5c2")+
-  annotate("rect", xmin = "08-31", xmax = "09-09", ymin = 0, ymax = 25, alpha = 0.5, fill = "#F29040")+
+  scale_color_manual(values = "#C60C30")+
+  annotate("rect", xmin = "05-03", xmax = "05-07", ymin = 0, ymax = 25, alpha = 0.5, fill = "springgreen3")+
+  annotate("rect", xmin = "06-08", xmax = "06-09", ymin = 0, ymax = 25, alpha = 0.5, fill = "skyblue3")+
+  annotate("rect", xmin = "06-10", xmax = "06-11", ymin = 0, ymax = 25, alpha = 0.5, fill = "skyblue3")+
+  annotate("rect", xmin = "06-12", xmax = "06-14", ymin = 0, ymax = 25, alpha = 0.5, fill = "skyblue3")+
+  annotate("rect", xmin = "08-31", xmax = "09-09", ymin = 0, ymax = 25, alpha = 0.5, fill = "orange3")+
   ylab("Temperature (°C)")+
   xlab("Julian days")+
   theme(axis.text.x = element_text(angle = 90),
@@ -109,11 +109,11 @@ plot_QC <- ggplot(meteo_QC, aes(x=Time, y=Mean, color = City, group = City)) +
   geom_point()+ 
   geom_line()+
   theme_bw()+
-  scale_color_manual(values = "khaki3")+
-  annotate("rect", xmin = "05-12", xmax = "05-15", ymin = 0, ymax = 25, alpha = 0.5, fill = "#ffb3c6")+
-  annotate("rect", xmin = "05-18", xmax = "05-20", ymin = 0, ymax = 25, alpha = 0.5, fill = "#ffb3c6")+
-  annotate("rect", xmin = "09-29", xmax = "10-03", ymin = 0, ymax = 25, alpha = 0.5, fill = "#F29040")+
-  annotate("rect", xmin = "10-05", xmax = "10-06", ymin = 0, ymax = 25, alpha = 0.5, fill = "#F29040")+
+  scale_color_manual(values = "#1D4E89")+
+  annotate("rect", xmin = "05-12", xmax = "05-15", ymin = 0, ymax = 25, alpha = 0.5, fill = "springgreen3")+
+  annotate("rect", xmin = "05-18", xmax = "05-20", ymin = 0, ymax = 25, alpha = 0.5, fill = "springgreen3")+
+  annotate("rect", xmin = "09-29", xmax = "10-03", ymin = 0, ymax = 25, alpha = 0.5, fill = "orange3")+
+  annotate("rect", xmin = "10-05", xmax = "10-06", ymin = 0, ymax = 25, alpha = 0.5, fill = "orange3")+
   ylab("Temperature (°C)")+
   xlab("Julian days")+
   theme(axis.text.x = element_text(angle = 90),
@@ -131,14 +131,14 @@ plot_SHB <- ggplot(meteo_SHB, aes(x=Time, y=Mean, color = City, group = City)) +
   geom_point()+ 
   geom_line()+
   theme_bw()+
-  scale_color_manual(values = "darkolivegreen3")+
-  annotate("rect", xmin = "05-09", xmax = "05-11", ymin = 0, ymax = 25, alpha = 0.5, fill = "#ffb3c6")+
-  annotate("rect", xmin = "05-31", xmax = "06-03", ymin = 0, ymax = 25, alpha = 0.5, fill = "#61a5c2")+
-  annotate("rect", xmin = "09-21", xmax = "09-22", ymin = 0, ymax = 25, alpha = 0.5, fill = "#F29040")+
-  annotate("rect", xmin = "09-23", xmax = "09-24", ymin = 0, ymax = 25, alpha = 0.5, fill = "#F29040")+
-  annotate("rect", xmin = "09-25", xmax = "09-26", ymin = 0, ymax = 25, alpha = 0.5, fill = "#F29040")+
-  annotate("rect", xmin = "09-27", xmax = "09-28", ymin = 0, ymax = 25, alpha = 0.5, fill = "#F29040")+
-  annotate("rect", xmin = "10-04", xmax = "10-05", ymin = 0, ymax = 25, alpha = 0.5, fill = "#F29040")+
+  scale_color_manual(values = "#2E8B57")+
+  annotate("rect", xmin = "05-09", xmax = "05-11", ymin = 0, ymax = 25, alpha = 0.5, fill = "springgreen3")+
+  annotate("rect", xmin = "05-31", xmax = "06-03", ymin = 0, ymax = 25, alpha = 0.5, fill = "skyblue3")+
+  annotate("rect", xmin = "09-21", xmax = "09-22", ymin = 0, ymax = 25, alpha = 0.5, fill = "orange3")+
+  annotate("rect", xmin = "09-23", xmax = "09-24", ymin = 0, ymax = 25, alpha = 0.5, fill = "orange3")+
+  annotate("rect", xmin = "09-25", xmax = "09-26", ymin = 0, ymax = 25, alpha = 0.5, fill = "orange3")+
+  annotate("rect", xmin = "09-27", xmax = "09-28", ymin = 0, ymax = 25, alpha = 0.5, fill = "orange3")+
+  annotate("rect", xmin = "10-04", xmax = "10-05", ymin = 0, ymax = 25, alpha = 0.5, fill = "orange3")+
   ylab("Temperature (°C)")+
   xlab("Julian days")+
   theme(axis.text.x = element_text(angle = 90),
@@ -165,12 +165,12 @@ plot_MTL_Prec <- ggplot(meteo_MTL, aes(x=Time, y=Rain, color = City, group = Cit
   geom_point()+ 
   geom_line()+
   theme_bw()+
-  scale_color_manual(values = "indianred3")+
-  annotate("rect", xmin = "05-03", xmax = "05-07", ymin = 0, ymax = 65, alpha = 0.5, fill = "#ffb3c6")+
+  scale_color_manual(values = "#C60C30")+
+  annotate("rect", xmin = "05-03", xmax = "05-07", ymin = 0, ymax = 65, alpha = 0.5, fill = "springgreen3")+
   annotate("rect", xmin = "06-08", xmax = "06-09", ymin = 0, ymax = 65, alpha = 0.5, fill = "#61a5c2")+
   annotate("rect", xmin = "06-10", xmax = "06-11", ymin = 0, ymax = 65, alpha = 0.5, fill = "#61a5c2")+
   annotate("rect", xmin = "06-12", xmax = "06-14", ymin = 0, ymax = 65, alpha = 0.5, fill = "#61a5c2")+
-  annotate("rect", xmin = "08-31", xmax = "09-09", ymin = 0, ymax = 65, alpha = 0.5, fill = "#F29040")+
+  annotate("rect", xmin = "08-31", xmax = "09-09", ymin = 0, ymax = 65, alpha = 0.5, fill = "orange3")+
   ylab("Precipitations (mm)")+
   xlab("Julian days")+
   theme(axis.text.x = element_text(angle = 90),
@@ -188,11 +188,11 @@ plot_QC_Prec <- ggplot(meteo_QC, aes(x=Time, y=Rain, color = City, group = City)
   geom_point()+ 
   geom_line()+
   theme_bw()+
-  scale_color_manual(values = "khaki3")+
-  annotate("rect", xmin = "05-12", xmax = "05-15", ymin = 0, ymax = 42, alpha = 0.5, fill = "#ffb3c6")+
-  annotate("rect", xmin = "05-18", xmax = "05-20", ymin = 0, ymax = 42, alpha = 0.5, fill = "#ffb3c6")+
-  annotate("rect", xmin = "09-29", xmax = "10-03", ymin = 0, ymax = 42, alpha = 0.5, fill = "#F29040")+
-  annotate("rect", xmin = "10-05", xmax = "10-06", ymin = 0, ymax = 42, alpha = 0.5, fill = "#F29040")+
+  scale_color_manual(values = "#1D4E89")+
+  annotate("rect", xmin = "05-12", xmax = "05-15", ymin = 0, ymax = 42, alpha = 0.5, fill = "springgreen3")+
+  annotate("rect", xmin = "05-18", xmax = "05-20", ymin = 0, ymax = 42, alpha = 0.5, fill = "springgreen3")+
+  annotate("rect", xmin = "09-29", xmax = "10-03", ymin = 0, ymax = 42, alpha = 0.5, fill = "orange3")+
+  annotate("rect", xmin = "10-05", xmax = "10-06", ymin = 0, ymax = 42, alpha = 0.5, fill = "orange3")+
   ylab("Precipitations (mm)")+
   xlab("Julian days")+
   theme(axis.text.x = element_text(angle = 90),
@@ -210,14 +210,14 @@ plot_SHB_Prec <- ggplot(meteo_SHB, aes(x=Time, y=Rain, color = City, group = Cit
   geom_point()+ 
   geom_line()+
   theme_bw()+
-  scale_color_manual(values = "darkolivegreen3")+
-  annotate("rect", xmin = "05-09", xmax = "05-11", ymin = 0, ymax = 42, alpha = 0.5, fill = "#ffb3c6")+
+  scale_color_manual(values = "#2E8B57")+
+  annotate("rect", xmin = "05-09", xmax = "05-11", ymin = 0, ymax = 42, alpha = 0.5, fill = "springgreen3")+
   annotate("rect", xmin = "05-31", xmax = "06-03", ymin = 0, ymax = 42, alpha = 0.5, fill = "#61a5c2")+
-  annotate("rect", xmin = "09-21", xmax = "09-22", ymin = 0, ymax = 42, alpha = 0.5, fill = "#F29040")+
-  annotate("rect", xmin = "09-23", xmax = "09-24", ymin = 0, ymax = 42, alpha = 0.5, fill = "#F29040")+
-  annotate("rect", xmin = "09-25", xmax = "09-26", ymin = 0, ymax = 42, alpha = 0.5, fill = "#F29040")+
-  annotate("rect", xmin = "09-27", xmax = "09-28", ymin = 0, ymax = 42, alpha = 0.5, fill = "#F29040")+
-  annotate("rect", xmin = "10-04", xmax = "10-05", ymin = 0, ymax = 42, alpha = 0.5, fill = "#F29040")+
+  annotate("rect", xmin = "09-21", xmax = "09-22", ymin = 0, ymax = 42, alpha = 0.5, fill = "orange3")+
+  annotate("rect", xmin = "09-23", xmax = "09-24", ymin = 0, ymax = 42, alpha = 0.5, fill = "orange3")+
+  annotate("rect", xmin = "09-25", xmax = "09-26", ymin = 0, ymax = 42, alpha = 0.5, fill = "orange3")+
+  annotate("rect", xmin = "09-27", xmax = "09-28", ymin = 0, ymax = 42, alpha = 0.5, fill = "orange3")+
+  annotate("rect", xmin = "10-04", xmax = "10-05", ymin = 0, ymax = 42, alpha = 0.5, fill = "orange3")+
   ylab("Precipitations (mm)")+
   xlab("Julian days")+
   theme(axis.text.x = element_text(angle = 90),
