@@ -50,7 +50,8 @@ perm_out_full <- imap(kingdoms, function(barcode, barcode_ID){
     variable = rownames(res),
     R2 = res$R2,
     p = res$`Pr(>F)`,
-    df = res$Df
+    df = res$Df,
+    pseudoF = res$F
   )
 }) %>% list_rbind() %>% 
   filter(variable != 'Total') %>% 
@@ -74,8 +75,8 @@ ggsave(paste0('out/stats/perMANOVA_interactions.pdf'),
        units = 'px', dpi = 220)
 
 
-perm_out_full %>% 
-  pivot_wider(values_from = c('R2', 'p'),
+permanova_stats <- perm_out_full %>% 
+  pivot_wider(values_from = c('pseudoF', 'df', 'R2', 'p' ),
               names_from = Barcode,
               id_cols = c('variable'),
               names_glue = "{.value}_{Barcode}",
@@ -90,30 +91,38 @@ perm_out_full %>%
       .cols = matches('p_'),
       .fns = ~ round(., 4)
     ),
+    across(
+      .cols = matches('pseudoF_'),
+      .fns = ~ round(., 2)
+    ),
     variable = factor(variable, levels = c(model_vars, 'Residual'))) %>% 
-  arrange(variable) %>% 
+  arrange(variable)  
   
-  # Build table
+  
+# Build table
+permanova_stats %>% 
   kable("html",
         caption = 'perMANOVA by terms')%>%
   kable_styling(full_width = FALSE) %>% 
   add_header_above( # Secondary header
     header = c(
       "Variables" = 1,
-      rep(c("R<sup>2</sup>" = 1,
+      rep(c("Pseudo-F" = 1,
+            "DF" = 1,
+            "R<sup>2</sup>" = 1,
             "<i>p</i>-value" = 1
             ), 3)
     ), 
     bold = FALSE,
-    align = c('l', rep('c', 6)), # align headers left
+    align = c('l', rep('c', 12)), # align headers left
     escape = FALSE # allows html in variable names
   ) %>%
   add_header_above( # Top header
     header = c(
       "",
-      c( "Bacteria"= 2,
-      "Fungi" = 2,
-      "Plants" = 2
+      c( "Bacteria"= 4,
+      "Fungi" = 4,
+      "Plants" = 4
     )), 
     align = c('l', rep('c',3)),
     escape = FALSE) %>% 
@@ -127,7 +136,7 @@ save_kable(file = paste0('out/stats/perm_terms_interactions.html'))
 #############################
 
 # Data from scripts/3_metrics.R
-betadiv.ls <- read_rds('data/diversity/beta_diversity.ls.rds')
+betadiv.ls <- read_rds('data/diversity/beta_diversity_byCity.ls.rds')
 
 # Permanova-generarting function
 # One permanova by city*barcode
@@ -176,23 +185,19 @@ iterate_permanova <- function(pcoa.ls,
             i == length(vars_res), shared_var,
             res$R2[i]
           ),
-          #pseudoF = ?
-          #df = ?
+          pseudoF = res$F[i],
+          df = res$Df[i],
           p = res$`Pr(>F)`[i]) 
         
-      }) %>% list_rbind # bind all rows into one tibble
-    }) %>% list_rbind # bind all barcode tibbles
-  }) %>% list_rbind %>% # bind all city tibbles
+      }) %>% list_rbind() # bind all rows into one tibble
+    }) %>% list_rbind() # bind all barcode tibbles
+  }) %>% list_rbind() %>% # bind all city tibbles
     # Reorder factors 
     mutate(variable = factor(variable, levels = c(model_vars, "Shared",'Residual')),
            p_sig = as.factor(case_when(p < 0.05 ~ 'yes', TRUE~ 'no')))
 }
 
-model_vars <- c('concDNA' ,'median_income', 'population_density',
-                'mean_temperature', 'vegetation_index_NDVI_landsat', 
-                'mean_wind_speed', 
-                'precip','mean_relative_humidity' , 'time'
-)
+model_vars <- c('median_income', 'vegetation_index_NDVI_landsat', 'mean_temperature', 'mean_relative_humidity', 'time')
 
 perm_out <- list(
   margin = iterate_permanova(betadiv.ls,
@@ -212,13 +217,26 @@ map(c('terms', 'margin'), function(effect_type){
     perm_out[[effect_type]] %>% 
       filter(City == city) %>% 
       select(-City, -p_sig) %>% 
-      pivot_wider(values_from = c('R2', 'p'),
+      pivot_wider(values_from = c('pseudoF','df','R2', 'p'),
                   names_from = Barcode,
                   id_cols = c('variable'),
                   names_glue = "{.value}_{Barcode}",
                   names_vary = "slowest" # control column order, so ordered by names_from and not by values_from
       ) %>% 
-      mutate(across(where(is.numeric), ~ round(., 3))) %>% 
+      mutate(
+        across(
+          .cols = matches('R2_'),
+          .fns = ~ round(., 3)
+        ),
+        across(
+          .cols = matches('p_'),
+          .fns = ~ round(., 4)
+        ),
+        across(
+          .cols = matches('pseudoF_'),
+          .fns = ~ round(., 2)
+        ),
+        variable = factor(variable, levels = c(model_vars, 'Residual'))) %>% 
       
       # Build table
       kable("html",
@@ -227,19 +245,21 @@ map(c('terms', 'margin'), function(effect_type){
       add_header_above( # Secondary header
         header = c(
           "Variables" = 1,
-          rep(c("R<sup>2</sup>" = 1,
-                "<i>p</i>" = 1), 3)
+          rep(c("Pseudo-F" = 1,
+                "DF" = 1,
+                "R<sup>2</sup>" = 1,
+                "<i>p</i>-value" = 1), 3)
         ), 
         bold = FALSE,
-        align = c('l', rep('c', 6)), # align headers left
+        align = c('l', rep('c', 12)), # align headers left
         escape = FALSE # allows html in variable names
       ) %>%
       add_header_above( # Top header
         header = c(
           setNames(1, city),
-          "Bacteria" = 2,
-          "Fungi" = 2,
-          "Pollen" = 2
+          "Bacteria" = 4,
+          "Fungi" = 4,
+          "Pollen" = 4
         ), align = c('l', rep('c',3))) %>% 
       row_spec(0, extra_css = "display: none;") %>% # Remove original header 
       

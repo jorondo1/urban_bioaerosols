@@ -7,6 +7,7 @@ p_load(phyloseq, tidyverse, kableExtra, ggridges)
 # Import
 
 source('scripts/myFunctions.R')
+source('scripts/0_config.R')
 source("https://github.com/jorondo1/misc_scripts/raw/refs/heads/main/rarefy_even_depth2.R")
 theme_set(theme_light())
 ps.ls <- read_rds('data/ps.ls.rds')
@@ -141,16 +142,23 @@ classification.df <- map(c('BACT', 'FUNG', 'PLAN'), function(barcode){
 
 classification.df %>% 
   mutate(proportion_type = case_when(
-    proportion_type == 'asv_prop' ~ 'Proportion of assigned ASVs',
-    proportion_type == 'relAb_prop' ~ 'Proportion of assigned ASV reads'
-    )) %>% 
+    proportion_type == 'asv_prop' ~ 'Proportion of ASVs',
+    proportion_type == 'relAb_prop' ~ 'Proportion of ASV reads'
+    ),
+    barcode = recode_factor(barcode, !!!kingdoms),
+    ) %>% 
   ggplot(aes(y = value, x = taxRank, colour = taxRank)) +
   geom_boxplot() +
   ylim(0,NA)+
   facet_grid(barcode~proportion_type) +
+  scale_colour_brewer(palette = 'Set2') +
   theme_light() +
+  labs(y = 'Proportion of taxonomically labelled ASVs',
+       colour = 'Taxonomic rank') +
   theme(axis.text.x = element_blank(),
-        axis.ticks.x = element_blank()) 
+        axis.ticks.x = element_blank(),
+        axis.title.x = element_blank(),
+        legend.position = 'bottom') 
 
 ggsave('out/asv_processing/classification_rates.pdf', 
        bg = 'white', width = 1400, height = 2000, 

@@ -245,8 +245,8 @@ common_legend_plot <- waterfall_plot_df.ls$FUNG %>%
         # Add some margin to the bottom to push the title up if needed
         legend.justification = "left",
         legend.box.just = "left", # Align legend box to the left
-      legend.box.margin = margin(t = 10, r = 10, b = 10, l = 10)
-       )
+        legend.box.margin = margin(t = 10, r = 10, b = 10, l = 10)
+  )
 
 common_legend <- get_plot_component(common_legend_plot, "guide-box-right")
 
@@ -262,7 +262,7 @@ class_legends_grobs <- imap(waterfall_plot_df.ls, function(waterfall_plot_df, ba
       legend.position = "right", 
       legend.justification = "left",
       legend.box.just = "left", # Align legend box to the left
-     legend.box.margin = margin(10,10,10,10) # Remove any default margins
+      legend.box.margin = margin(10,10,10,10) # Remove any default margins
     )
   
   get_plot_component(dummy_plot, "guide-box-right") # get the legend
@@ -346,8 +346,33 @@ theme(legend.position = 'bottom',
       plot.background = element_rect(fill = "white", color = NA)
 )
 
+###############################
+#### ---- STATS TABLE
+################################
 
-#########################
+
+imap(kingdoms, function(barcode_name, barcode) {
+  
+  waterfall_plot_df.ls[[barcode]] %>% 
+    mutate(Dataset = barcode_name, .before = 1)
+}) %>% list_rbind() %>% 
+  select(-Class, -lfc_cat, -textcolour) %>% 
+  mutate(across(all_of(c('lfc', 'se')), ~format(round(.x,3), nsmall=2, scientific = FALSE)),
+         q = format(q, scientific = TRUE, digits=2)) %>% 
+  kable("html",
+        col.names = c(
+          "Dataset",
+          "Genus",
+          "Season",
+          "Log2 fold-change",
+          "Standard error",
+          "Adjusted p-value"
+        ) ) %>% 
+  kable_styling(full_width = FALSE) %>% 
+  save_kable(file = paste0('out/DAA/signif_values.html'))
+
+
+####
 ### --- HEATMAP PLOT
 ###########################
 taxLvls <- ancom_out_long.ls$BACT %>% 
