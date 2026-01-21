@@ -1,12 +1,9 @@
 
 library(pacman)
-p_load(tidyverse, phyloseq, patchwork, ggh4x, #facet_nested
+p_load(mgx.tools, # devtools::install_github("jorondo1/mgx.tools")
+       tidyverse, phyloseq, patchwork, ggh4x, ggpubr, #facet_nested
        magrittr, readxl, RColorBrewer)
 
-source('https://raw.githubusercontent.com/jorondo1/misc_scripts/refs/heads/main/tax_glom2.R')
-source('https://raw.githubusercontent.com/jorondo1/misc_scripts/refs/heads/main/rarefy_even_depth2.R')
-source('https://raw.githubusercontent.com/jorondo1/misc_scripts/refs/heads/main/psflashmelt.R')
-source('scripts/myFunctions.R')
 source('scripts/0_config.R') # Variable naming and such
 
 tax_ranks <- c("Kingdom", "Phylum", "Class", "Order", "Family", "Genus")
@@ -14,6 +11,7 @@ ps.ls <- readRDS('data/ps.ls.rds')
 
 # From scripts/3_metrics.R
 alphadiv.df <- read_rds('data/diversity/alpha_diversity.rds')
+theme_set(theme_light())
 
 ######################################################################
 # S1 #################################################################
@@ -41,32 +39,32 @@ ggsave(paste0('out/_SUPP/S1_gradients.pdf'),
        units = 'px', dpi = 160)
 
 # Not used, smoothing graphs rather than boxplots
-map(cities, function(ci) {
-  adiv.plot.smooth <- 
-    alphadiv.df %>%
-    filter(City == ci) %>% 
-    ggplot(aes(x = veg_index_bracket., y = Shannon, fill=as.factor(median_income_bracket.))) +
-    geom_point()+
-    geom_smooth()+
-    facet_grid(.~Barcode)+
-    labs(fill = "Income")+
-    theme(strip.text = element_text(color = "black",size = 14,face = "bold"),
-          legend.position = c(0.06, 0.16),  # Adjust position inside plot area
-          legend.background = element_rect(fill = "white", color = "black"),
-          legend.title = element_text(face = "bold"))
-  adiv.plot.smooth2 <- 
-    alphadiv.df %>%
-    filter(City == ci) %>% 
-    ggplot(aes(x = median_income_bracket., y = Shannon, fill=as.factor(veg_index_bracket.))) +
-    geom_point()+
-    geom_smooth()+
-    facet_grid(.~Barcode)+
-    labs(fill = "Vegetation")+
-    theme(strip.text = element_text(color = "black",size = 14,face = "bold"),
-          legend.position = c(0.06, 0.16),  # Adjust position inside plot area
-          legend.background = element_rect(fill = "white", color = "black"),
-          legend.title = element_text(face = "bold"))
-})
+# map(cities, function(ci) {
+#   adiv.plot.smooth <- 
+#     alphadiv.df %>%
+#     filter(City == ci) %>% 
+#     ggplot(aes(x = veg_index_bracket., y = Shannon, fill=as.factor(median_income_bracket.))) +
+#     geom_point()+
+#     geom_smooth()+
+#     facet_grid(.~Barcode)+
+#     labs(fill = "Income")+
+#     theme(strip.text = element_text(color = "black",size = 14,face = "bold"),
+#           legend.position = c(0.06, 0.16),  # Adjust position inside plot area
+#           legend.background = element_rect(fill = "white", color = "black"),
+#           legend.title = element_text(face = "bold"))
+#   adiv.plot.smooth2 <- 
+#     alphadiv.df %>%
+#     filter(City == ci) %>% 
+#     ggplot(aes(x = median_income_bracket., y = Shannon, fill=as.factor(veg_index_bracket.))) +
+#     geom_point()+
+#     geom_smooth()+
+#     facet_grid(.~Barcode)+
+#     labs(fill = "Vegetation")+
+#     theme(strip.text = element_text(color = "black",size = 14,face = "bold"),
+#           legend.position = c(0.06, 0.16),  # Adjust position inside plot area
+#           legend.background = element_rect(fill = "white", color = "black"),
+#           legend.title = element_text(face = "bold"))
+# })
 
 
 ###################################
@@ -132,8 +130,9 @@ imap(comm_plot_data.ls, function(comm_plot_data.df, barcode){
     scale_fill_manual(values = expanded_palette) +
     labs(fill = which_taxrank, 
          x = 'Samples ordered by sampling date',
-         y = paste('Relative abundance of', kingdoms[[barcode]], 'sequences')) +
-    theme(panel.grid = element_blank(),
+         y = paste('Relative abundance of', kingdoms[[barcode]], 'ASVs')) +
+    theme(strip.text = element_text(color = "black",size = 13,face = "bold"),
+          panel.grid = element_blank(),
           axis.text.x = element_blank(),
           axis.ticks.x = element_blank(),
           panel.background = element_blank(),
@@ -196,16 +195,13 @@ adiv.plot.income.all <- alphadiv.df %>%
 
 plot_adiv.all <- adiv.plot.all/ adiv.plot.ndvi.all / adiv.plot.income.all &
   theme(strip.text = element_text(color = "black",size = 14,face = "bold"),
-        legend.position = c(0.005, 0.02),
-        legend.justification = c(0, 0),
-        legend.background = element_rect(fill = "white", color = "black"),
-        legend.title = element_text(face = "bold")) &
-  ylab("Shannon Index") &
-  ylim(0,NA); plot_adiv.all
+        legend.position = 'none') &
+  scale_y_continuous(expand = expansion(mult = c(0.05, 0.15))) &
+  ylab("Shannon Index") ; plot_adiv.all
 
 ggsave(paste0('out/_SUPP/S8_alphadiv_allcities.pdf'),plot = plot_adiv.all,
-       bg = 'white', width = 3000, height = 3000,
-       units = 'px', dpi = 200)
+       bg = 'white', width = 1500, height = 1500,
+       units = 'px', dpi = 160)
 
 # Plot for Figure S9
 # Bioaerosol alpha diversity across season
@@ -309,10 +305,7 @@ map(cities, function(ci) {
     ylab("Shannon Index") &
 #    geom_pwc(method = "wilcox_test", label = "p.adj.signif") &
     theme(strip.text = element_text(color = "black",size = 14,face = "bold"),
-          legend.position = c(0.005, 0.02),
-          legend.justification = c(0, 0),
-          legend.background = element_rect(fill = "white", color = "black"),
-          legend.title = element_text(face = "bold")) &
+          legend.position = 'none') &
     ylim(0,NA)
   
   # Dynamic figure number naming!
@@ -320,7 +313,7 @@ map(cities, function(ci) {
   
   # EXPORT
   ggsave(paste0('out/_SUPP/S',figNum,'_adiversity', ci,'.pdf'),
-         plot = plot, bg = 'white', width = 2000, height = 2600,
+         plot = plot, bg = 'white', width = 1500, height = 1950,
          units = 'px', dpi = 160)
 })
 

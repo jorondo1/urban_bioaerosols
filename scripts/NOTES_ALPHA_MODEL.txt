@@ -1,0 +1,27 @@
+Ok I understand the problem with our RE models.We have 65 sites, so we're trying to fit 65 parameters using only 2-3 observations per site, which makes no sense. The model is singular because there's just not enough info to compare the sites to one another meaningfully. Because we ask a random model, we're basically trying to estimate the variance of the "site population" that our sites were chosen from. To do this we need to compare within-site variance to between-site variance, but between-site variances cannot be reliably inferred using only 2-3 observations per site (because it's hard to tell whether two sites have a significantly different variance with so few observations) so it's essentially zero – the residual variance then represents the within-site variance.So basically, we can't use random effects (including in DA). Claude (AI) gave me a suggestion on an intermediate way to mediate the autocorrelation structure caused by same-sites, which is essentially to assume that same-site observations are correlated when estimating standard errors. I would not replace our alphadiv wilcox tests with this, but it would support the results we're presenting by essentially estimating, for a given city,Shannon ~ timeand provide us with robust confidence intervals. For example, for pollen in Montreal:
+
+> coeftest(model, vcov = vcovCL, cluster = ~site_id)
+
+t test of coefficients:
+
+            Estimate Std. Error t value  Pr(>|t|)    
+(Intercept)  1.16230    0.12995  8.9442 2.220e-12 ***
+timeSummer  -0.96257    0.13877 -6.9365 4.407e-09 ***
+timeFall     0.47716    0.15508  3.0769  0.003234 ** 
+---
+Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ‘ ’ 1
+
+> coefci(model, vcov = vcovCL, cluster = ~site_id)
+                 2.5 %     97.5 %
+(Intercept)  0.9019824  1.4226272
+timeSummer  -1.2405637 -0.6845845
+timeFall     0.1665039  0.7878117Which is coherent with our Wilcox test, because all CI don't overlap.[10:35 AM]we could thank the reviewer for pointing this out as it revealed the futility of random effects and allowed us to find a more appropriate way to account for non-independence between our observations and boom
+
+
+
+Do we go down this road ? It should only add a few lines. I found a way to actually do the three-way comparison instead of doing Wilcox tests, which accounts for the correlation structure (using emmeans) :> emm <- emmeans(model, ~ time, vcov = vcovCL(model, cluster = ~site_id))
+> pairs(emm)  # All pairwise comparisons
+ contrast        estimate     SE df t.ratio p.value
+ Spring - Summer    0.963 0.1390 56   6.936 <0.0001
+ Spring - Fall     -0.477 0.1550 56  -3.077  0.0089
+ Summer - Fall     -1.440 0.0976 56 -14.747 <0.0001(edited)[11:06 AM]it doesn't really affect the results overall (haven't checked all of them but it tracks)

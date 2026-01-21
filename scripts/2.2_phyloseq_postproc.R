@@ -158,11 +158,12 @@ classification.df %>%
   theme(axis.text.x = element_blank(),
         axis.ticks.x = element_blank(),
         axis.title.x = element_blank(),
-        legend.position = 'bottom') 
+        legend.position = 'bottom',
+        strip.text = element_text(color = "black",size = 14,face = "bold")) 
 
 ggsave('out/asv_processing/classification_rates.pdf', 
        bg = 'white', width = 1400, height = 2000, 
-       units = 'px', dpi = 220)
+       units = 'px', dpi = 160)
 
 ############################
 # Rarefy phyloseq objects ###
