@@ -7,7 +7,7 @@ library(pacman)
 p_load(tidyverse, phyloseq)
 
 # Diversity functions:
-source("https://github.com/jorondo1/misc_scripts/raw/refs/heads/main/community_functions.R")
+library(mgx.tools) # devtools::install_github("jorondo1/mgx.tools")
 source('scripts/0_config.R') # Variable naming and such
 
 ps_rare.ls <- read_rds('data/ps_rare.ls.rds')

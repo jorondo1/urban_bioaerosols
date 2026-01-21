@@ -56,8 +56,8 @@ getN <- function(x) sum(getUniques(x))
 
 track_dada <- function(out.N, out,
                        dadaFs, dadaRs = NULL,
-                       seqtab = seqtab,
-                       seqtab.nochim) {
+                       mergers_pooled = mergers_pooled,
+                       seqtab.nochim = seqtab.nochim) {
   require(dplyr, tibble, tidyr)
   
   track <- cbind(out.N, out[,2], 
@@ -66,7 +66,7 @@ track_dada <- function(out.N, out,
   # Conditionally add dadaRs column if it exists
   if(!is.null(dadaRs)) {
     track <- cbind(track, sapply(dadaRs, getN))
-    column_names <- c("input", "removeNs", "filtered", "denoisedF", "denoisedF", "raw_seqtab", "nonchim")
+    column_names <- c("input", "removeNs", "filtered", "denoisedF", "denoisedR", "raw_seqtab", "nonchim")
   } else {
     column_names <- c("input", "removeNs", "filtered", "denoisedF", "raw_seqtab", "nonchim")
   }

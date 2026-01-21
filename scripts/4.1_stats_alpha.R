@@ -86,9 +86,51 @@ map(indices, function(idx) {
           caption = '') %>%
     kable_styling(full_width = FALSE) %>% 
     save_kable(file = paste0('out/stats/wilcox_',idx,'.html'))
-  
 })
 
 ######################################
-# 1. Alpha diversity across seasons and NVDI ###
+# 1. Alpha diversity model within plot variation ###
 ########################################
+
+p_load(lmerTest, sandwich, lmtest, emmeans)
+
+lmerfit <- alphadiv.df %>% 
+  filter(Barcode=="Bacteria") %>% 
+  lmer(Shannon ~ City + (1|site_id),
+     data = .)
+
+summary(lmerfit)
+
+lmfit <- alphadiv.df %>% 
+  filter(Barcode=="Bacteria") %>% 
+  lm(Shannon ~ time + City,
+       data = .)
+summary(lmfit)
+
+model <- alphadiv.df %>% 
+  filter(Barcode=="Pollen" & City == 'Sherbrooke') %>%
+  lm(Shannon ~ time, data = .)
+coeftest(model, vcov = vcovCL, cluster = ~site_id)
+coefci(model, vcov = vcovCL, cluster = ~site_id)
+
+# All contrasts
+emm <- emmeans(model, ~ time, vcov = vcovCL(model, cluster = ~site_id))
+pairs(emm)
+
+alphadiv.df %>%
+  filter(Barcode=="Bacteria") %>% 
+  group_by(City, site_id) %>% 
+  summarise(mean_shannon = mean(Shannon),
+            sd_shannon = sd(Shannon)) %>% 
+  ggplot(aes(x = site_id, y = mean_shannon)) +
+  geom_point() +
+  geom_errorbar(aes(ymin=mean_shannon-sd_shannon, ymax=mean_shannon+sd_shannon), width=.2,
+                position=position_dodge(.9)) +
+  facet_grid(~City, scales = 'free')
+
+
+
+
+
+
+
