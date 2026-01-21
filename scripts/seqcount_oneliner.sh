@@ -1,0 +1,1 @@
+find data/16S/0_raw -name "22-*.fastq.gz" -o -name "22-*.fq.gz" | parallel -j $(nproc) 'echo "$(zcat {} | wc -l) / 4" | bc' | tee >(awk '{sum+=$1; sumsq+=$1^2; count++} END {mean=sum/count; std=sqrt(sumsq/count - mean^2); print "Mean ± SD: " mean " ± " std; print "Total: " sum; print "Files: " count}')
