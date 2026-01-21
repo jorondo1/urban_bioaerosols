@@ -3,9 +3,9 @@
 ###############
 
 library(pacman)
-p_load(tidyverse, magrittr, vegan, kableExtra, rstatix, parallel, MetBrewer)
-source('scripts/0_config.R') # Variable naming and such
-source('scripts/myFunctions.R')
+p_load(tidyverse,  mgx.tools, 
+       magrittr, vegan, kableExtra, rstatix, parallel, MetBrewer)
+source('scripts/0_config.R')
 
 
 #######################################
@@ -20,7 +20,7 @@ betadiv_full.ls <- read_rds('data/diversity/beta_diversity_full.ls.rds')
 model_vars <- c('city','time','city:time', 'vegetation_index_NDVI_landsat', 
                 'median_income',
                 'vegetation_index_NDVI_landsat:median_income'
-                )
+)
 model_formula <- as.formula(paste("dist.mx ~", paste(model_vars, collapse = " + ")))
 
 adonis_out.ls <- imap(kingdoms, function(barcode, barcode_ID) {
@@ -97,8 +97,8 @@ permanova_stats <- perm_out_full %>%
     ),
     variable = factor(variable, levels = c(model_vars, 'Residual'))) %>% 
   arrange(variable)  
-  
-  
+
+
 # Build table
 permanova_stats %>% 
   kable("html",
@@ -111,7 +111,7 @@ permanova_stats %>%
             "DF" = 1,
             "R<sup>2</sup>" = 1,
             "<i>p</i>-value" = 1
-            ), 3)
+      ), 3)
     ), 
     bold = FALSE,
     align = c('l', rep('c', 12)), # align headers left
@@ -121,15 +121,15 @@ permanova_stats %>%
     header = c(
       "",
       c( "Bacteria"= 4,
-      "Fungi" = 4,
-      "Plants" = 4
-    )), 
+         "Fungi" = 4,
+         "Plant particles" = 4
+      )), 
     align = c('l', rep('c',3)),
     escape = FALSE) %>% 
   row_spec(0, extra_css = "display: none;") %>% # Remove original header 
   
-
-save_kable(file = paste0('out/stats/perm_terms_interactions.html'))
+  
+  save_kable(file = paste0('out/stats/perm_terms_interactions.html'))
 
 ###########################
 # Beta diversity by city ###
@@ -259,7 +259,7 @@ map(c('terms', 'margin'), function(effect_type){
           setNames(1, city),
           "Bacteria" = 4,
           "Fungi" = 4,
-          "Pollen" = 4
+          "Plant particles" = 4
         ), align = c('l', rep('c',3))) %>% 
       row_spec(0, extra_css = "display: none;") %>% # Remove original header 
       

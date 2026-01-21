@@ -2,13 +2,13 @@
 # Before rarefaction, impossible trnLs 
 # Produce tables 
 library(pacman)
-p_load(phyloseq, tidyverse, kableExtra, ggridges)
+p_load(mgx.tools, phyloseq, tidyverse, kableExtra, ggridges)
 
 # Import
 
-source('scripts/myFunctions.R')
+#source('scripts/myFunctions.R')
 source('scripts/0_config.R')
-source("https://github.com/jorondo1/misc_scripts/raw/refs/heads/main/rarefy_even_depth2.R")
+#source("https://github.com/jorondo1/misc_scripts/raw/refs/heads/main/rarefy_even_depth2.R")
 theme_set(theme_light())
 ps.ls <- read_rds('data/ps.ls.rds')
 
@@ -48,7 +48,7 @@ ps.stats <- imap(ps.ls, function(ps, barcode) {
     Min_prev = min(asv_prevalence),
     Max_prev = max(asv_prevalence)
   )
-}) %>% list_rbind
+}) %>% list_rbind()
 
 ps.stats %<>%
   mutate(across(where(is.numeric), ~ format(round(., 0),big.mark=',')))
@@ -138,7 +138,7 @@ classification.df <- map(c('BACT', 'FUNG', 'PLAN'), function(barcode){
       mutate(taxRank = factor(rank, levels = ranks)) # add taxrank variable
   }) %>% list_rbind %>% 
     mutate(barcode = barcode) # add barcode variable
-}) %>% list_rbind 
+}) %>% list_rbind()
 
 classification.df %>% 
   mutate(proportion_type = case_when(
@@ -176,9 +176,5 @@ ps_rare.ls <- lapply(ps.ls, function(ps) {
 
 write_rds(ps_rare.ls, 'data/ps_rare.ls.rds',
           compress = 'gz')
-
-###################################
-# Most abundant taxa by barcode ###
-#####################################
 
 

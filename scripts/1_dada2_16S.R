@@ -1,9 +1,9 @@
 ### 16S STANDARD DADA2 PIPELINE
 
 library(pacman)
-p_load(dada2, tidyverse, Biostrings, ShortRead, parallel, phyloseq)
-source('scripts/myFunctions.R')
- 
+p_load(mgx.tools, # devtools::install_github("jorondo1/mgx.tools")
+       dada2, tidyverse, Biostrings, ShortRead, parallel, phyloseq)
+
 # CONFIG 
 barcode <- '16S'
 FWD <- "AACMGGATTAGATACCCKG"

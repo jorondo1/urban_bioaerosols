@@ -18,13 +18,11 @@
 # X. SETUP ###
 ###############
 library(pacman)
-p_load(tidyverse, RColorBrewer, phyloseq, patchwork, magrittr,ggrain, ggpubr)
+p_load(mgx.tools, # devtools::install_github("jorondo1/mgx.tools")
+  tidyverse, RColorBrewer, phyloseq, patchwork, magrittr,ggrain, ggpubr)
 
-source('scripts/myFunctions.R')
-source("https://github.com/jorondo1/misc_scripts/raw/refs/heads/main/psflashmelt.R")
-source("https://github.com/jorondo1/misc_scripts/raw/refs/heads/main/community_functions.R")
-source("https://github.com/jorondo1/misc_scripts/raw/refs/heads/main/myFunctions.R")
 source('scripts/0_config.R') # Variable naming and such
+source('scripts/myFunctions.R')
 
 ps_rare.ls <- read_rds('data/ps_rare.ls.rds')
 theme_set(theme_light())
@@ -37,8 +35,6 @@ nTax_by_barcode <- c(
   'FUNG' = 14,
   'PLAN' = 8
 )
-
-dist_metric <- 'robust.aitchison'
 
 ##############################
 # 1. Prepare plot dataframe ###
@@ -214,7 +210,7 @@ community_plots.ls <- map(cities, function(ci) {
     theme(axis.text.x = element_blank(),
           axis.title.x = element_blank())
   
-  # POLLEN (Bottom)
+  # Plant particles (Bottom)
   p_plan <- list(
     time_plots.ls[['Spring']][['PLAN']] + 
       theme(strip.text.y = element_blank())+

@@ -16,11 +16,11 @@
 #################################
 
 library(pacman)
-p_load(tidyverse, phyloseq, magrittr, decontam, Biostrings,
+p_load(mgx.tools, # devtools::install_github("jorondo1/mgx.tools")
+       tidyverse, phyloseq, magrittr, decontam, Biostrings,
        readxl, decontam)
-
-# Phyloseq prep functions
-source("https://github.com/jorondo1/misc_scripts/raw/refs/heads/main/phyloseq_functions.R")
+# Decontam functions:
+source("https://github.com/jorondo1/misc_scripts/raw/refs/heads/main/decontam_functions.R")
 
 # Parse DNA concentration xlsx files
 parse_CERMO_xlsx <- function(files) {
@@ -48,6 +48,8 @@ add_seq_depth <- function(seqtab, meta, dnaConc) {
     cbind(meta_subset, .) 
 }
 
+
+
 ######################
 # 0.2. Parse metadata ###
 ########################
@@ -57,16 +59,6 @@ dna.path <- file.path(urbanbio.path,"data/metadata")
 
 # Metadata
 meta <- read_delim(file.path(urbanbio.path,"data/metadata/metadata_2022_samples_final.csv")) 
-
-# Rewrite time labels
-# meta %<>%
-#   mutate(time = case_when(
-#     date <= "2022-05-19" ~ 'May',
-#     date > "2022-05-30" & date <= "2022-06-30" ~ 'June',
-#     date > "2022-08-30" & date <= "2022-09-10" ~ 'September',
-#     date > "2022-09-10" ~ 'October',
-#     TRUE ~ NA
-#   ))
 
 meta %>% filter(!is.na(time)) %>% 
   ggplot(aes(x = date, y= city, colour = time)) + geom_jitter(width = 0, height = 0.3) + theme_light()
@@ -131,15 +123,15 @@ taxa_16S[which(taxa_16S$Genus=='Methylorubrum'),"Genus"] <- "Methylobacterium"
 which(taxa_16S$Genus=="Methylobacterium")
 
 # Keep samples with metadata info
-seqtab_16S_sam <- subset_samples(seqtab_16S, sample.names)
-seqtab_16S_ctrl <- subset_samples(seqtab_16S, ctrl.names)
+seqtab_16S_sam <- mgx.tools::subset_samples(seqtab_16S, sample.names)
+seqtab_16S_ctrl <- mgx.tools::subset_samples(seqtab_16S, ctrl.names)
 
 # Subset ASVs
-taxa_16S_sam <- subset_asvs(taxa_16S, seqtab_16S_sam, 50) 
-taxa_16S_ctrl <- subset_asvs(taxa_16S, seqtab_16S_ctrl, 50) 
+taxa_16S_sam <- mgx.tools::subset_tax_table(taxa_16S, seqtab_16S_sam, 50) 
+taxa_16S_ctrl <- mgx.tools::subset_tax_table(taxa_16S, seqtab_16S_ctrl, 50) 
 
 # Seq count distribution
-viz_seqdepth(seqtab_16S_sam)
+mgx.tools::viz_seqdepth(seqtab_16S_sam)
 
 # Remove near-empty samples
 seqtab_16S_sam_filt <- remove_ultra_rare(seqtab_16S_sam, taxa_16S_sam, 9000)
@@ -180,16 +172,16 @@ seqtab_ITS <- read_rds(file.path(path_ITS, '4_taxonomy/seqtab.RDS'))
 taxa_ITS[is.na(taxa_ITS)] <- 'Unclassified' 
 
 # Keep samples with metadata info
-seqtab_ITS_sam <- subset_samples(seqtab_ITS, sample.names)
-seqtab_ITS_ctrl <- subset_samples(seqtab_ITS, ctrl.names)
+seqtab_ITS_sam <- mgx.tools::subset_samples(seqtab_ITS, sample.names)
+seqtab_ITS_ctrl <- mgx.tools::subset_samples(seqtab_ITS, ctrl.names)
 
 # Subset ASVs
-taxa_ITS_sam <- subset_asvs(taxa_ITS, seqtab_ITS_sam, 50)
-taxa_ITS_ctrl <- subset_asvs(taxa_ITS, seqtab_ITS_ctrl, 10)
+taxa_ITS_sam <- mgx.tools::subset_tax_table(taxa_ITS, seqtab_ITS_sam, 50)
+taxa_ITS_ctrl <- mgx.tools::subset_tax_table(taxa_ITS, seqtab_ITS_ctrl, 10)
 
 # Seq count distribution
-viz_seqdepth(seqtab_ITS_sam)
-viz_seqdepth(seqtab_ITS_ctrl)
+mgx.tools::viz_seqdepth(seqtab_ITS_sam)
+mgx.tools::viz_seqdepth(seqtab_ITS_ctrl)
 
 # Remove near-empty samples
 seqtab_ITS_sam_filt <- remove_ultra_rare(seqtab_ITS_sam, taxa_ITS_sam, 2500)
@@ -227,15 +219,15 @@ taxa_trnL[is.na(taxa_trnL)] <- 'Unclassified'
 taxa_trnL <- taxa_trnL[which(taxa_trnL[,1] != 'Bacteria'),] # Remove cyanobacteria
 
 # Keep samples with metadata info
-seqtab_trnL_sam <- subset_samples(seqtab_trnL, sample.names)
-seqtab_trnL_ctrl <- subset_samples(seqtab_trnL, ctrl.names)
+seqtab_trnL_sam <- mgx.tools::subset_samples(seqtab_trnL, sample.names)
+seqtab_trnL_ctrl <- mgx.tools::subset_samples(seqtab_trnL, ctrl.names)
 
 # Subset ASVs
-taxa_trnL_sam <- subset_asvs(taxa_trnL, seqtab_trnL_sam, min_seq = 50)
-taxa_trnL_ctrl <- subset_asvs(taxa_trnL, seqtab_trnL_ctrl, min_seq = 50)
+taxa_trnL_sam <- mgx.tools::subset_tax_table(taxa_trnL, seqtab_trnL_sam, min_seq = 50)
+taxa_trnL_ctrl <- mgx.tools::subset_tax_table(taxa_trnL, seqtab_trnL_ctrl, min_seq = 50)
 
 # Seq count distribution
-viz_seqdepth(seqtab_trnL_sam)
+mgx.tools::viz_seqdepth(seqtab_trnL_sam)
 
 # Remove near-empty samples
 seqtab_trnL_sam_filt <- remove_ultra_rare(seqtab_trnL_sam, taxa_trnL_sam, 2500)
@@ -282,13 +274,13 @@ taxa_trnl_p[is.na(taxa_trnl_p)] <- 'Unclassified'
 taxa_trnl_p <- taxa_trnl_p[which(taxa_trnl_p[,1] != 'Bacteria'),] # Remove cyanobacteria
 
 # Keep samples with metadata info
-seqtab_trnL_sam_p <- subset_samples(seqtab_trnL_p, meta_passive$Sample_ID)
+seqtab_trnL_sam_p <- mgx.tools::subset_samples(seqtab_trnL_p, meta_passive$Sample_ID)
 
 # Subset ASVs
-taxa_trnL_sam_p <- subset_asvs(taxa_trnl_p, seqtab_trnL_sam_p, min_seq = 50)
+taxa_trnL_sam_p <- mgx.tools::subset_tax_table(taxa_trnl_p, seqtab_trnL_sam_p, min_seq = 50)
 
 # Seq count distribution
-viz_seqdepth(seqtab_trnL_sam_p)
+mgx.tools::viz_seqdepth(seqtab_trnL_sam_p)
 
 # Remove near-empty samples
 seqtab_trnL_sam_filt_p <- remove_ultra_rare(seqtab_trnL_sam_p, taxa_trnL_sam_p, 500)
@@ -309,69 +301,37 @@ ps_trnL_p <- phyloseq(
 #####################
 # 2.1. Export data ###
 #######################
-saveRDS(ps_trnL_p, file.path(urbanbio.path,'data/ps_passive.rds'))
+saveRDS(ps_trnL_p, 'data/ps_passive.rds')
 
 ps.ls <- list()
 ps.ls[["BACT"]] <- ps_16S
 ps.ls[["FUNG"]] <- ps_ITS
 ps.ls[["PLAN"]] <- ps_trnL
-saveRDS(ps.ls, file.path(urbanbio.path,'data/ps.ls.rds'))
+saveRDS(ps.ls, 'data/ps.ls.rds')
 
 ps_ctrl.ls <- list()
 ps_ctrl.ls[["BACT"]] <- ps_16S_ctrl
 ps_ctrl.ls[["FUNG"]] <- ps_ITS_ctrl
 ps_ctrl.ls[["PLAN"]] <- ps_trnL_ctrl
-saveRDS(ps_ctrl.ls, file.path(urbanbio.path,'data/ps_ctrl.ls.rds'))
+saveRDS(ps_ctrl.ls, 'data/ps_ctrl.ls.rds')
 
 # Also save raw seqtab, taxtable, metadata
 seqtab.ls <- list()
 seqtab.ls[['BACT']] <- seqtab_16S_sam_filt
 seqtab.ls[['FUNG']] <- seqtab_ITS_sam_filt
 seqtab.ls[['PLAN']] <- seqtab_trnL_sam_filt
-saveRDS(seqtab.ls, file.path(urbanbio.path,'data/seqtab.ls.rds'))
+saveRDS(seqtab.ls, 'data/seqtab.ls.rds')
 
 taxtab.ls <- list()
 taxtab.ls[['BACT']] <- taxa_16S_sam
 taxtab.ls[['FUNG']] <- taxa_ITS_sam
 taxtab.ls[['PLAN']] <- taxa_trnL_sam
-saveRDS(taxtab.ls, file.path(urbanbio.path,'data/taxtab.ls.rds'))
+saveRDS(taxtab.ls, 'data/taxtab.ls.rds')
 
 # Export asvs as fasta
 asv_to_fasta(seqtab_16S_sam_filt, file.path(path_16S, '4_taxonomy/asv.fa'))
 asv_to_fasta(seqtab_ITS_sam_filt, file.path(path_ITS, '4_taxonomy/asv.fa'))
 asv_to_fasta(seqtab_trnL_sam_filt, file.path(path_trnL, '4_taxonomy_E22_100_trunc275/asv.fa'))
-
-
-
-
-
-
-# Find contaminants
-# contam_freq_trnL <- decontaminate(seqtab_trnL_sam_filt, meta_samples_trnL, 'concDNA')
-# contam_freq_trnL$p 
-
-# 
-# # 
-# # Only check samples with positive DNA concententration values
-# # 
-# ctrl_samples <- c('22-A-QC-Q15-B', '22-E-MTL-23A-B', '22-S-SHER-SH07-B')
-# neg_ctrl_sam <- ps_16S_ctrl@otu_table %>% .[ctrl_samples,]
-# 
-# contam_freq %>%
-#   rownames_to_column('ASV') %>%
-#   left_join(
-#     t(neg_ctrl_sam) %>% as.data.frame %>% rownames_to_column('ASV'),
-#     by = 'ASV'
-#   ) %>% 
-#   filter()
-# 
-# 
-# # Subset OTU table to samples with concDNA info
-# asv_table <- ps_16S@otu_table %>%
-#   data.frame %>%
-#   .[names(concDNA),]
-# 
-
 
 
 # Set browser

@@ -9,10 +9,11 @@
 # the decision not to use merged read was based on comparing different approaches.
 
 #  ml StdEnv/2023 r/4.4.0 mugqic/cutadapt/2.10
+### 16S STANDARD DADA2 PIPELINE
+
 library(pacman)
-p_load(dada2, tidyverse, Biostrings, ShortRead, parallel)
-source('scripts/myFunctions.R')
-source('scripts/mergePairsRescue.R')
+p_load(mgx.tools, # devtools::install_github("jorondo1/mgx.tools")
+       dada2, tidyverse, Biostrings, ShortRead, parallel, phyloseq)
 
 # CONFIG
 barcode <- 'trnL'

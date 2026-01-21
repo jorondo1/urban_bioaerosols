@@ -3,9 +3,8 @@
 ###############
 
 library(pacman)
-p_load(tidyverse, magrittr, vegan, kableExtra, rstatix, parallel)
-source('scripts/0_config.R') # Variable naming and such
-source('scripts/myFunctions.R')
+p_load(mgx.tools, # devtools::install_github("jorondo1/mgx.tools")
+       magrittr, vegan, kableExtra, rstatix, parallel)
 
 ######################################
 # 1. Alpha diversity across seasons ###
@@ -108,7 +107,7 @@ lmfit <- alphadiv.df %>%
 summary(lmfit)
 
 model <- alphadiv.df %>% 
-  filter(Barcode=="Pollen" & City == 'Sherbrooke') %>%
+  filter(Barcode=="Plant particles" & City == 'Sherbrooke') %>%
   lm(Shannon ~ time, data = .)
 coeftest(model, vcov = vcovCL, cluster = ~site_id)
 coefci(model, vcov = vcovCL, cluster = ~site_id)

@@ -43,8 +43,8 @@ write_rds(diversity.df, 'data/diversity/alpha_diversity.rds')
 
 pcoa_full.ls <- imap(ps_rare.ls, function(ps, barcode){
   out <- list()
-  out[['robust.aitchison']] <- compute_pcoa(ps, dist = 'robust.aitchison')
-  out[['bray']] <- compute_pcoa(ps, dist = 'bray', vst = TRUE)
+  #out[['robust.aitchison']] <- mgx.tools::compute_pcoa(ps, dist = 'robust.aitchison')
+  out[['bray']] <- mgx.tools::compute_pcoa(ps, dist = 'bray', vst = TRUE)
   out
 })
 
@@ -59,8 +59,8 @@ eig_full.df <- imap(pcoa_full.ls, function(pcoa_dist.ls, barcode) {
       group_by(Barcode, Dist) %>% 
       mutate(Eig = 100*Eig/sum(Eig)) %>% # Compute %eig
       filter(MDS %in% c('MDS1', 'MDS2')) # keep the 1st two
-  }) %>% list_rbind
-}) %>% list_rbind %>% 
+  }) %>% list_rbind()
+}) %>% list_rbind() %>% 
   group_by(Barcode, Dist, MDS) %>%
   mutate(Barcode = recode(Barcode, !!!kingdoms),
          MDS = case_when(MDS == 'MDS1' ~ 'PCo1',
@@ -73,11 +73,11 @@ plot_full.df <- imap(pcoa_full.ls, function(pcoa_dist.ls, barcode) {
     imap(pcoa_dist.ls, function(pcoa, dist) {
       pcoa$metadata %>% 
         rownames_to_column('Sample') %>% 
-        select(Sample, city, PCo1, PCo2) %>% 
+        select(Sample, city, time, PCo1, PCo2) %>% 
         mutate(Barcode = barcode,
                Dist = dist) # add barcode name for each iteration
-    }) %>% list_rbind
-}) %>% list_rbind %>% tibble %>% 
+    }) %>% list_rbind()
+}) %>% list_rbind() %>% tibble() %>% 
   mutate(Barcode = recode(Barcode, !!!kingdoms),
          city = factor(city, levels = cities))
 
@@ -88,7 +88,7 @@ write_rds(pcoa_full.ls,  'data/diversity/beta_diversity_full.ls.rds')
 
 # Sanity check plot : 
 pcoa_full.ls$plot.df %>% 
-  filter(Dist == 'robust.aitchison') %>% 
+  filter(Dist == 'bray') %>% 
   ggplot(aes(x = PCo1, y = PCo2, colour = time)) +
   geom_point() +
   stat_ellipse(level = 0.95, geom = 'polygon', 
@@ -116,7 +116,7 @@ ps_byCity.ls <- lapply(cities, function(city_name) { # 1st level: city
 pcoa.ls <- imap(ps_byCity.ls, function(ps.ls, city) {
   imap(ps.ls, function(ps, barcode){
     out <- list()
-    out[['robust.aitchison']] <- compute_pcoa(ps, dist = 'robust.aitchison')
+    #out[['robust.aitchison']] <- compute_pcoa(ps, dist = 'robust.aitchison')
     out[['bray']] <- compute_pcoa(ps, dist = 'bray', vst = TRUE)
     out
   })
@@ -129,16 +129,16 @@ eig.df <- imap(pcoa.ls, function(pcoa_barcode.ls, city) {
       pcoa$eig %>% 
         data.frame(Eig = .) %>% 
         rownames_to_column('MDS') %>% 
-        tibble %>% 
+        tibble() %>% 
         mutate(Barcode = barcode,
                City = city,
                Dist = dist) %>% 
         group_by(Barcode, City, Dist) %>% 
         mutate(Eig = 100*Eig/sum(Eig)) %>% # Compute %eig
         filter(MDS %in% c('MDS1', 'MDS2')) # keep the 1st two
-    }) %>% list_rbind
-  }) %>% list_rbind
-}) %>% list_rbind %>% 
+    }) %>% list_rbind()
+  }) %>% list_rbind()
+}) %>% list_rbind() %>% 
   group_by(Barcode, City, Dist, MDS) %>%
   mutate(Barcode = recode(Barcode, !!!kingdoms),
          MDS = case_when(MDS == 'MDS1' ~ 'PCo1',
@@ -156,9 +156,10 @@ plot.df <- imap(pcoa.ls, function(pcoa_barcode.ls, city) {
         mutate(Barcode = barcode,
                Dist = dist,
                City = city) # add barcode name for each iteration
-    }) %>% list_rbind
-  }) %>% list_rbind
-}) %>% list_rbind %>% tibble %>% 
+    }) %>% list_rbind()
+  }) %>% list_rbind()
+}) %>% list_rbind() %>% 
+  tibble() %>% 
   mutate(Barcode = recode(Barcode, !!!kingdoms),
          time = factor(time, levels = periods),
          # time = recode_factor(time, !!!c(

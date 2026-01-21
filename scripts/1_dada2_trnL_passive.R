@@ -6,11 +6,11 @@
 # Visualisation is recommended (included in step 3).
 
 #  ml StdEnv/2023 r/4.4.0 mugqic/cutadapt/2.10
-library(dada2)
+### 16S STANDARD DADA2 PIPELINE
+
 library(pacman)
-p_load(dada2, tidyverse, Biostrings, ShortRead, parallel,
-       update = FALSE)
-source('scripts/myFunctions.R')
+p_load(mgx.tools, # devtools::install_github("jorondo1/mgx.tools")
+       dada2, tidyverse, Biostrings, ShortRead, parallel, phyloseq)
 
 # CONFIG
 barcode <- 'trnL_passive'

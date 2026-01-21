@@ -4,7 +4,7 @@ taxRanks <- c("Kingdom", "Phylum", "Class", "Order", "Family", "Genus", "Species
 
 kingdoms <- c('BACT' = "Bacteria",
               'FUNG' = "Fungi",
-              'PLAN' = "Pollen")
+              'PLAN' = "Plant particles")
 
 cities <- c('Montreal' = 'Montreal', 
             'Quebec' = 'Quebec', 
