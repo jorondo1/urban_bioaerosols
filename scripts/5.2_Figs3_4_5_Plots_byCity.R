@@ -22,7 +22,6 @@ p_load(mgx.tools, # devtools::install_github("jorondo1/mgx.tools")
   tidyverse, RColorBrewer, phyloseq, patchwork, magrittr,ggrain, ggpubr)
 
 source('scripts/0_config.R') # Variable naming and such
-source('scripts/myFunctions.R')
 
 ps_rare.ls <- read_rds('data/ps_rare.ls.rds')
 theme_set(theme_light())
@@ -83,19 +82,19 @@ sample_counts <- imap(ps_rare.ls, function(ps, barcode){
 #################################
 
 # Compile community plots for each city 
-community_plots.ls <- map(cities, function(ci) {
+community_plots.ls <- map(cities, function(City) {
   
   # Each timeslot needs to be created separately, to better manage the x (time) axis
   time_plots.ls <- map(names(period_colours), function(time_period) {
     
     # Create custom (text) date labels for x axis with no date spacing
     date_labels <- melted %>% 
-      filter(city == ci & time == time_period) %>% 
+      filter(city == City & time == time_period) %>% 
       select(date, date_label) %>% distinct %>% 
       deframe()
     # This is required for vertical x axis consistency !
     
-    if (ci == 'Quebec' & time_period == 'Summer') {
+    if (City == 'Quebec' & time_period == 'Summer') {
       return(NULL)  # Skip this iteration
     }
     
@@ -105,7 +104,7 @@ community_plots.ls <- map(cities, function(ci) {
       # First for all periods in the barcode, define top taxa
       # (redundant for each time iteration!)
       melted_filt <- melted %>% 
-        filter(city == ci & Barcode == barcode) %>% 
+        filter(city == City & Barcode == barcode) %>% 
         mutate(Barcode = recode_factor(Barcode, !!!kingdoms),
                date = factor(date, levels = names(date_labels)))
       
@@ -132,7 +131,7 @@ community_plots.ls <- map(cities, function(ci) {
       
       # Count number of samples by sample groups
       sample_counts_filt <- sample_counts %>% 
-        filter(city == ci & Barcode == barcode & time == time_period) %>% 
+        filter(city == City & Barcode == barcode & time == time_period) %>% 
         select(date, n_samples)
       
       # MAIN PLOT
@@ -172,7 +171,7 @@ community_plots.ls <- map(cities, function(ci) {
       labs(tag = "A"), # Tags
     
     # Conditionally include Summer
-    if (ci != 'Quebec') {
+    if (City != 'Quebec') {
       time_plots.ls[['Summer']][['BACT']] +
         theme(strip.text.y = element_blank(),
               axis.text.y = element_blank())
@@ -193,7 +192,7 @@ community_plots.ls <- map(cities, function(ci) {
       theme(strip.text.y = element_blank()) +
       labs(y = 'Mean relative abundance of amplicons', tag = "B"), # Tags
     
-    if (ci != 'Quebec') {
+    if (City != 'Quebec') {
       time_plots.ls[['Summer']][['FUNG']] +
         theme(strip.text.y = element_blank(),
               axis.text.y = element_blank(),
@@ -216,7 +215,7 @@ community_plots.ls <- map(cities, function(ci) {
       theme(strip.text.y = element_blank())+
       labs(tag = "C"), # Tags
     
-    if (ci != 'Quebec') {
+    if (City != 'Quebec') {
       time_plots.ls[['Summer']][['PLAN']] +
         theme(strip.text.y = element_blank(),
               axis.text.y = element_blank()
@@ -247,29 +246,65 @@ community_plots.ls <- map(cities, function(ci) {
 # From scripts/3_metrics.R
 alphadiv.df <- read_rds('data/diversity/alpha_diversity.rds')
 betadiv.ls <- read_rds('data/diversity/beta_diversity_byCity.ls.rds')
+emm_fit <- readRDS('out/stats/alpha_emm_fit.RDS')
 
-map(cities, function(ci) {
+map(cities, function(city) {
   
-  adiv.plot <- 
-    alphadiv.df %>%
-    filter(City == ci) %>% 
-    ggplot(aes(x = time, y = Shannon, fill=time)) + 
+  # ALPHA PLOT
+  adiv_data <- alphadiv.df %>% 
+    filter(City==city) %>% 
+    select(Shannon, time, Barcode)
+  
+  max_div <- adiv_data %>% 
+    group_by(Barcode) %>% 
+    summarise(y_pos = max(Shannon) + 0.1)
+  
+  period_levels <- intersect(periods, unique(adiv_data$time))
+  
+  pval_data <- emm_fit %>% 
+    filter(City==city & p.adjusted < 0.05) %>% 
+    left_join(max_div, by = 'Barcode') %>%
+    group_by(Barcode) %>%
+    # Rank comparisons within each Barcode and offset accordingly
+    mutate(
+      rank = row_number(),
+      y_pos = case_when(
+        rank == 1 ~ y_pos + 0.1,
+        TRUE ~ y_pos + (rank)*0.3
+      ),
+      x_min = as.numeric(factor(group1, levels = period_levels)),
+      x_max = as.numeric(factor(group2, period_levels))
+    ) %>%
+    ungroup() 
+  
+  adiv.plot <- adiv_data %>% 
+    ggplot(aes(x = time, y = Shannon, fill = time)) + 
     scale_fill_manual(values = period_colours) +
-    geom_violin(width = 1, alpha = 0.5) + #Add violin & boxplot next line
-    geom_boxplot(width = 0.1, outlier.shape = NA)+  # Removes points from boxplot
-    geom_pwc(method = "wilcox_test", label = "p.adj.signif")+ #Add stats
-    facet_grid(.~Barcode) +
-    labs(fill = 'Sampling\nperiod', tag = "D")+ # Tags
-    ylim(0,8.5)
+    geom_violin(width = 1, alpha = 0.5) +
+    geom_boxplot(width = 0.1, outlier.shape = NA) +
+    geom_bracket(
+      data = pval_data,
+      aes(xmin = x_min, xmax = x_max, y.position = y_pos, label = p_label),
+      inherit.aes = FALSE,
+      step.increase = 0,
+      tip.length = 0.01
+    ) +
+    facet_grid(. ~ Barcode) +
+    labs(fill = 'Sampling\nperiod', tag = "D") +
+    theme(
+      axis.title.x = element_blank()
+    )
   
+  
+  # BETA PLOT
   bdiv.plot.ls <- map(kingdoms, function(barcode) {
     
     PCo <- betadiv.ls$eig.df %>% 
-      filter(City == ci & Dist == 'bray' & Barcode == barcode) %>% 
+      filter(City == city & Dist == 'bray' & Barcode == barcode) %>% 
       select(PCo1, PCo2) %>% as.vector
     
     betadiv.ls$plot.df %>% 
-      filter(City == ci & Dist == 'bray' & Barcode == barcode) %>%
+      filter(City == city & Dist == 'bray' & Barcode == barcode) %>%
       ggplot(aes(x = PCo1, y = PCo2, colour = time)) +
       geom_point(size = 1) +
       stat_ellipse(level = 0.95, geom = 'polygon', 
@@ -291,14 +326,14 @@ map(cities, function(ci) {
   
   ### BUILD MEGAPLOT
   plot <- 
-    community_plots.ls[[ci]] / adiv.plot / bdiv.plot &
+    community_plots.ls[[city]] / adiv.plot / bdiv.plot &
     theme(legend.position = "right",
           legend.justification = "left",
           legend.box.spacing = unit(0, "cm"),
     )
   
   # EXPORT
-  ggsave(paste0('out/_MAIN/community', ci,'.pdf'),
+  ggsave(paste0('out/_MAIN/community', city,'.pdf'),
          plot = plot, bg = 'white', width = 2000, height = 2600,
          units = 'px', dpi = 180)
 

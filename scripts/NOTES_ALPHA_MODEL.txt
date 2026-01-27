@@ -24,4 +24,6 @@ Do we go down this road ? It should only add a few lines. I found a way to actua
  contrast        estimate     SE df t.ratio p.value
  Spring - Summer    0.963 0.1390 56   6.936 <0.0001
  Spring - Fall     -0.477 0.1550 56  -3.077  0.0089
- Summer - Fall     -1.440 0.0976 56 -14.747 <0.0001(edited)[11:06 AM]it doesn't really affect the results overall (haven't checked all of them but it tracks)
+ Summer - Fall     -1.440 0.0976 56 -14.747 <0.0001(edited)
+
+[11:06 AM]it doesn't really affect the results overall (haven't checked all of them but it tracks)

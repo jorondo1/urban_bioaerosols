@@ -4,13 +4,13 @@
 
 library(pacman)
 p_load(mgx.tools, # devtools::install_github("jorondo1/mgx.tools")
-       magrittr, vegan, kableExtra, rstatix, parallel)
+       tidyverse, magrittr, vegan, kableExtra, rstatix, parallel)
 
 ######################################
 # 1. Alpha diversity across seasons ###
 ########################################
 
-alphadiv.df <- read_rds('data/diversity/alpha_diversity.rds')
+alphadiv.df <- readRDS('data/diversity/alpha_diversity.rds')
 
 wilcox_e_p_combo <- function(df, grouping_vars, # a vector
                              model) {
@@ -88,24 +88,44 @@ map(indices, function(idx) {
 })
 
 ######################################
-# 1. Alpha diversity model within plot variation ###
+# 2. Alpha diversity model within plot variation ###
 ########################################
 
 p_load(lmerTest, sandwich, lmtest, emmeans)
 
+# Random effect
 lmerfit <- alphadiv.df %>% 
   filter(Barcode=="Bacteria") %>% 
-  lmer(Shannon ~ City + (1|site_id),
-     data = .)
-
+  lmer(Shannon ~  (1|site_id),
+     data = .) # singular fit
 summary(lmerfit)
+# null variance for site_id (RE) suggests very similar diverisity within cities
 
+# Remember that we have 1-3 points per site only
+alphadiv.df %>% 
+  group_by(Barcode, site_id) %>% 
+  summarise(N = n()) %>% 
+  select(-site_id) %>% 
+  table()
+
+alphadiv.df %>% 
+  ggplot(aes(x = site_id, y = Shannon, colour = City)) +
+  geom_boxplot() +
+  facet_grid(Barcode~., scales = 'free')
+
+# What if we only keep sites with 3 samples
+site_3 <- alphadiv.df %>% 
+  group_by(Barcode, site_id) %>% 
+  summarise(N = n()) %>% filter(N==3)
+
+# Regular linear model with time as an explanatory
 lmfit <- alphadiv.df %>% 
   filter(Barcode=="Bacteria") %>% 
   lm(Shannon ~ time + City,
        data = .)
 summary(lmfit)
 
+# Cluster-robust (by site) standard errors
 model <- alphadiv.df %>% 
   filter(Barcode=="Plant particles" & City == 'Sherbrooke') %>%
   lm(Shannon ~ time, data = .)
@@ -116,20 +136,4 @@ coefci(model, vcov = vcovCL, cluster = ~site_id)
 emm <- emmeans(model, ~ time, vcov = vcovCL(model, cluster = ~site_id))
 pairs(emm)
 
-alphadiv.df %>%
-  filter(Barcode=="Bacteria") %>% 
-  group_by(City, site_id) %>% 
-  summarise(mean_shannon = mean(Shannon),
-            sd_shannon = sd(Shannon)) %>% 
-  ggplot(aes(x = site_id, y = mean_shannon)) +
-  geom_point() +
-  geom_errorbar(aes(ymin=mean_shannon-sd_shannon, ymax=mean_shannon+sd_shannon), width=.2,
-                position=position_dodge(.9)) +
-  facet_grid(~City, scales = 'free')
-
-
-
-
-
-
-
+# That works, see next script

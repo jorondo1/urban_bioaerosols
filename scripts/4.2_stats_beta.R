@@ -34,7 +34,7 @@ adonis_out.ls <- imap(kingdoms, function(barcode, barcode_ID) {
   setBlocks(perm) <- samDat %>% 
     filter(if_all(all_of(valid_cols), ~ !is.na(.))) %>% 
     pull(time)
-  
+  perm=9999
   adonis2(formula = model_formula,
           permutations = perm,
           data = samDat,
@@ -161,9 +161,9 @@ iterate_permanova <- function(pcoa.ls,
       vars <- intersect(vars, colnames(samData))
       
       formula <- as.formula(paste("dist.mx ~", paste(vars, collapse = " + ")))
-      
+      #BLOCKS?
       res <- adonis2(formula = formula,
-                     permutations = 1000,
+                     permutations = 9999,
                      data = samData,
                      by = partType,
                      na.action = na.exclude,
