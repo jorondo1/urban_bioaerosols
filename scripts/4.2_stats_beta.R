@@ -29,14 +29,14 @@ adonis_out.ls <- imap(kingdoms, function(barcode, barcode_ID) {
   samDat <- pcoa_barcode.ls$metadata
   
   # Block strata permutation restriction
-  valid_cols <- intersect(colnames(samDat), model_vars)
-  perm <- how(nperm = 9999)
-  setBlocks(perm) <- samDat %>% 
-    filter(if_all(all_of(valid_cols), ~ !is.na(.))) %>% 
-    pull(time)
-  perm=9999
+  # No because we can only permute within site, and there are very few observations per site
+  # valid_cols <- intersect(colnames(samDat), model_vars)
+  # perm <- how(nperm = 9999)
+  # setBlocks(perm) <- samDat %>% 
+  #   filter(if_all(all_of(valid_cols), ~ !is.na(.))) %>% 
+  #   pull(site_id)
   adonis2(formula = model_formula,
-          permutations = perm,
+          permutations = 9999,
           data = samDat,
           by = 'terms',
           na.action = na.exclude,
@@ -161,7 +161,7 @@ iterate_permanova <- function(pcoa.ls,
       vars <- intersect(vars, colnames(samData))
       
       formula <- as.formula(paste("dist.mx ~", paste(vars, collapse = " + ")))
-      #BLOCKS?
+      #BLOCKS? nope, same reason as above
       res <- adonis2(formula = formula,
                      permutations = 9999,
                      data = samData,

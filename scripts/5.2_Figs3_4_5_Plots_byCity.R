@@ -190,7 +190,7 @@ community_plots.ls <- map(cities, function(City) {
   p_fung <- list(
     time_plots.ls[['Spring']][['FUNG']] + 
       theme(strip.text.y = element_blank()) +
-      labs(y = 'Mean relative abundance of amplicons', tag = "B"), # Tags
+      labs(y = 'Mean relative abundance', tag = "B"), # Tags
     
     if (City != 'Quebec') {
       time_plots.ls[['Summer']][['FUNG']] +
@@ -290,7 +290,7 @@ map(cities, function(city) {
       tip.length = 0.01
     ) +
     facet_grid(. ~ Barcode) +
-    labs(fill = 'Sampling\nperiod', tag = "D") +
+    labs(fill = 'Sampling\nperiod', tag = "D", y = 'Shannon index') +
     theme(
       axis.title.x = element_blank()
     )
